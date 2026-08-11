@@ -3,6 +3,7 @@ FROM node:22-bookworm-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0
 
 WORKDIR /app
 COPY package*.json ./
+COPY .npmrc ./
 COPY packages/api/package*.json packages/api/
 RUN npm ci --ignore-scripts
 
@@ -13,6 +14,7 @@ FROM node:22-bookworm-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0
 
 WORKDIR /app
 COPY package*.json ./
+COPY .npmrc ./
 COPY packages/api/package*.json packages/api/
 RUN npm ci --omit=dev --ignore-scripts --workspace @venue-wrangler/api --include-workspace-root=false
 
