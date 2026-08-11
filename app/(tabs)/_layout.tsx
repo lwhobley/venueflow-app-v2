@@ -52,8 +52,9 @@ export default function TabsLayout() {
       <Tabs.Screen name="home" options={{ title: t('nav.home'), tabBarIcon: icon('view-dashboard') }} />
       <Tabs.Screen name="clock" options={{ title: t('nav.clock'), tabBarIcon: icon('clock-outline') }} />
       <Tabs.Screen name="schedule" options={{ title: t('nav.schedule'), tabBarIcon: icon('calendar-week') }} />
-      <Tabs.Screen name="floor" options={{ title: t('nav.floor'), tabBarIcon: icon('floor-plan') }} />
-      <Tabs.Screen name="reservations" options={{ title: t('nav.reservations'), tabBarIcon: icon('book-clock-outline') }} />
+      <Tabs.Screen name="facility" options={{ title: 'F&B Ops', tabBarIcon: icon('food-variant') }} />
+      <Tabs.Screen name="floor" options={{ title: t('nav.floor'), href: null, tabBarIcon: icon('floor-plan') }} />
+      <Tabs.Screen name="reservations" options={{ title: t('nav.reservations'), href: null, tabBarIcon: icon('book-clock-outline') }} />
       <Tabs.Screen
         name="guests"
         options={{ title: 'CRM', href: canManage ? '/guests' : null, tabBarIcon: icon('account-heart-outline') }}

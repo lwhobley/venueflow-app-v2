@@ -49,6 +49,7 @@ const queryRoutes: Record<string, Route> = {
   'operations.getDailyBrief': { path: '/v1/operations/daily-brief' },
   'operations.getCommandCenter': { path: '/v1/operations/command-center' },
   'operations.getCommandCenterEvent': { path: (args) => `/v1/operations/command-center/events/${args.eventId ?? args.id}` },
+  'stadium.getOverview': { path: '/v1/stadium/overview' },
   'operations.listLogbook': { path: (args) => `/v1/operations/logbook${args?.limit ? `?limit=${args.limit}` : ''}` },
   'operations.getChecklist': {
     path: (args) => `/v1/operations/checklist?kind=${encodeURIComponent(args.kind)}${args?.date ? `&date=${encodeURIComponent(args.date)}` : ''}`,
@@ -105,6 +106,47 @@ const queryRoutes: Record<string, Route> = {
 };
 
 const mutationRoutes: Record<string, Route> = {
+  'stadium.createZone': {
+    path: '/v1/stadium/zones',
+    method: 'POST',
+    body: stripVenue,
+    invalidate: [['stadium', 'getOverview']],
+  },
+  'stadium.generateEventPlan': {
+    path: '/v1/stadium/event-plan',
+    method: 'POST',
+    body: ({ venueId, eventId, options }) => ({ venue_id: venueId, event_id: eventId, options: options ?? {} }),
+  },
+  'stadium.updateZoneStatus': {
+    path: (args) => `/v1/stadium/zones/${args.zoneId}/status`,
+    method: 'PATCH',
+    body: ({ status }) => ({ status }),
+    invalidate: [['stadium', 'getOverview']],
+  },
+  'stadium.createEvent': {
+    path: '/v1/stadium/events',
+    method: 'POST',
+    body: stripVenue,
+    invalidate: [['stadium', 'getOverview'], ['operations', 'getCommandCenter']],
+  },
+  'stadium.updateEventStatus': {
+    path: (args) => `/v1/stadium/events/${args.eventId}/status`,
+    method: 'PATCH',
+    body: ({ status }) => ({ status }),
+    invalidate: [['stadium', 'getOverview'], ['operations', 'getCommandCenter']],
+  },
+  'stadium.updateZoneReadiness': {
+    path: (args) => `/v1/stadium/events/${args.eventId}/zones/${args.zoneId}/readiness`,
+    method: 'PATCH',
+    body: ({ status, notes }) => ({ status, notes }),
+    invalidate: [['stadium', 'getOverview'], ['operations', 'getCommandCenter']],
+  },
+  'stadium.upsertPartner': {
+    path: '/v1/stadium/partners',
+    method: 'POST',
+    body: stripVenue,
+    invalidate: [['stadium', 'getOverview']],
+  },
   'app.markNotificationRead': {
     path: (args) => `/v1/app/notifications/${args.notificationId ?? args.id ?? args}/read`,
     method: 'POST',

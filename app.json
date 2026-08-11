@@ -14,8 +14,8 @@
       "infoPlist": {
         "UIBackgroundModes": [],
         "NSLocationWhenInUseUsageDescription": "Venue Wrangler uses your location to verify clock-ins and clock-outs at your venue.",
-        "NSPhotoLibraryUsageDescription": "Venue Wrangler lets managers upload bar inventory photos from the photo library.",
-        "NSPhotoLibraryAddUsageDescription": "Venue Wrangler saves inventory photos to your library for backup and sharing.",
+        "NSPhotoLibraryUsageDescription": "Venue Wrangler lets managers upload stadium F&B inventory and production photos from the photo library.",
+        "NSPhotoLibraryAddUsageDescription": "Venue Wrangler saves F&B operations photos to your library for backup and sharing.",
         "NSUserNotificationsUsageDescription": "Venue Wrangler sends schedule updates, shift changes, and important venue alerts.",
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -40,7 +40,7 @@
       "favicon": "./assets/favicon.png"
     },
     "scheme": "venuewrangler",
-    "description": "Venue Wrangler restaurant operations and venue management.",
+    "description": "Venue Wrangler stadium food and beverage operations management.",
     "extra": {
       "EXPO_PUBLIC_API_URL": "https://venue-wrangler-api-c57mm72zpa-ue.a.run.app/api",
       "router": {},
@@ -68,13 +68,13 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Venue Wrangler lets managers upload bar inventory photos from the photo library."
+          "photosPermission": "Venue Wrangler lets managers upload stadium F&B inventory and production photos from the photo library."
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "Venue Wrangler scans barcodes and QR codes to look up bar inventory items.",
+          "cameraPermission": "Venue Wrangler scans barcodes and QR codes to look up stadium F&B inventory items.",
           "recordAudioAndroid": false
         }
       ],

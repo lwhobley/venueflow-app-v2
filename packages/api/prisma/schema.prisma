@@ -202,6 +202,93 @@ enum ManagerGoalStatus {
   cancelled
 }
 
+enum StadiumEventType {
+  game
+  concert
+  tournament
+  festival
+  community
+  corporate
+  other
+}
+
+enum StadiumEventStatus {
+  draft
+  planning
+  ready
+  live
+  completed
+  cancelled
+}
+
+enum FnbOperationType {
+  concession_stand
+  grab_and_go
+  portable_cart
+  kiosk
+  food_vendor
+  commissary
+  production_kitchen
+  premium_suite
+  premium_club
+  loge_hospitality
+  in_seat_service
+  catering
+  banquet
+  bar
+  beer_cart
+  beverage
+  mobile_pickup
+  retail_fnb
+  partner_pop_up
+  back_of_house
+  other
+}
+
+enum FnbDepartment {
+  concessions
+  culinary_production
+  premium_hospitality
+  catering_banquets
+  beverage_operations
+  retail_fnb
+  vendor_partners
+}
+
+enum FnbUnitStatus {
+  open
+  restricted
+  closed
+  incident
+}
+
+enum EventFnbReadinessStatus {
+  not_started
+  in_progress
+  ready
+  blocked
+}
+
+enum FnbPartnerType {
+  local_concept
+  restaurant_concept
+  pop_up
+  licensed_brand
+  food_vendor
+  beverage_vendor
+  distributor
+  other
+}
+
+enum FnbPartnerStatus {
+  onboarding
+  approved
+  active
+  paused
+  noncompliant
+  terminated
+}
+
 enum MembershipStatus {
   pending
   active
@@ -287,6 +374,8 @@ model Venue {
   phone                         String?
   address                       String?
   venueType                     String?
+  stadiumCapacity               Int?
+  homeTeam                      String?
   staffRange                    String?
   weeklyLaborBudgetHours        Float?
   schedulePublishedAt           DateTime?
@@ -362,6 +451,9 @@ model Venue {
   joinRequests                  WorkplaceJoinRequest[]
   eventExecutionWorkspaces      EventExecutionWorkspace[]
   documents                     VenueDocument[]
+  fnbOperationUnits             FnbOperationUnit[]
+  eventFnbReadiness             EventFnbReadiness[]
+  fnbPartners                   FnbPartner[]
 }
 
 model Profile {
@@ -1561,22 +1653,96 @@ model ManagerGoal {
 }
 
 model VenueEvent {
-  id             String       @id @default(cuid())
-  venueId        String
-  title          String
-  startsAt       DateTime
-  endsAt         DateTime?
-  expectedGuests Int?
-  notes          String?
-  reservationId  String?
-  reservation    Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
-  createdBy      String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  venue          Venue        @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  id                  String              @id @default(cuid())
+  venueId             String
+  title               String
+  eventCode           String?
+  eventType           StadiumEventType    @default(other)
+  status              StadiumEventStatus  @default(planning)
+  startsAt            DateTime
+  gatesOpenAt         DateTime?
+  endsAt              DateTime?
+  expectedGuests      Int?
+  ticketsScanned      Int                 @default(0)
+  opponentOrHeadliner String?
+  notes               String?
+  reservationId       String?
+  reservation         Reservation?        @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  createdBy           String
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  venue               Venue               @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  fnbReadiness        EventFnbReadiness[]
 
+  @@unique([venueId, eventCode])
   @@index([venueId, startsAt])
+  @@index([venueId, status, startsAt])
   @@index([reservationId])
+}
+
+model FnbOperationUnit {
+  id             String              @id @default(cuid())
+  venueId        String
+  code           String
+  name           String
+  department     FnbDepartment       @default(concessions)
+  type           FnbOperationType
+  capacity       Int?
+  stadiumZone    String?
+  level          String?
+  status         FnbUnitStatus       @default(open)
+  notes          String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  venue          Venue               @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  eventReadiness EventFnbReadiness[]
+
+  @@unique([venueId, code])
+  @@index([venueId, department, stadiumZone])
+  @@index([venueId, type])
+  @@index([venueId, status])
+}
+
+model EventFnbReadiness {
+  id        String                  @id @default(cuid())
+  venueId   String
+  eventId   String
+  zoneId    String
+  status    EventFnbReadinessStatus @default(not_started)
+  notes     String?
+  checkedBy String?
+  checkedAt DateTime?
+  createdAt DateTime                @default(now())
+  updatedAt DateTime                @updatedAt
+  venue     Venue                   @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  event     VenueEvent              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  zone      FnbOperationUnit        @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, zoneId])
+  @@index([venueId, eventId, status])
+  @@index([zoneId, status])
+}
+
+model FnbPartner {
+  id                  String           @id @default(cuid())
+  venueId             String
+  name                String
+  type                FnbPartnerType
+  status              FnbPartnerStatus @default(onboarding)
+  contactName         String?
+  contactEmail        String?
+  contactPhone        String?
+  revenueShareBps     Int?
+  complianceExpiresAt DateTime?
+  brandStandardsNotes String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  venue               Venue            @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@unique([venueId, name])
+  @@index([venueId, type])
+  @@index([venueId, status])
+  @@index([venueId, complianceExpiresAt])
 }
 
 model EventExecutionWorkspace {

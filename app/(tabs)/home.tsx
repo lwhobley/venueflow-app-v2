@@ -55,9 +55,9 @@ export default function HomeScreen() {
     const values = readiness?.categories ?? {};
     return [
       ['Staffing', values.staffing ?? values['staffing'] ?? 0],
-      ['Setup', values.setup ?? values['setup'] ?? 0],
-      ['Floor', values.floor ?? values['floor'] ?? 0],
-      ['Approvals', values.approvals ?? values['approvals'] ?? 0],
+      ['Culinary / production', values.setup ?? values['setup'] ?? 0],
+      ['Concessions', values.floor ?? values['floor'] ?? 0],
+      ['Premium hospitality', values.approvals ?? values['approvals'] ?? 0],
     ] as const;
   }, [readiness?.categories]);
 
@@ -82,7 +82,7 @@ export default function HomeScreen() {
               <CommandText palette={palette} variant="label" style={{ color: '#B6D6BE' }}>{venueName}</CommandText>
               {venues.length > 1 ? <MaterialCommunityIcons name="swap-horizontal" size={16} color="#B6D6BE" /> : null}
             </Pressable>
-            <CommandText palette={palette} variant="hero" style={{ color: '#FFFFFF' }}>Operations command</CommandText>
+            <CommandText palette={palette} variant="hero" style={{ color: '#FFFFFF' }}>Stadium F&B command</CommandText>
           </View>
           <Pressable onPress={() => setShowNotifications((value) => !value)} accessibilityRole="button" accessibilityLabel="Open notifications" style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1, padding: 8 })}>
             <View>
@@ -98,7 +98,7 @@ export default function HomeScreen() {
           </View>
           <View style={{ width: StyleSheet.hairlineWidth, height: 20, backgroundColor: '#70A381' }} />
           <CommandText palette={palette} variant="body" style={{ color: '#D9EBDD' }}>
-            {readiness?.status === 'blocked' ? 'Needs attention' : readiness?.status === 'at-risk' ? 'Watch service' : 'Service command ready'}
+            {readiness?.status === 'blocked' ? 'Needs attention' : readiness?.status === 'at-risk' ? 'Watch F&B operations' : 'F&B command ready'}
           </CommandText>
         </View>
       </View>
@@ -138,7 +138,7 @@ export default function HomeScreen() {
               const state = value >= 100 ? 'Clear' : value > 0 ? `${value}% watch` : 'Pending';
               const color = value >= 100 ? palette.success : value > 0 ? palette.warning : palette.muted;
               return (
-                <Pressable key={label} onPress={() => router.push(label === 'Staffing' ? '/staff' : label === 'Floor' ? '/floor' : '/checklist')} style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1, flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: palette.divider })}>
+                <Pressable key={label} onPress={() => router.push(label === 'Staffing' ? '/staff' : label === 'Concessions' ? '/facility' : '/checklist')} style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1, flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: palette.divider })}>
                   <CommandText palette={palette} variant="body" style={{ flex: 1 }}>{label}</CommandText>
                   <View style={{ width: 88, flexDirection: 'row', alignItems: 'center', gap: 6 }}><View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: color }} /><CommandText palette={palette} variant="caption" style={{ color, fontWeight: '700' }}>{state}</CommandText></View>
                   <CommandText palette={palette} variant="caption" style={{ width: 80, textAlign: 'right' }}>{label === 'Staffing' ? 'Manager' : 'Team'}</CommandText>
@@ -170,8 +170,8 @@ export default function HomeScreen() {
           {[
             ['Sales', pulse ? formatMoney(pulse.salesCents) : '$0.00'],
             ['Labor', pulse ? formatDuration(Math.round(pulse.laborHours * 60)) : '—'],
-            ['Open checks', String(pulse?.openChecks ?? dailyBrief?.prepOpenCount ?? 0)],
-            ['Active clocks', String(pulse?.activeClocks ?? dashboard?.analytics.clockedInCount ?? 0)],
+            ['Open prep', String(pulse?.openChecks ?? dailyBrief?.prepOpenCount ?? 0)],
+            ['Active crew', String(pulse?.activeClocks ?? dashboard?.analytics.clockedInCount ?? 0)],
           ].map(([label, value], index) => (
             <View key={label} style={{ flex: 1, paddingHorizontal: spacing.sm, gap: 3, borderLeftWidth: index ? StyleSheet.hairlineWidth : 0, borderColor: palette.divider }}>
               <CommandText palette={palette} variant="body" style={{ fontWeight: '800' }}>{value}</CommandText>
@@ -181,9 +181,9 @@ export default function HomeScreen() {
         </View>
 
         {canManage ? <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
-          <CommandText palette={palette} variant="title">Manager goal</CommandText>
-          <TextInput value={goalTitle} onChangeText={setGoalTitle} placeholder="Add a goal for today" mode="outlined" dense outlineColor={palette.border} activeOutlineColor={palette.primary} textColor={palette.charcoal} style={{ backgroundColor: palette.surface }} />
-          <CommandButton palette={palette} icon="plus" selected={Boolean(goalTitle.trim())} onPress={() => void addGoal()} style={{ alignSelf: 'flex-start' }}>Add goal</CommandButton>
+          <CommandText palette={palette} variant="title">F&B priority</CommandText>
+          <TextInput value={goalTitle} onChangeText={setGoalTitle} placeholder="Add an event-day F&B priority" mode="outlined" dense outlineColor={palette.border} activeOutlineColor={palette.primary} textColor={palette.charcoal} style={{ backgroundColor: palette.surface }} />
+          <CommandButton palette={palette} icon="plus" selected={Boolean(goalTitle.trim())} onPress={() => void addGoal()} style={{ alignSelf: 'flex-start' }}>Add priority</CommandButton>
         </View> : null}
 
         {loading ? <Skeleton height={60} /> : null}

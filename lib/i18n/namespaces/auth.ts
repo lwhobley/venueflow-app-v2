@@ -10,16 +10,16 @@ export const en = {
     brand: 'Venue Wrangler',
     slides: {
       scheduling: {
-        title: 'Faster Scheduling',
-        description: 'Build the work schedule in minutes.\nShare and track it instantly.',
+        title: 'Event-day Staffing',
+        description: 'Schedule concession, culinary, premium,\ncatering, and beverage teams.',
       },
       reservations: {
-        title: 'Smarter Reservations',
-        description: 'Manage bookings, walk-ins, and\nwaitlists all from one place.',
+        title: 'Every F&B Location',
+        description: 'Run stands, markets, portables, kitchens,\nsuites, clubs, bars, and pickup.',
       },
       crm: {
-        title: 'Know Your Guests',
-        description: 'Track preferences, visits, and spend\nto deliver a personal experience.',
+        title: 'Partners & Performance',
+        description: 'Manage local partners, compliance,\ninventory, revenue, and readiness.',
       },
     },
     logIn: 'Log In',
@@ -30,7 +30,7 @@ export const en = {
     kickerSignUp: 'Get started',
     kickerSignIn: 'Welcome back',
     brand: 'Venue Wrangler',
-    subtitle: 'Time tracking, scheduling, reservations, and team chat for teams that already use Venue Wrangler.',
+    subtitle: 'Event-day staffing, F&B operations, inventory, partner compliance, and team communication.',
     inviteBannerTitle: "You're invited to join",
     inviteInstructions: 'Create or sign in to your account and this invite will attach you to the venue.',
     tabCreateAccount: 'Create account',

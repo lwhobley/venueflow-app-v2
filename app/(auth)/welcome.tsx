@@ -30,13 +30,13 @@ const slides: Slide[] = [
   },
   {
     key: 'reservations',
-    icon: 'book-open-variant',
-    secondaryIcons: ['table-chair', 'bell-ring-outline'],
+    icon: 'food-variant',
+    secondaryIcons: ['storefront-outline', 'chef-hat'],
   },
   {
     key: 'crm',
-    icon: 'account-heart-outline',
-    secondaryIcons: ['chart-line', 'tag-multiple-outline'],
+    icon: 'handshake-outline',
+    secondaryIcons: ['chart-line', 'clipboard-check-outline'],
   },
 ];
 
