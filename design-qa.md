@@ -1,50 +1,76 @@
-# Operations command redesign QA
+# Venue Wrangler landing page design QA
 
-**Source visual truth path**
+## Comparison target
 
-- `C:\Users\lwhob\.codex\generated_images\019fbb40-ca66-7f51-80ab-6ef6a1314b69\exec-98cf8500-679d-4199-bd51-e7b9c5b9d9a1.png`
-- Source dimensions: 853 × 1842 pixels.
+- Source visual truth: `C:\Users\lwhob\.codex\visualizations\2026\08\11\019ff0ff-6323-75e1-8aa2-fcb30b57210e\venue-wrangler-build\source-option-3.png`
+- Browser-rendered implementation: `C:\Users\lwhob\.codex\visualizations\2026\08\11\019ff0ff-6323-75e1-8aa2-fcb30b57210e\venue-wrangler-build\16-desktop-qa-final.png`
+- Normalized comparison: `C:\Users\lwhob\.codex\visualizations\2026\08\11\019ff0ff-6323-75e1-8aa2-fcb30b57210e\venue-wrangler-build\17-normalized-hero-comparison.png`
+- Supporting captures:
+  - Mobile hero: `C:\Users\lwhob\.codex\visualizations\2026\08\11\019ff0ff-6323-75e1-8aa2-fcb30b57210e\venue-wrangler-build\03-mobile-hero.png`
+  - Mobile navigation: `C:\Users\lwhob\.codex\visualizations\2026\08\11\019ff0ff-6323-75e1-8aa2-fcb30b57210e\venue-wrangler-build\04-mobile-menu.png`
+  - Mobile completed demo: `C:\Users\lwhob\.codex\visualizations\2026\08\11\019ff0ff-6323-75e1-8aa2-fcb30b57210e\venue-wrangler-build\05-mobile-demo-approved.png`
+  - Mobile pricing: `C:\Users\lwhob\.codex\visualizations\2026\08\11\019ff0ff-6323-75e1-8aa2-fcb30b57210e\venue-wrangler-build\06-mobile-pricing.png`
+  - Desktop product: `C:\Users\lwhob\.codex\visualizations\2026\08\11\019ff0ff-6323-75e1-8aa2-fcb30b57210e\venue-wrangler-build\10-desktop-product.png`
+  - Desktop pricing: `C:\Users\lwhob\.codex\visualizations\2026\08\11\019ff0ff-6323-75e1-8aa2-fcb30b57210e\venue-wrangler-build\11-desktop-pricing.png`
+  - Tablet hero: `C:\Users\lwhob\.codex\visualizations\2026\08\11\019ff0ff-6323-75e1-8aa2-fcb30b57210e\venue-wrangler-build\15-tablet-hero.png`
 
-**Implementation evidence**
+## Viewport and normalization
 
-- Target route: `app/(tabs)/home.tsx`.
-- Intended viewport: 390 × 844 CSS pixels at device scale factor 1.
-- Browser-rendered implementation screenshot: unavailable. The local Expo web process did not expose a reachable preview during this run, and the in-app browser connection timed out before it could capture the authenticated app state.
-- Density normalization: blocked; no implementation image was available to normalize with the source.
-- State: authenticated manager with a selected venue, manager dashboard, daily brief, and command-center data available.
+- Source pixels: 864 x 1821.
+- Desktop browser CSS viewport: 1440 x 1024 at device pixel ratio 1.
+- Browser content capture pixels: 1425 x 878 (the scrollbar and browser capture surface account for the pixel difference from the requested viewport).
+- The source hero used its top 864 x 790 pixels and was proportionally resized to the implementation capture height for the side-by-side comparison. The implementation was not density-scaled.
+- Responsive checks: requested 834 x 1000 tablet and 390 x 844 mobile. Document client width equaled scroll width at both breakpoints, confirming no page-level horizontal overflow.
+- State: default staffing-gap request with the approval action visible. A separate capture verifies the completed state after approval.
 
-**Findings**
+## Full-view comparison evidence
 
-- [P1] Browser visual verification is unavailable
-  Location: local mobile web preview.
-  Evidence: no rendered implementation screenshot could be captured.
-  Impact: the command layout cannot be compared visually against the selected reference at the required viewport.
-  Fix: start the Expo web preview in a reachable local browser session, authenticate as a venue manager, capture the Home tab at 390 × 844, then compare it with the selected reference.
+The final hero preserves the selected direction's product-led split composition, deep-teal-and-warm-cream palette, live AI command surface, prompt choices, approval control, pricing CTA, trust line, and transition into the answer-versus-action story. The user-selected Option 1 headline replaces the source mock's original headline intentionally. The implementation also uses the existing Venue Wrangler display/body font pairing and actual app screenshots in downstream product proof.
 
-**Required fidelity surfaces**
+## Focused region evidence
 
-- Fonts and typography: implemented with the native sans system rather than the earlier serif display treatment. Browser evidence is still required to check wrapping and optical weight.
-- Spacing and layout rhythm: code uses one full-width command header, one priority strip, table rows, a timeline, and a compact four-column footer. Visual overflow and spacing remain unverified.
-- Colors and visual tokens: shared light tokens now use green planboard, warm white, hairline dividers, accessible green, and amber warning states. Browser contrast verification is still needed.
-- Image quality and asset fidelity: the selected reference has no app-owned raster imagery; the implementation uses the existing Material Community icon set for standard UI icons.
-- Copy and content: all values come from existing dashboard, daily brief, command-center, notifications, and goal-query/mutation paths. Browser evidence is still needed to validate real-data wrapping.
+- Hero: source and implementation are combined in `17-normalized-hero-comparison.png`; hierarchy, controls, colors, prompt selection, and the AI data surface remain visually aligned.
+- Product imagery: `10-desktop-product.png` verifies that supplied high-resolution app screenshots are used, sharply cropped, and arranged with the selected green surface treatment.
+- Pricing and conversion: `11-desktop-pricing.png` and `06-mobile-pricing.png` verify clear price hierarchy, a shortened form, readable inputs, and responsive stacking.
+- Mobile interaction: `03-mobile-hero.png`, `04-mobile-menu.png`, and `05-mobile-demo-approved.png` verify the compact navigation, scroll-safe prompt row, and visible completed state.
 
-**Open Questions**
+## Required fidelity surfaces
 
-- Does the manager command endpoint return a complete `readiness.categories` object for every venue? The UI safely renders missing values as pending, but this should be checked against a live manager account.
+- Fonts and typography: Baloo 2 carries the friendly, bold hospitality headline language; Nunito carries body and control copy. Weights, line height, and wrapping maintain the source's strong hierarchy. The replacement headline is deliberately locked to three desktop lines and reflows safely on mobile.
+- Spacing and layout rhythm: the desktop hero follows the source's left-message/right-product balance. Prompt controls remain adjacent to the command center, sections use generous whitespace, and pricing uses the source's split plan/form arrangement.
+- Colors and visual tokens: midnight teal, a warm-cream canvas, pale aqua selected states, dark ink, restrained borders, and subtle shadows form the user-selected brand refinement. Text and primary controls retain strong contrast while hover and pressed states remain visibly distinct on desktop and mobile.
+- Image quality and asset fidelity: supplied app screenshots are used directly at high resolution. Icons use one consistent Material Symbols Rounded library. No placeholder imagery, custom SVG art, emoji, or generated fake product screens remain in the implementation.
+- Copy and content: the chosen headline is exact. AI copy consistently explains question answering, plan review, explicit approval, and completed work without inventing customer proof or unsupported performance metrics.
+- Responsiveness and accessibility: desktop, tablet, and mobile captures show no page-level overflow or clipped persistent controls. Navigation, prompt controls, approval controls, and form inputs are semantic and keyboard-focusable. Reduced-motion preferences are respected.
 
-**Implementation Checklist**
+## Comparison history
 
-1. Capture the authenticated manager Home tab at 390 × 844.
-2. Verify the priority action, readiness-row navigation, notification read action, event navigation, and manager goal mutation.
-3. Compare the capture side by side with the source image and correct P0/P1/P2 differences.
+### Pass 1
 
-**Comparison history**
+- [P2] The desktop hero headline wrapped into five lines and overpowered the AI demo.
+  - Fix: reduced the desktop display scale and added intentional line grouping for the user-selected headline.
+  - Post-fix evidence: `09-desktop-hero-final.png` and `17-normalized-hero-comparison.png` show the intended three-line desktop headline.
+- [P2] The next section began too far below the hero compared with the selected mock.
+  - Fix: reduced hero bottom padding and the first follow-on section's top padding.
+  - Post-fix evidence: `16-desktop-qa-final.png` and `17-normalized-hero-comparison.png` show the tighter transition and visible next-section heading.
 
-- No visual comparison iteration completed because the browser-rendered implementation could not be captured.
+### Pass 2
 
-**Follow-up Polish**
+- No actionable P0, P1, or P2 differences remain.
+- The implementation intentionally omits the mock's narrow internal app-navigation rail to make room for the longer selected headline and external prompt selector. The core hierarchy and interaction model remain intact.
 
-- Consider reducing the header title size slightly if a long venue name causes the command header to wrap on narrow devices.
+## Primary interactions tested
 
-final result: blocked
+- Mobile navigation opens, exposes every route, and closes.
+- Demo prompt selection updates the answer, plan, approval copy, and completion copy.
+- Approve Plan replaces the approval controls with a completed state.
+- Pricing CTAs navigate to the real signup section.
+- Empty signup submission activates native required-field validation and focuses the owner-name field without sending a request.
+- Existing onboarding tests confirm email verification and workspace creation hooks remain present.
+- Browser console checked after desktop, tablet, mobile, demo, and pricing states: no warnings or errors.
+
+## Follow-up polish
+
+- [P3] A future real customer outcome could strengthen the proof section once verified customer evidence exists.
+
+final result: passed

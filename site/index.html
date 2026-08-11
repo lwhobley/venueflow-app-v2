@@ -3,848 +3,622 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Venue Wrangler | Operations software for restaurants, bars, and venues</title>
-  <meta name="description" content="Venue Wrangler gives restaurants, bars, and event venues scheduling, time clock, reservations, floor plans, CRM, inventory, reporting, and team chat in one shared workspace." />
-  <meta property="og:title" content="Venue Wrangler | Run the whole venue from one workspace" />
-  <meta property="og:description" content="Scheduling, reservations, live floor, inventory, reports, CRM, payroll exports, and staff tools for modern venue teams." />
-  <meta property="og:image" content="https://venue-wrangler.pages.dev/assets/screen-command.png" />
+  <title>Venue Wrangler | AI operations command center for hospitality</title>
+  <meta name="description" content="Ask questions, delegate tasks, and run a better venue. Venue Wrangler connects scheduling, reservations, floors, inventory, labor, and your team in one AI-powered workspace." />
+  <meta property="og:title" content="Venue Wrangler | Ask questions. Delegate tasks. Run a better venue." />
+  <meta property="og:description" content="The AI operations command center for restaurants, bars, hotels, lounges, and event venues." />
+  <meta property="og:image" content="https://venuewrangler.com/assets/screen-command.png" />
+  <meta name="theme-color" content="#075e61" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@500;600;700;800&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400,0,0" rel="stylesheet" />
   <style>
     :root {
-      --green: #2f7d46;
-      --green-2: #1f5f34;
-      --mint: #e7f3ea;
-      --ink: #172018;
-      --muted: #697267;
-      --line: #dde6dc;
-      --soft: #f6faf7;
+      --green: #075e61;
+      --green-dark: #06474a;
+      --green-soft: #e3f1ef;
+      --green-pale: #f1f8f7;
+      --ink: #172323;
+      --muted: #5d6b69;
+      --line: #d6e4e1;
       --white: #ffffff;
-      --gold: #d9a441;
-      --red: #e46d5f;
-      --shadow: 0 24px 70px rgba(23, 32, 24, 0.12);
-      --radius: 18px;
+      --warm: #fbf6ec;
+      --canvas: #fbf6ec;
+      --canvas-strong: #f0e3cf;
+      --red: #b42318;
+      --shadow: 0 22px 60px rgba(4, 54, 57, 0.13);
+      --shadow-soft: 0 10px 28px rgba(12, 42, 43, 0.09);
+      --radius-lg: 30px;
+      --radius: 20px;
+      --radius-sm: 13px;
     }
     * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
+    html { scroll-behavior: smooth; scroll-padding-top: 86px; }
     body {
       margin: 0;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: var(--white);
+      min-width: 0;
+      overflow-x: hidden;
+      background: var(--warm);
       color: var(--ink);
+      font-family: "Nunito", system-ui, sans-serif;
       line-height: 1.55;
-      letter-spacing: 0;
     }
     body.modal-open { overflow: hidden; }
-    a { color: inherit; }
-    img { max-width: 100%; display: block; }
     button, input, select { font: inherit; }
-    .wrap { width: min(1180px, calc(100% - 44px)); margin: 0 auto; }
-    .nav {
-      position: sticky;
-      top: 0;
-      z-index: 20;
-      background: rgba(255,255,255,0.86);
-      backdrop-filter: blur(18px);
-      border-bottom: 1px solid rgba(221,230,220,0.85);
+    button, a { -webkit-tap-highlight-color: transparent; }
+    a { color: inherit; }
+    img { display: block; max-width: 100%; }
+    .material-symbols-rounded { font-size: 21px; line-height: 1; vertical-align: middle; }
+    .wrap { width: min(1210px, calc(100% - 40px)); margin-inline: auto; }
+    .eyebrow {
+      margin: 0 0 16px;
+      color: var(--green);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .13em;
+      text-transform: uppercase;
     }
-    .nav-inner { height: 74px; display: flex; align-items: center; justify-content: space-between; gap: 22px; }
-    .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; font-weight: 900; color: var(--green); font-size: 22px; }
-    .brand-mark {
-      width: 42px;
-      height: 42px;
-      border-radius: 10px;
-      background: var(--green);
-      color: white;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 16px;
-      font-weight: 950;
-      box-shadow: 0 10px 24px rgba(47,125,70,0.18);
-    }
-    .nav-links { display: flex; align-items: center; gap: 24px; font-size: 14px; font-weight: 750; color: #4c554b; }
-    .nav-links a { text-decoration: none; }
-    .nav-links a:hover { color: var(--green); }
-    .actions { display: flex; align-items: center; gap: 10px; }
     .btn {
-      border: 0;
-      border-radius: 999px;
-      padding: 12px 19px;
-      background: var(--green);
-      color: #fff;
-      font-weight: 850;
-      text-decoration: none;
-      cursor: pointer;
+      min-height: 48px;
+      padding: 12px 20px;
+      border: 1px solid var(--green);
+      border-radius: 14px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
-      min-height: 46px;
-      box-shadow: 0 12px 28px rgba(47,125,70,0.2);
-    }
-    .btn:hover { background: var(--green-2); }
-    .btn.secondary { background: transparent; color: var(--green); border: 1px solid var(--line); box-shadow: none; }
-    .btn.secondary:hover { background: var(--soft); }
-    .hero { min-height: 760px; display: flex; align-items: center; padding: 30px 0 34px; overflow: hidden; }
-    .hero-grid { display: grid; grid-template-columns: 0.92fr 1.08fr; gap: 52px; align-items: center; }
-    .hero h1 { font-size: clamp(54px, 7vw, 104px); line-height: 0.92; margin: 0 0 26px; color: var(--green); letter-spacing: 0; }
-    .hero-copy { max-width: 640px; font-size: clamp(18px, 2vw, 23px); color: #50594e; margin: 0 0 32px; }
-    .hero-note { margin-top: 18px; color: var(--muted); font-size: 14px; max-width: 520px; }
-    .motion-stage {
-      position: relative;
-      height: min(650px, 68vh);
-      min-height: 520px;
-      border-radius: 34px;
-      background:
-        radial-gradient(circle at 78% 12%, rgba(217,164,65,0.2), transparent 30%),
-        linear-gradient(145deg, #f8fbf8, #eef7f0);
-      overflow: hidden;
-      box-shadow: var(--shadow);
-      border: 1px solid var(--line);
-    }
-    .motion-track {
-      position: absolute;
-      inset: -7% auto auto 8%;
-      width: 84%;
-      display: grid;
-      grid-template-columns: repeat(3, minmax(190px, 1fr));
-      gap: 18px;
-      transform: rotate(-7deg);
-      animation: floatTrack 12s ease-in-out infinite alternate;
-    }
-    .phone {
-      border-radius: 28px;
-      border: 1px solid rgba(23,32,24,0.08);
-      box-shadow: 0 22px 38px rgba(23,32,24,0.18);
-      background: #fff;
-      overflow: hidden;
-      aspect-ratio: 1242 / 2688;
-    }
-    .phone img { width: 100%; height: 100%; object-fit: cover; }
-    .phone:nth-child(2) { margin-top: 72px; }
-    .phone:nth-child(3) { margin-top: 24px; }
-    .motion-caption {
-      position: absolute;
-      left: 28px;
-      right: 28px;
-      bottom: 28px;
-      background: rgba(255,255,255,0.82);
-      backdrop-filter: blur(16px);
-      border: 1px solid rgba(221,230,220,0.9);
-      border-radius: 20px;
-      padding: 20px;
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 12px;
-      align-items: center;
-    }
-    .motion-caption strong { display: block; font-size: 18px; }
-    .motion-caption span { display: block; color: var(--muted); font-size: 14px; }
-    .play {
-      width: 52px;
-      height: 52px;
-      border-radius: 50%;
-      border: 0;
       background: var(--green);
-      color: white;
+      color: var(--white);
+      font-weight: 800;
+      line-height: 1.15;
+      text-align: center;
+      text-decoration: none;
       cursor: pointer;
-      font-size: 20px;
-      box-shadow: 0 16px 36px rgba(47,125,70,0.26);
+      transition: transform .18s ease, background .18s ease, border-color .18s ease, box-shadow .18s ease;
+      box-shadow: 0 10px 24px rgba(7, 94, 97, .2);
     }
-    .ticker {
-      border-top: 1px solid var(--line);
-      border-bottom: 1px solid var(--line);
-      overflow: hidden;
-      background: var(--ink);
-      color: #ecf7ee;
-      font-weight: 850;
-      white-space: nowrap;
+    .btn:hover { background: var(--green-dark); border-color: var(--green-dark); transform: translateY(-2px); box-shadow: 0 14px 28px rgba(7, 94, 97, .24); }
+    .btn:active { transform: translateY(2px) scale(.98); box-shadow: inset 0 3px 8px rgba(4, 54, 57, .28); }
+    .btn:focus-visible, .prompt-btn:focus-visible, .menu-toggle:focus-visible, input:focus-visible, select:focus-visible {
+      outline: 3px solid rgba(7, 94, 97, .28);
+      outline-offset: 3px;
     }
-    .ticker-track { display: inline-flex; gap: 34px; padding: 18px 0 18px 34px; animation: marquee 28s linear infinite; }
-    .section { padding: 96px 0; }
-    .section.tight { padding: 70px 0; }
-    .section-head { display: grid; grid-template-columns: 0.78fr 1fr; gap: 48px; align-items: end; margin-bottom: 40px; }
-    .section h2 { margin: 0; font-size: clamp(34px, 5vw, 64px); line-height: 1.02; color: var(--ink); }
-    .section p.lead { margin: 0; color: var(--muted); font-size: 19px; }
-    .intro-video {
-      border-radius: 30px;
-      overflow: hidden;
-      border: 1px solid var(--line);
-      background: #0e1710;
-      box-shadow: var(--shadow);
-      min-height: 520px;
-      position: relative;
-    }
-    .video-canvas { position: absolute; inset: 0; overflow: hidden; }
-    .video-strip {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      display: flex;
-      gap: 22px;
-      width: max-content;
-      transform: translate(-50%, -50%) rotate(-5deg);
-      animation: videoPan 22s linear infinite;
-    }
-    .video-strip img {
-      width: min(260px, 20vw);
-      border-radius: 22px;
-      box-shadow: 0 28px 60px rgba(0,0,0,0.4);
-    }
-    .video-overlay {
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(90deg, rgba(14,23,16,0.9), rgba(14,23,16,0.2) 58%, rgba(14,23,16,0.76));
-      display: flex;
-      align-items: center;
-      padding: clamp(28px, 6vw, 76px);
-    }
-    .video-copy { color: white; max-width: 560px; }
-    .video-copy h2 { color: white; }
-    .video-copy p { color: #d6e6d9; font-size: 19px; }
-    .media-grid { display: grid; grid-template-columns: 1.18fr 0.82fr; gap: 26px; align-items: stretch; }
-    .gallery-main, .gallery-side, .panel {
-      border: 1px solid var(--line);
-      border-radius: 26px;
-      background: var(--soft);
-      overflow: hidden;
-      box-shadow: 0 16px 45px rgba(23,32,24,0.08);
-    }
-    .gallery-main { min-height: 620px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; padding: 28px; align-items: center; }
-    .gallery-main .phone { max-height: 560px; }
-    .gallery-side { padding: 28px; display: flex; flex-direction: column; gap: 20px; justify-content: space-between; }
-    .feature-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
-    .feature {
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 22px;
-      background: #fff;
-      min-height: 220px;
-      transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
-    }
-    .feature:hover { transform: translateY(-4px); box-shadow: 0 18px 38px rgba(23,32,24,0.08); border-color: #b9d2bd; }
-    .feature .icon { color: var(--green); font-size: 26px; margin-bottom: 16px; }
-    .feature h3 { margin: 0 0 8px; font-size: 22px; }
-    .feature p { color: var(--muted); margin: 0; }
-    .flows { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-    .flow {
-      border-radius: 22px;
-      min-height: 250px;
-      padding: 22px;
-      background: var(--soft);
-      border: 1px solid var(--line);
-      position: relative;
-      overflow: hidden;
-    }
-    .flow strong { display: block; font-size: 20px; margin-bottom: 6px; position: relative; z-index: 1; }
-    .flow span { color: var(--muted); position: relative; z-index: 1; }
-    .pulse {
-      position: absolute;
-      width: 150px;
-      height: 150px;
-      border-radius: 50%;
-      right: -34px;
-      bottom: -42px;
-      background: rgba(47,125,70,0.14);
-      animation: pulse 3.5s ease-in-out infinite;
-    }
-    .integrations-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; }
-    .integration-group h3 { margin: 0 0 20px; font-size: 19px; font-weight: 800; color: var(--ink); }
-    .integration-list { display: flex; flex-wrap: wrap; gap: 12px; }
-    .integration-badge {
-      background: #fff;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 11px 16px;
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--ink);
-      white-space: nowrap;
-      transition: all 160ms ease;
-    }
-    .integration-badge:hover { border-color: var(--green); background: var(--mint); }
+    .btn.secondary { background: var(--white); color: var(--green-dark); border-color: #b4cbc7; box-shadow: none; }
+    .btn.secondary:hover { background: var(--green-pale); border-color: var(--green); box-shadow: 0 10px 22px rgba(7, 94, 97, .12); }
+    .btn.secondary:active { background: var(--green-soft); box-shadow: inset 0 3px 7px rgba(4, 54, 57, .16); }
+    .btn.text { min-height: 42px; padding-inline: 14px; background: transparent; color: var(--green-dark); border-color: transparent; box-shadow: none; }
+    .btn.text:hover { background: var(--green-pale); }
 
-    /* Why Venue Wrangler */
-    .reasons-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 24px;
-    }
-    .reason-card {
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: #fff;
-      padding: 28px;
-      min-height: 280px;
-      display: flex;
-      flex-direction: column;
-      transition: all 180ms ease;
-    }
-    .reason-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 18px 38px rgba(23,32,24,0.08);
-      border-color: #b9d2bd;
-    }
-    .reason-icon { font-size: 40px; margin-bottom: 14px; }
-    .reason-card h3 { margin: 0 0 12px; font-size: 20px; color: var(--ink); }
-    .reason-card p { margin: 0; color: var(--muted); flex-grow: 1; }
-
-    /* Built for */
-    .venue-types {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 20px;
-    }
-    .venue-type {
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: #fff;
-      padding: 26px;
-      min-height: 200px;
-    }
-    .venue-type h3 { margin: 0 0 12px; font-size: 18px; color: var(--green); font-weight: 800; }
-    .venue-type p { margin: 0; color: #3d463c; font-size: 15px; line-height: 1.6; }
-
-    /* Use case */
-    .use-case-example {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 24px;
-    }
-    .use-case-column {
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--soft);
-      padding: 28px;
-    }
-    .use-case-column h3 { margin: 0 0 20px; font-size: 18px; color: var(--ink); font-weight: 800; }
-    .use-case-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
-    .use-case-list li {
-      font-size: 15px;
-      color: #3d463c;
-      padding-left: 24px;
-      position: relative;
-      line-height: 1.5;
-    }
-    .use-case-list li::before {
-      content: "✓";
-      position: absolute;
-      left: 0;
-      color: var(--green);
-      font-weight: 900;
-    }
-    .price-signup { display: grid; grid-template-columns: 0.86fr 1.14fr; gap: 28px; align-items: start; }
-    .price {
-      background: var(--green);
-      color: white;
-      border-radius: 30px;
-      padding: 36px;
-      box-shadow: 0 24px 62px rgba(47,125,70,0.24);
+    .nav {
       position: sticky;
-      top: 100px;
-    }
-    .price h2 { color: white; }
-    .price .amount { font-size: 66px; font-weight: 950; letter-spacing: 0; margin: 14px 0 4px; line-height: 1; }
-    .price ul { list-style: none; padding: 0; margin: 28px 0; display: grid; gap: 12px; }
-    .price li::before { content: "✓"; margin-right: 10px; font-weight: 900; }
-    .signup {
-      border: 1px solid var(--line);
-      border-radius: 30px;
-      padding: 32px;
-      background: #fff;
-      box-shadow: var(--shadow);
-    }
-    .signup h3 { margin: 0 0 8px; font-size: 32px; }
-    .signup p { color: var(--muted); margin: 0 0 24px; }
-    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    label { display: grid; gap: 7px; color: #3d463c; font-weight: 800; font-size: 13px; }
-    input, select {
-      width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 13px 14px;
-      min-height: 48px;
-      color: var(--ink);
-      background: var(--soft);
-      outline: none;
-    }
-    input:focus, select:focus { border-color: var(--green); box-shadow: 0 0 0 4px rgba(47,125,70,0.1); }
-    .full { grid-column: 1 / -1; }
-    .status { margin-top: 14px; min-height: 24px; color: var(--muted); font-weight: 700; }
-    .status.error { color: #b23a2f; }
-    .status.success { color: var(--green); }
-    .footer {
-      border-top: 1px solid var(--line);
-      background: var(--soft);
-      padding: 42px 0;
-      color: var(--muted);
-    }
-    .footer-inner { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; align-items: center; }
-    .footer a { color: var(--muted); margin-left: 18px; font-weight: 750; text-decoration: none; }
-    .modal {
-      position: fixed;
-      inset: 0;
+      top: 0;
       z-index: 50;
-      background: rgba(8,14,9,0.72);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
+      background: rgba(251, 246, 236, .94);
+      border-bottom: 1px solid rgba(214, 228, 225, .92);
+      backdrop-filter: blur(16px);
     }
-    .modal.open { display: flex; }
-    .modal-card {
-      width: min(920px, 100%);
-      background: white;
-      border-radius: 26px;
-      overflow: hidden;
-      box-shadow: 0 30px 80px rgba(0,0,0,0.34);
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-    }
-    .modal-media { background: var(--ink); min-height: 520px; position: relative; overflow: hidden; }
-    .modal-media img { position: absolute; width: 52%; border-radius: 22px; box-shadow: 0 22px 48px rgba(0,0,0,0.35); }
-    .modal-media img:nth-child(1) { left: 10%; top: 8%; }
-    .modal-media img:nth-child(2) { right: 8%; bottom: 8%; }
-    .modal-copy { padding: 34px; display: flex; flex-direction: column; justify-content: center; }
-    .modal-copy h2 { margin: 0 0 10px; color: var(--green); font-size: 40px; line-height: 1; }
-    .close { position: absolute; top: 18px; right: 18px; z-index: 2; border: 0; border-radius: 50%; width: 42px; height: 42px; background: white; cursor: pointer; font-size: 22px; }
-    @keyframes floatTrack { from { transform: translateY(0) rotate(-7deg); } to { transform: translateY(-38px) rotate(-4deg); } }
-    @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-    @keyframes videoPan { from { transform: translate(-42%, -50%) rotate(-5deg); } to { transform: translate(-62%, -50%) rotate(-5deg); } }
-    @keyframes pulse { 0%,100% { transform: scale(0.82); opacity: 0.75; } 50% { transform: scale(1.18); opacity: 1; } }
+    .nav-inner { min-height: 72px; display: flex; align-items: center; gap: 28px; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; flex: 0 0 auto; color: var(--green-dark); font-family: "Baloo 2", sans-serif; font-size: 22px; font-weight: 800; text-decoration: none; }
+    .brand-mark { width: 38px; height: 38px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; background: var(--green); color: var(--white); font-size: 13px; font-weight: 900; letter-spacing: -.02em; }
+    .nav-links { display: flex; align-items: center; justify-content: center; gap: 26px; flex: 1; }
+    .nav-links a { color: #384846; font-size: 14px; font-weight: 800; text-decoration: none; }
+    .nav-links a:hover { color: var(--green); }
+    .nav-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+    .nav-actions .btn { min-height: 42px; padding: 10px 16px; border-radius: 999px; }
+    .menu-toggle { display: none; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 12px; background: var(--white); color: var(--green-dark); cursor: pointer; transition: transform .16s ease, background .16s ease, border-color .16s ease, box-shadow .16s ease; }
+    .menu-toggle:hover { background: var(--green-pale); border-color: var(--green); box-shadow: 0 8px 18px rgba(7, 94, 97, .13); }
+    .menu-toggle:active { transform: translateY(2px) scale(.96); background: var(--green-soft); box-shadow: inset 0 3px 7px rgba(4, 54, 57, .17); }
+    .mobile-menu { display: none; }
+
+    .hero { position: relative; padding: 54px 0 30px; background: var(--canvas); }
+    .hero::after { content: ""; position: absolute; z-index: 0; inset: 11% 0 auto 43%; height: 520px; background: var(--canvas-strong); border-radius: 70px 0 0 70px; }
+    .hero-grid { position: relative; z-index: 1; display: grid; grid-template-columns: .82fr 1.18fr; gap: 58px; align-items: center; }
+    .hero-copy h1 { max-width: 620px; margin: 0; font-family: "Baloo 2", sans-serif; font-size: clamp(50px, 4.1vw, 59px); font-weight: 800; letter-spacing: -.045em; line-height: .94; color: var(--green-dark); }
+    .hero-copy h1 .line { display: block; white-space: nowrap; }
+    .hero-copy .lead { max-width: 590px; margin: 25px 0 0; color: #4e5d5b; font-size: clamp(18px, 1.7vw, 21px); line-height: 1.62; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+    .trust-line { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 20px 0 0; color: var(--muted); font-size: 14px; font-weight: 700; }
+    .trust-line .material-symbols-rounded { color: var(--green); }
+    .trust-line span + span::before { content: "·"; margin-right: 10px; color: #99a39a; }
+
+    .demo-layout { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 14px; align-items: center; }
+    .prompt-list { display: grid; gap: 10px; }
+    .prompt-list > span { color: var(--muted); font-size: 11px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+    .prompt-btn { width: 100%; min-height: 58px; padding: 12px 13px; border: 1px solid var(--line); border-radius: 14px; display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,.92); color: #344846; font-size: 13px; font-weight: 800; text-align: left; cursor: pointer; box-shadow: 0 6px 18px rgba(12, 42, 43, .06); transition: transform .16s ease, background .16s ease, border-color .16s ease, box-shadow .16s ease; }
+    .prompt-btn .material-symbols-rounded { color: var(--green); }
+    .prompt-btn.active { border-color: var(--green); background: var(--green-soft); color: var(--green-dark); box-shadow: 0 8px 24px rgba(7,94,97,.13); }
+    .prompt-btn:hover { border-color: var(--green); transform: translateY(-2px); box-shadow: 0 11px 23px rgba(7, 94, 97, .16); }
+    .prompt-btn:active { transform: translateY(2px) scale(.98); background: var(--green-soft); box-shadow: inset 0 3px 7px rgba(4, 54, 57, .16); }
+    .ai-shell { min-width: 0; overflow: hidden; border: 1px solid #c7d8d4; border-radius: 25px; background: var(--white); box-shadow: var(--shadow); }
+    .ai-topbar { min-height: 58px; padding: 12px 17px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .ai-title { display: flex; align-items: center; gap: 9px; font-family: "Baloo 2", sans-serif; font-size: 18px; font-weight: 800; }
+    .ai-title .spark { width: 31px; height: 31px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; background: var(--green); color: var(--white); }
+    .control-pill { padding: 7px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 5px; background: var(--green-pale); color: var(--green-dark); font-size: 11px; font-weight: 900; white-space: nowrap; }
+    .control-pill .material-symbols-rounded { font-size: 16px; }
+    .ai-body { display: grid; grid-template-columns: minmax(0, 1fr) 150px; }
+    .ai-conversation { min-width: 0; padding: 15px; border-right: 1px solid var(--line); display: grid; gap: 10px; align-content: start; }
+    .request { padding: 12px 14px; border-radius: 13px; background: var(--green-soft); font-size: 13px; font-weight: 800; }
+    .ai-step { border: 1px solid var(--line); border-radius: 13px; padding: 12px; background: var(--white); }
+    .step-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; color: var(--green-dark); font-size: 11px; font-weight: 900; letter-spacing: .05em; text-transform: uppercase; }
+    .step-heading span:first-child { display: flex; align-items: center; gap: 6px; }
+    .step-heading .material-symbols-rounded { font-size: 17px; }
+    .step-heading time { color: #8b948d; font-weight: 700; letter-spacing: 0; text-transform: none; }
+    .ai-step p { margin: 0; color: #354039; font-size: 12px; line-height: 1.5; }
+    .plan-list { margin: 7px 0 0; padding: 0; display: grid; gap: 5px; list-style: none; }
+    .plan-list li { display: flex; gap: 6px; color: #3a463d; font-size: 11.5px; line-height: 1.35; }
+    .plan-list .material-symbols-rounded { color: var(--green); font-size: 15px; flex: 0 0 auto; }
+    .approval-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+    .approval-actions button { min-height: 34px; padding: 7px 11px; border-radius: 9px; font-size: 11px; }
+    .completed { display: none; border-color: #9bc4be; background: var(--green-pale); }
+    .completed.show { display: block; }
+    .approval.hide { display: none; }
+    .data-rail { padding: 14px 12px; background: #fbfcfb; }
+    .data-rail h3 { margin: 0 0 11px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+    .mini-stat { padding: 10px 0; border-top: 1px solid var(--line); }
+    .mini-stat:first-of-type { border-top: 0; padding-top: 0; }
+    .mini-stat span { display: block; color: var(--muted); font-size: 10px; }
+    .mini-stat strong { display: flex; justify-content: space-between; gap: 8px; margin-top: 2px; color: var(--ink); font-size: 13px; }
+    .mini-stat em { color: var(--green); font-size: 10px; font-style: normal; font-weight: 900; }
+
+    .section { padding: 96px 0; }
+    .hero + .section { padding-top: 72px; }
+    .section.white { background: var(--white); }
+    .section-head { max-width: 760px; margin: 0 auto 46px; text-align: center; }
+    .section-head h2 { margin: 0; font-family: "Baloo 2", sans-serif; font-size: clamp(38px, 5vw, 62px); line-height: 1; letter-spacing: -.035em; color: var(--green-dark); }
+    .section-head p { margin: 18px auto 0; color: var(--muted); font-size: 18px; }
+    .comparison { display: grid; grid-template-columns: 1fr 80px 1fr; align-items: stretch; gap: 22px; max-width: 1020px; margin: 0 auto; }
+    .comparison-card { padding: 30px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--white); box-shadow: var(--shadow-soft); }
+    .comparison-card.done { border-color: #a4c7c1; background: var(--green-pale); }
+    .comparison-card h3 { margin: 0 0 18px; font-family: "Baloo 2", sans-serif; font-size: 25px; color: var(--green-dark); }
+    .answer-bubble { padding: 16px; border-radius: 13px; background: #f1f3f1; color: #3e4840; font-weight: 700; }
+    .comparison-list { display: grid; gap: 12px; margin: 20px 0 0; padding: 0; list-style: none; }
+    .comparison-list li { display: flex; gap: 10px; color: #4e5d5b; font-size: 15px; }
+    .comparison-list .material-symbols-rounded { flex: 0 0 auto; color: #9aa39b; }
+    .comparison-card.done .comparison-list .material-symbols-rounded { color: var(--green); }
+    .comparison-arrow { display: flex; align-items: center; justify-content: center; color: var(--green); }
+    .comparison-arrow .material-symbols-rounded { font-size: 38px; }
+
+    .connected { padding: 84px 0; background: var(--green-dark); color: var(--white); }
+    .connected .section-head h2 { color: var(--white); }
+    .connected .section-head p { color: #c8deda; }
+    .data-flow { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px; border-radius: var(--radius); overflow: hidden; background: rgba(255,255,255,.16); }
+    .data-item { min-height: 145px; padding: 24px 13px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #064c4f; text-align: center; }
+    .data-item .material-symbols-rounded { margin-bottom: 12px; color: #a9ddd6; font-size: 32px; }
+    .data-item strong { font-size: 15px; }
+    .data-item span { margin-top: 5px; color: #c8deda; font-size: 12px; }
+
+    .product-proof { display: grid; grid-template-columns: .8fr 1.2fr; gap: 64px; align-items: center; }
+    .proof-copy h2 { margin: 0; font-family: "Baloo 2", sans-serif; font-size: clamp(40px, 5vw, 66px); line-height: .98; letter-spacing: -.04em; color: var(--green-dark); }
+    .proof-copy > p { margin: 20px 0 0; color: var(--muted); font-size: 18px; }
+    .proof-list { display: grid; gap: 13px; margin: 26px 0 0; padding: 0; list-style: none; }
+    .proof-list li { display: flex; align-items: flex-start; gap: 10px; font-weight: 800; }
+    .proof-list .material-symbols-rounded { color: var(--green); }
+    .screens { height: 590px; position: relative; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--green-pale); overflow: hidden; box-shadow: var(--shadow-soft); }
+    .screen-shot { position: absolute; width: 39%; overflow: hidden; border: 7px solid var(--white); border-radius: 24px; background: var(--white); box-shadow: 0 20px 44px rgba(12,42,43,.18); }
+    .screen-shot img { width: 100%; }
+    .screen-shot.one { left: 8%; top: 14%; transform: rotate(-5deg); }
+    .screen-shot.two { left: 34%; top: 6%; z-index: 2; }
+    .screen-shot.three { right: 7%; top: 18%; transform: rotate(5deg); }
+
+    .integrations { padding: 44px 0; border-block: 1px solid var(--line); background: var(--white); }
+    .integration-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 16px 30px; }
+    .integration-row strong { color: var(--green-dark); font-family: "Baloo 2", sans-serif; font-size: 19px; }
+    .integration-row span { color: #5f6961; font-size: 14px; font-weight: 900; }
+
+    .pricing-grid { display: grid; grid-template-columns: .78fr 1.22fr; gap: 26px; align-items: stretch; }
+    .price-card { padding: clamp(30px, 5vw, 56px); border-radius: var(--radius-lg); background: var(--green); color: var(--white); }
+    .price-card h2 { margin: 0; font-family: "Baloo 2", sans-serif; font-size: clamp(42px, 5vw, 66px); line-height: .95; }
+    .price { display: flex; align-items: end; gap: 8px; margin-top: 26px; }
+    .price strong { font-family: "Baloo 2", sans-serif; font-size: clamp(62px, 8vw, 94px); line-height: .8; }
+    .price span { padding-bottom: 8px; color: #d2e7e3; }
+    .included { display: grid; gap: 13px; margin: 34px 0 0; padding: 0; list-style: none; }
+    .included li { display: flex; gap: 10px; font-weight: 800; }
+    .included .material-symbols-rounded { color: #b5e1da; }
+    .signup-card { padding: clamp(26px, 4vw, 46px); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--white); box-shadow: var(--shadow-soft); }
+    .signup-card h3 { margin: 0; font-family: "Baloo 2", sans-serif; color: var(--green-dark); font-size: 36px; line-height: 1; }
+    .signup-card > p { margin: 12px 0 26px; color: var(--muted); }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+    label { display: grid; gap: 7px; color: #344846; font-size: 13px; font-weight: 900; }
+    label.full { grid-column: 1 / -1; }
+    input, select { width: 100%; min-height: 48px; border: 1px solid #b8c9c6; border-radius: 11px; padding: 11px 13px; background: var(--white); color: var(--ink); }
+    input::placeholder { color: #909991; }
+    .terms { display: flex; align-items: flex-start; gap: 9px; margin-top: 17px; font-weight: 700; line-height: 1.45; }
+    .terms input { width: 18px; min-height: 18px; margin-top: 1px; accent-color: var(--green); }
+    .terms a { color: var(--green-dark); }
+    .form-submit { width: 100%; margin-top: 18px; }
+    .form-submit:disabled, .approval-actions button:disabled { opacity: .62; cursor: wait; transform: none; }
+    .status { min-height: 24px; margin-top: 14px; color: var(--muted); font-size: 14px; font-weight: 800; }
+    .status.success { color: var(--green-dark); }
+    .status.error { color: var(--red); }
+    .verification { margin-top: 18px; padding: 17px; border: 1px solid #aacdc6; border-radius: 14px; background: var(--green-pale); }
+
+    .final-cta { padding: 78px 0; background: var(--white); }
+    .final-cta-inner { padding: 42px; border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: space-between; gap: 28px; background: var(--green-pale); border: 1px solid #cde1dd; }
+    .final-cta h2 { margin: 0; font-family: "Baloo 2", sans-serif; color: var(--green-dark); font-size: clamp(34px, 4vw, 52px); line-height: 1; }
+    .final-cta p { margin: 10px 0 0; color: var(--muted); }
+    .footer { padding: 34px 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+    .footer-inner { display: flex; justify-content: space-between; gap: 24px; }
+    .footer strong { color: var(--green-dark); }
+    .footer-links { display: flex; flex-wrap: wrap; gap: 10px 18px; }
+
     @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition-duration: .01ms !important; }
     }
-    @media (max-width: 980px) {
-      .hero-grid, .section-head, .media-grid, .price-signup { grid-template-columns: 1fr; }
-      .motion-stage { min-height: 600px; }
-      .feature-list { grid-template-columns: repeat(2, 1fr); }
-      .flows { grid-template-columns: repeat(2, 1fr); }
-      .integrations-grid { grid-template-columns: 1fr; }
-      .reasons-grid { grid-template-columns: repeat(2, 1fr); }
-      .venue-types { grid-template-columns: repeat(2, 1fr); }
-      .use-case-example { grid-template-columns: 1fr; }
-      .price { position: relative; top: auto; }
-      .modal-card { grid-template-columns: 1fr; }
-      .modal-media { min-height: 320px; }
+    @media (max-width: 1050px) {
+      .nav-links { gap: 16px; }
+      .nav-links a:nth-child(3) { display: none; }
+      .hero-grid { grid-template-columns: 1fr; }
+      .hero-copy { max-width: 780px; }
+      .hero-copy h1 { max-width: 720px; }
+      .hero::after { inset: 42% 0 auto 6%; height: 520px; border-radius: 60px 0 0 60px; }
+      .demo-layout { max-width: 850px; margin: 0 auto; }
+      .product-proof { grid-template-columns: 1fr; }
+      .proof-copy { max-width: 760px; }
+      .screens { height: 650px; }
+      .data-flow { grid-template-columns: repeat(3, 1fr); }
     }
-    @media (max-width: 720px) {
-      .nav-links { display: none; }
-      .nav-inner { height: 66px; }
-      .brand { font-size: 18px; }
-      .hero { padding-top: 36px; }
-      .motion-stage { min-height: 500px; height: 60vh; border-radius: 24px; }
-      .motion-track { width: 132%; left: -14%; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-      .motion-caption { left: 16px; right: 16px; bottom: 16px; }
-      .section { padding: 40px 0; }
-      .gallery-main { grid-template-columns: 1fr; min-height: 0; }
-      .gallery-main .phone:nth-child(2) { display: none; }
-      .feature-list, .flows, .form-grid { grid-template-columns: 1fr; }
-      .video-strip img { width: 210px; }
-      .reasons-grid { grid-template-columns: 1fr; }
-      .reason-card { min-height: auto; }
-      .venue-types { grid-template-columns: 1fr; }
-      .use-case-example { grid-template-columns: 1fr; }
-      .use-case-column { padding: 20px; }
-      .footer-inner { display: block; }
-      .footer a { display: inline-block; margin: 12px 18px 0 0; }
+    @media (max-width: 780px) {
+      .wrap { width: min(100% - 28px, 680px); }
+      .nav-inner { min-height: 64px; gap: 10px; }
+      .brand { font-size: 19px; margin-right: auto; }
+      .brand-mark { width: 34px; height: 34px; }
+      .nav-links, .nav-actions { display: none; }
+      .menu-toggle { display: inline-flex; align-items: center; justify-content: center; }
+      .mobile-menu.open { display: grid; gap: 5px; padding: 10px 14px 16px; border-top: 1px solid var(--line); background: var(--warm); }
+      .mobile-menu a { min-height: 44px; padding: 10px 12px; border-radius: 10px; display: flex; align-items: center; color: #344846; font-weight: 800; text-decoration: none; }
+      .mobile-menu a:hover { background: var(--green-pale); }
+      .mobile-menu .btn { margin-top: 5px; color: var(--white); }
+      .hero { padding: 50px 0 62px; }
+      .hero::after { display: none; }
+      .hero-grid { gap: 42px; }
+      .hero-copy h1 { font-size: clamp(49px, 14vw, 68px); }
+      .hero-copy h1 .line { white-space: normal; }
+      .hero-copy .lead { font-size: 17px; line-height: 1.55; }
+      .hero-actions .btn { flex: 1 1 170px; }
+      .demo-layout { grid-template-columns: 1fr; }
+      .prompt-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .prompt-list > span { grid-column: 1 / -1; }
+      .prompt-btn { min-height: 74px; padding: 10px; align-items: flex-start; font-size: 11px; }
+      .prompt-btn .material-symbols-rounded { font-size: 18px; }
+      .ai-body { grid-template-columns: 1fr; }
+      .ai-conversation { border-right: 0; }
+      .data-rail { display: none; }
+      .section { padding: 68px 0; }
+      .section-head { margin-bottom: 34px; }
+      .section-head h2 { font-size: 42px; }
+      .comparison { grid-template-columns: 1fr; }
+      .comparison-arrow { min-height: 34px; transform: rotate(90deg); }
+      .comparison-card { padding: 24px; }
+      .data-flow { grid-template-columns: repeat(2, 1fr); }
+      .data-item { min-height: 132px; }
+      .screens { height: 500px; }
+      .screen-shot { width: 48%; }
+      .screen-shot.one { left: 1%; }
+      .screen-shot.two { left: 27%; }
+      .screen-shot.three { right: 0; }
+      .pricing-grid { grid-template-columns: 1fr; }
+      .form-grid { grid-template-columns: 1fr; }
+      label.full { grid-column: auto; }
+      .final-cta { padding: 58px 0; }
+      .final-cta-inner { padding: 30px; align-items: flex-start; flex-direction: column; }
+      .footer-inner { flex-direction: column; }
     }
-  </style>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <style>
-    /* Opening transition overlay (plays once per session, then dissolves into the page). */
-    #vw-opener { display: none; position: fixed; inset: 0; z-index: 9999; background: #FBD4B6; opacity: 1; transition: opacity .85s ease; }
-    #vw-opener.vw-show { display: block; }
-    #vw-opener.vw-hide { opacity: 0; pointer-events: none; }
-    html.vw-lock, html.vw-lock body { overflow: hidden; }
-    #vw-skip { display: none; position: fixed; right: 20px; bottom: 20px; z-index: 10000;
-      font-family: 'Nunito', system-ui, sans-serif; font-weight: 700; font-size: 14px; color: #2B2A33;
-      background: rgba(255,255,255,0.82); border: 1px solid rgba(0,0,0,0.08); padding: 9px 16px;
-      border-radius: 999px; cursor: pointer; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
-      box-shadow: 0 6px 18px rgba(20,20,40,0.14); }
-    #vw-skip.vw-show { display: block; }
-    #vw-skip:hover { background: #fff; }
-    @media (prefers-reduced-motion: reduce) { #vw-opener, #vw-skip { display: none !important; } }
+    @media (max-width: 480px) {
+      .hero-copy h1 { font-size: 49px; }
+      .hero-actions { display: grid; }
+      .hero-actions .btn { width: 100%; }
+      .trust-line { align-items: flex-start; flex-direction: column; gap: 4px; }
+      .trust-line span + span::before { content: none; }
+      .prompt-list { display: flex; overflow-x: auto; padding-bottom: 5px; scroll-snap-type: x mandatory; }
+      .prompt-list > span { min-width: 100%; }
+      .prompt-btn { min-width: 150px; scroll-snap-align: start; }
+      .ai-topbar { align-items: flex-start; }
+      .control-pill { padding: 6px 8px; }
+      .approval-actions .btn { flex: 1; }
+      .screens { height: 420px; }
+      .screen-shot { border-width: 4px; border-radius: 16px; }
+      .data-flow { grid-template-columns: 1fr 1fr; }
+      .price-card, .signup-card { border-radius: 22px; }
+      .final-cta-inner { padding: 25px; }
+    }
   </style>
 </head>
 <body>
-  <div id="vw-opener" aria-hidden="true"></div>
-  <button id="vw-skip" type="button" aria-label="Skip intro">Skip intro &rsaquo;</button>
-  <nav class="nav">
+  <nav class="nav" aria-label="Primary navigation">
     <div class="wrap nav-inner">
-      <a class="brand" href="#top"><span class="brand-mark" aria-hidden="true">VW</span> Venue Wrangler</a>
+      <a class="brand" href="#top" aria-label="Venue Wrangler home"><span class="brand-mark" aria-hidden="true">VW</span>Venue Wrangler</a>
       <div class="nav-links">
+        <a href="#ai-command-center">AI Command Center</a>
         <a href="#product">Product</a>
-        <a href="#functions">Functions</a>
         <a href="#integrations">Integrations</a>
-        <a href="#why-venue-wrangler">Why Venue Wrangler</a>
         <a href="#pricing">Pricing</a>
-        <a href="faq/">FAQ</a>
       </div>
-      <div class="actions">
-        <a class="btn secondary" href="https://apps.apple.com/app/id6772533789">Log in on iOS</a>
-        <a class="btn" href="#pricing">Start workspace</a>
+      <div class="nav-actions">
+        <a class="btn text" href="/app/sign-in">Login</a>
+        <a class="btn" href="#ai-command-center">Try the live demo</a>
       </div>
+      <button class="menu-toggle" id="menuToggle" type="button" aria-label="Open navigation" aria-controls="mobileMenu" aria-expanded="false"><span class="material-symbols-rounded">menu</span></button>
+    </div>
+    <div class="mobile-menu" id="mobileMenu">
+      <a href="#ai-command-center">AI Command Center</a>
+      <a href="#product">Product</a>
+      <a href="#integrations">Integrations</a>
+      <a href="#pricing">Pricing</a>
+      <a href="/app/sign-in">Login</a>
+      <a class="btn" href="#ai-command-center">Try the live demo</a>
     </div>
   </nav>
 
   <main id="top">
-    <header class="hero">
+    <header class="hero" id="ai-command-center">
       <div class="wrap hero-grid">
-        <div>
-          <h1>Venue Wrangler</h1>
-          <p class="hero-copy">The operating system for restaurants, bars, lounges, event venues, and hotels. Schedule staff, manage reservations, track floors in real time, monitor inventory, record hours with a geofenced time clock, run CRM for events, generate reports, and keep your team connected — all in one mobile app and web workspace.</p>
-          <div class="actions">
-            <a class="btn" href="#pricing">Start workspace</a>
-            <button class="btn secondary" type="button" data-open-demo>Watch intro</button>
+        <div class="hero-copy">
+          <p class="eyebrow">The AI command center for hospitality</p>
+          <h1><span class="line">Ask questions.</span><span class="line">Delegate tasks.</span><span class="line">Run a better venue.</span></h1>
+          <p class="lead">Venue Wrangler brings your live schedule, reservations, floor, inventory, labor, and team together—then turns what is happening now into clear answers and completed work.</p>
+          <div class="hero-actions">
+            <a class="btn" href="#live-demo"><span class="material-symbols-rounded" aria-hidden="true">play_arrow</span>Try the live demo</a>
+            <a class="btn secondary" href="#pricing">Start for $99.99/month</a>
           </div>
-          <p class="hero-note">Start on the web, then log in on mobile with the same email. Owners, managers, and staff stay connected in one Venue Wrangler workspace.</p>
+          <p class="trust-line"><span><span class="material-symbols-rounded" aria-hidden="true">verified_user</span> You approve every action</span><span>Up to 50 staff</span><span>No per-seat fees</span></p>
         </div>
-        <div class="motion-stage" aria-label="Animated Venue Wrangler application screenshots">
-          <div class="motion-track">
-            <div class="phone"><img src="assets/screen-command.png" alt="Operations Command dashboard" /></div>
-            <div class="phone"><img src="assets/screen-reservations.png" alt="Reservations screen" /></div>
-            <div class="phone"><img src="assets/screen-floor.png" alt="Floor plan screen" /></div>
+
+        <div class="demo-layout" id="live-demo">
+          <div class="prompt-list" aria-label="Demo requests">
+            <span>Try asking</span>
+            <button class="prompt-btn" type="button" data-demo="brief"><span class="material-symbols-rounded" aria-hidden="true">assignment</span>Brief me before doors open</button>
+            <button class="prompt-btn active" type="button" data-demo="staff"><span class="material-symbols-rounded" aria-hidden="true">groups</span>Fill tonight's staffing gap</button>
+            <button class="prompt-btn" type="button" data-demo="floor"><span class="material-symbols-rounded" aria-hidden="true">table_restaurant</span>Show tables running behind</button>
           </div>
-          <div class="motion-caption">
-            <div><strong>Live command center</strong><span>Motion previews of the exact mobile app your team uses during service.</span></div>
-            <button class="play" type="button" data-open-demo aria-label="Play intro">▶</button>
-          </div>
+          <section class="ai-shell" aria-label="Interactive Venue Wrangler AI demonstration">
+            <div class="ai-topbar">
+              <div class="ai-title"><span class="spark"><span class="material-symbols-rounded" aria-hidden="true">auto_awesome</span></span>AI Command Center</div>
+              <div class="control-pill"><span class="material-symbols-rounded" aria-hidden="true">shield</span>You're in control</div>
+            </div>
+            <div class="ai-body">
+              <div class="ai-conversation" aria-live="polite">
+                <div class="request" id="demoRequest">Fill tonight's staffing gap</div>
+                <div class="ai-step">
+                  <div class="step-heading"><span><span class="material-symbols-rounded" aria-hidden="true">auto_awesome</span>Answer</span><time>4:42 PM</time></div>
+                  <p id="demoAnswer">We're short 2 servers and 1 bartender from 6–11 PM. I found six available team members who match the roles and availability.</p>
+                </div>
+                <div class="ai-step">
+                  <div class="step-heading"><span><span class="material-symbols-rounded" aria-hidden="true">checklist</span>Plan</span><time>4:43 PM</time></div>
+                  <ul class="plan-list" id="demoPlan">
+                    <li><span class="material-symbols-rounded" aria-hidden="true">check_circle</span>Offer the open server shifts to qualified staff</li>
+                    <li><span class="material-symbols-rounded" aria-hidden="true">check_circle</span>Offer the bar shift to available bartenders</li>
+                    <li><span class="material-symbols-rounded" aria-hidden="true">check_circle</span>Update the schedule after staff accept</li>
+                  </ul>
+                </div>
+                <div class="ai-step approval" id="demoApproval">
+                  <div class="step-heading"><span><span class="material-symbols-rounded" aria-hidden="true">approval</span>Approval</span><time>4:44 PM</time></div>
+                  <p id="demoApprovalCopy">Review the plan before Venue Wrangler contacts your team.</p>
+                  <div class="approval-actions"><button class="btn" type="button" id="approveDemo">Approve plan</button><button class="btn secondary" type="button" id="editDemo">Edit plan</button></div>
+                </div>
+                <div class="ai-step completed" id="demoCompleted">
+                  <div class="step-heading"><span><span class="material-symbols-rounded" aria-hidden="true">task_alt</span>Completed</span><time>4:45 PM</time></div>
+                  <p id="demoCompletedCopy">Open shifts sent to six qualified team members. The schedule will update as responses arrive.</p>
+                </div>
+              </div>
+              <aside class="data-rail" aria-label="Live venue snapshot">
+                <h3>Live venue snapshot</h3>
+                <div class="mini-stat"><span>Reservations</span><strong>132 <em>Tonight</em></strong></div>
+                <div class="mini-stat"><span>Floor status</span><strong>On pace <em>Live</em></strong></div>
+                <div class="mini-stat"><span>Staff scheduled</span><strong>38 <em>3 gaps</em></strong></div>
+                <div class="mini-stat"><span>Low-stock items</span><strong>2 <em>Review</em></strong></div>
+              </aside>
+            </div>
+          </section>
         </div>
       </div>
     </header>
 
-    <div class="ticker" aria-hidden="true">
-      <div class="ticker-track">
-        <span>Scheduling</span><span>Time clock</span><span>Reservations</span><span>Floor plan</span><span>CRM</span><span>Bar inventory</span><span>Reports</span><span>Team chat</span><span>Payroll exports</span>
-        <span>Scheduling</span><span>Time clock</span><span>Reservations</span><span>Floor plan</span><span>CRM</span><span>Bar inventory</span><span>Reports</span><span>Team chat</span><span>Payroll exports</span>
-      </div>
-    </div>
-
-    <section class="section" id="product">
-      <div class="wrap">
-        <div class="intro-video">
-          <div class="video-canvas">
-            <div class="video-strip">
-              <img src="assets/screen-command.png" alt="" />
-              <img src="assets/screen-availability.png" alt="" />
-              <img src="assets/screen-reservations.png" alt="" />
-              <img src="assets/screen-inventory.png" alt="" />
-              <img src="assets/screen-reports.png" alt="" />
-              <img src="assets/screen-floor.png" alt="" />
-            </div>
-          </div>
-          <div class="video-overlay">
-            <div class="video-copy">
-              <h2>One shift, one moving picture.</h2>
-              <p>Watch the work travel from availability to schedule, from bookings to the floor, from clock-ins to reports, and from inventory counts to reorder decisions.</p>
-              <button class="btn" type="button" data-open-demo>Open interactive intro</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="section" id="screenshots">
+    <section class="section white">
       <div class="wrap">
         <div class="section-head">
-          <h2>Beautiful in a rush.</h2>
-          <p class="lead">The mobile app is intentionally large, legible, and ready for service. Managers can scan the venue; staff can act without hunting.</p>
+          <p class="eyebrow">From insight to action</p>
+          <h2>More than answers. Completed work.</h2>
+          <p>Venue Wrangler does not stop at telling you what needs attention. It builds a safe plan, waits for your approval, and closes the loop.</p>
         </div>
-        <div class="media-grid">
-          <div class="gallery-main">
-            <div class="phone"><img src="assets/screen-command.png" alt="Operations Command dashboard" /></div>
-            <div class="phone"><img src="assets/screen-reservations.png" alt="Reservations and waitlist" /></div>
-          </div>
-          <div class="gallery-side">
-            <div>
-              <h3>Dashboard, reservations, floor, availability, inventory, and reports.</h3>
-              <p class="lead">Real app screenshots move through the page so teams can see the workflow, not just a generic feature list.</p>
-            </div>
-            <div class="phone"><img src="assets/screen-inventory.png" alt="Bar Stock inventory screen" /></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="section" id="functions">
-      <div class="wrap">
-        <div class="section-head">
-          <h2>Every function that keeps service together.</h2>
-          <p class="lead">Venue Wrangler replaces the spreadsheet, the group chat, the loose floor plan, and the end-of-night scramble with one connected operating layer.</p>
-        </div>
-        <div class="feature-list">
-          <article class="feature"><div class="icon">01</div><h3>Smart scheduling</h3><p>Build weekly schedules, copy days, apply templates, publish shifts, track edits, manage swaps, and fill open shifts with availability-aware assignments.</p></article>
-          <article class="feature"><div class="icon">02</div><h3>Availability & pay periods</h3><p>Staff submit weekly availability ahead of time. Managers control pay-period windows and unlock exceptions when needed.</p></article>
-          <article class="feature"><div class="icon">03</div><h3>Geofenced time clock</h3><p>When-in-use location verifies clock-ins at the venue, rejects mocked locations, and surfaces late clock-ins or missed clock-outs.</p></article>
-          <article class="feature"><div class="icon">04</div><h3>Reservations and waitlist</h3><p>Create bookings, manage walk-ins, seat parties, track private events, export CSVs, and connect reservation providers.</p></article>
-          <article class="feature"><div class="icon">05</div><h3>Live floor plan</h3><p>Design sections and tables, track occupancy, merge tables, seat reservations, and keep the floor state visible to the team.</p></article>
-          <article class="feature"><div class="icon">06</div><h3>CRM and events</h3><p>Track leads, notes, BEOs, contracts, guest preferences, spend, follow-ups, and won revenue for private dining and events.</p></article>
-          <article class="feature"><div class="icon">07</div><h3>Inventory</h3><p>Count bottles, parse lists or invoice text, import CSVs, log movements, flag below-par items, and understand value on hand.</p></article>
-          <article class="feature"><div class="icon">08</div><h3>Reports</h3><p>See scheduled shifts, open shifts, clock alerts, reservations, pending requests, payroll summaries, and exports from one reporting hub.</p></article>
-          <article class="feature"><div class="icon">09</div><h3>Team operations</h3><p>Invite staff, manage roles, send schedule updates, use venue-scoped chat, and keep everyone in the same source of truth.</p></article>
-        </div>
-      </div>
-    </section>
-
-    <section class="section tight">
-      <div class="wrap">
-        <div class="flows">
-          <div class="flow"><div class="pulse"></div><strong>Schedule in motion</strong><span>Availability becomes shifts, shifts become notifications, edits stay visible.</span></div>
-          <div class="flow"><div class="pulse"></div><strong>Floor in motion</strong><span>Bookings and waitlist entries move into table assignments and live statuses.</span></div>
-          <div class="flow"><div class="pulse"></div><strong>Inventory in motion</strong><span>Counts, invoices, and movements become reorder visibility.</span></div>
-          <div class="flow"><div class="pulse"></div><strong>Revenue in motion</strong><span>POS, labor, reservations, and CRM activity roll into manager reports.</span></div>
-        </div>
-      </div>
-    </section>
-
-    <section class="section" id="integrations">
-      <div class="wrap">
-        <div class="section-head">
-          <h2>Connects to your existing tools.</h2>
-          <p class="lead">Venue Wrangler integrates with the payroll and point-of-sale platforms your venue already uses, so data flows automatically instead of living in spreadsheets.</p>
-        </div>
-        <div class="integrations-grid">
-          <div class="integration-group">
-            <h3>Payroll platforms</h3>
-            <div class="integration-list">
-              <span class="integration-badge">Gusto</span>
-              <span class="integration-badge">Rippling</span>
-              <span class="integration-badge">Square Payroll</span>
-              <span class="integration-badge">Deel</span>
-              <span class="integration-badge">Paylocity</span>
-              <span class="integration-badge">ADP</span>
-              <span class="integration-badge">Paychex</span>
-            </div>
-          </div>
-          <div class="integration-group">
-            <h3>Point of sale</h3>
-            <div class="integration-list">
-              <span class="integration-badge">Square</span>
-              <span class="integration-badge">Toast</span>
-              <span class="integration-badge">Clover</span>
-              <span class="integration-badge">Shopify POS</span>
-              <span class="integration-badge">Lightspeed</span>
-              <span class="integration-badge">SpotOn</span>
-              <span class="integration-badge">Lavu</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="section" id="why-venue-wrangler">
-      <div class="wrap">
-        <div class="section-head">
-          <h2>Why Venue Wrangler stands apart.</h2>
-          <p class="lead">Most hospitality software solves one problem at a time. Venue Wrangler connects every piece of the operation so managers and staff work from a single source of truth.</p>
-        </div>
-        <div class="reasons-grid">
-          <div class="reason-card">
-            <div class="reason-icon">📱</div>
-            <h3>Mobile-first design for service</h3>
-            <p>Built for fast-paced hospitality environments. Large, legible interfaces. Staff can do their jobs from their phones, not just view data.</p>
-          </div>
-          <div class="reason-card">
-            <div class="reason-icon">💰</div>
-            <h3>Flat pricing, no per-seat fees</h3>
-            <p>$99.99/month for the entire workspace — up to 50 staff. No per-employee charges that grow with seasonal hiring. One bill, all features.</p>
-          </div>
-          <div class="reason-card">
-            <div class="reason-icon">🔗</div>
-            <h3>Everything connected</h3>
-            <p>Scheduling informed by reservation demand. Staffing decisions see floor plans and event details. Revenue and labor costs roll together into reporting.</p>
-          </div>
-          <div class="reason-card">
-            <div class="reason-icon">🌐</div>
-            <h3>Integrated platforms</h3>
-            <p>Connects to Gusto, Rippling, Square Payroll, Toast, Square, Clover, Shopify POS, Lightspeed, and SpotOn so hours and revenue flow automatically.</p>
-          </div>
-          <div class="reason-card">
-            <div class="reason-icon">⏱️</div>
-            <h3>Geofenced time clock</h3>
-            <p>Location-verified clock-in at the venue prevents buddy punching. Accurate labor records flow straight to payroll exports with no manual entry.</p>
-          </div>
-          <div class="reason-card">
-            <div class="reason-icon">👥</div>
-            <h3>Consolidation saves time</h3>
-            <p>Replaces separate apps for scheduling, reservations, floor plans, inventory, payroll, and chat. One workspace means one login, one interface, one source of truth.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="section" id="built-for">
-      <div class="wrap">
-        <div class="section-head">
-          <h2>Built for hospitality venues.</h2>
-          <p class="lead">Whether you're a full-service restaurant, a cocktail bar, a boutique event space, or a hotel with multiple outlets, Venue Wrangler is purpose-built for how you actually run the operation.</p>
-        </div>
-        <div class="venue-types">
-          <div class="venue-type">
-            <h3>Restaurants</h3>
-            <p>Full-service, casual, and fast-casual dining. Coordinate servers, kitchen staff, and bussers. Manage covers, reservations, inventory, and labor costs in one app.</p>
-          </div>
-          <div class="venue-type">
-            <h3>Bars & Lounges</h3>
-            <p>Cocktail bars, nightclubs, and lounges. Track bartenders and servers, manage bar stock, handle reservations for VIP tables, and monitor labor during peak hours.</p>
-          </div>
-          <div class="venue-type">
-            <h3>Event Venues</h3>
-            <p>Banquet halls, wedding venues, and event spaces. Manage private events with CRM, BEOs, and contract tracking. Schedule staff for private dining and coordinate with catering.</p>
-          </div>
-          <div class="venue-type">
-            <h3>Hotels</h3>
-            <p>Restaurant, bar, and room service operations. Consolidate scheduling and reservations across multiple outlets. Sync POS and payroll data across departments.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="section" id="use-case">
-      <div class="wrap">
-        <div class="section-head">
-          <h2>A typical Friday night.</h2>
-          <p class="lead">How Venue Wrangler brings everything together in real time.</p>
-        </div>
-        <div class="use-case-example">
-          <div class="use-case-column">
-            <h3>The setup</h3>
-            <ul class="use-case-list">
-              <li>200 covers booked in reservations</li>
-              <li>Private event in the back room (20 guests, 2 hours)</li>
-              <li>Live floor plan: 8 sections with current occupancy</li>
-              <li>Manager sees expected $4,200 revenue</li>
-              <li>Scheduled labor cost: $1,100</li>
+        <div class="comparison">
+          <article class="comparison-card">
+            <h3>Just an answer</h3>
+            <div class="answer-bubble">“You're short two servers tonight.”</div>
+            <ul class="comparison-list">
+              <li><span class="material-symbols-rounded" aria-hidden="true">close</span>You still have to find available people</li>
+              <li><span class="material-symbols-rounded" aria-hidden="true">close</span>You still have to update the schedule</li>
+              <li><span class="material-symbols-rounded" aria-hidden="true">close</span>You still have to notify the team</li>
             </ul>
-          </div>
-          <div class="use-case-column">
-            <h3>The execution</h3>
-            <ul class="use-case-list">
-              <li>12 servers, 4 bartenders, 2 bussers scheduled</li>
-              <li>One server calls out sick</li>
-              <li>Manager posts open shift → someone claims it in 2 minutes</li>
-              <li>Floor plan updates as tables seat and turn</li>
-              <li>Inventory alerts when premium bottles run low</li>
+          </article>
+          <div class="comparison-arrow" aria-hidden="true"><span class="material-symbols-rounded">arrow_forward</span></div>
+          <article class="comparison-card done">
+            <h3>Completed—with your approval</h3>
+            <div class="answer-bubble">“I've offered the shifts and prepared the schedule update.”</div>
+            <ul class="comparison-list">
+              <li><span class="material-symbols-rounded" aria-hidden="true">check_circle</span>Finds qualified, available staff</li>
+              <li><span class="material-symbols-rounded" aria-hidden="true">check_circle</span>Updates the schedule as shifts are accepted</li>
+              <li><span class="material-symbols-rounded" aria-hidden="true">check_circle</span>Keeps the team informed</li>
             </ul>
-          </div>
-          <div class="use-case-column">
-            <h3>The closeout</h3>
-            <ul class="use-case-list">
-              <li>All staff clocked accurate hours at venue</li>
-              <li>No manual time entry, no spreadsheet</li>
-              <li>Payroll export ready for Gusto with one click</li>
-              <li>Revenue vs. labor analysis in reports</li>
-              <li>Event details stored in CRM for follow-up</li>
-            </ul>
-          </div>
+          </article>
         </div>
       </div>
+    </section>
+
+    <section class="connected" aria-labelledby="connected-title">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow" style="color:#a9ddd6">One shared operating picture</p>
+          <h2 id="connected-title">One workspace. All your live venue data.</h2>
+          <p>Wrangler sees the relationships between the moving parts, so every answer and action starts with the full picture.</p>
+        </div>
+        <div class="data-flow">
+          <div class="data-item"><span class="material-symbols-rounded" aria-hidden="true">event_available</span><strong>Scheduling</strong><span>Shifts and availability</span></div>
+          <div class="data-item"><span class="material-symbols-rounded" aria-hidden="true">calendar_month</span><strong>Reservations</strong><span>Bookings and guest flow</span></div>
+          <div class="data-item"><span class="material-symbols-rounded" aria-hidden="true">table_restaurant</span><strong>Floor</strong><span>Tables and waitlist</span></div>
+          <div class="data-item"><span class="material-symbols-rounded" aria-hidden="true">inventory_2</span><strong>Inventory</strong><span>Counts and par levels</span></div>
+          <div class="data-item"><span class="material-symbols-rounded" aria-hidden="true">schedule</span><strong>Time clock</strong><span>Hours and labor alerts</span></div>
+          <div class="data-item"><span class="material-symbols-rounded" aria-hidden="true">monitoring</span><strong>Reports</strong><span>What happened and why</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section white" id="product">
+      <div class="wrap product-proof">
+        <div class="proof-copy">
+          <p class="eyebrow">Built for service</p>
+          <h2>Hospitality operations, in your pocket.</h2>
+          <p>Managers get a live command center. Staff get the tools they need to act quickly—without hunting through separate apps.</p>
+          <ul class="proof-list">
+            <li><span class="material-symbols-rounded" aria-hidden="true">check_circle</span>Real-time manager priorities</li>
+            <li><span class="material-symbols-rounded" aria-hidden="true">check_circle</span>Reservations, floor, and waitlist together</li>
+            <li><span class="material-symbols-rounded" aria-hidden="true">check_circle</span>Scheduling, availability, and time clock</li>
+            <li><span class="material-symbols-rounded" aria-hidden="true">check_circle</span>Inventory, reports, CRM, and team operations</li>
+          </ul>
+          <div class="hero-actions"><a class="btn" href="#pricing">Start your workspace</a><a class="btn secondary" href="https://apps.apple.com/app/id6772533789">View the iOS app</a></div>
+        </div>
+        <div class="screens" aria-label="Venue Wrangler product screenshots">
+          <div class="screen-shot one"><img src="assets/screen-command.png" alt="Venue Wrangler command center" /></div>
+          <div class="screen-shot two"><img src="assets/screen-reservations.png" alt="Venue Wrangler reservations screen" /></div>
+          <div class="screen-shot three"><img src="assets/screen-floor.png" alt="Venue Wrangler live floor plan" /></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="integrations" id="integrations" aria-label="Supported integrations">
+      <div class="wrap integration-row"><strong>Works with the tools you use:</strong><span>Toast</span><span>Square</span><span>Clover</span><span>Lightspeed</span><span>Gusto</span><span>Rippling</span><span>ADP</span><span>Paychex</span></div>
     </section>
 
     <section class="section" id="pricing">
-      <div class="wrap price-signup">
-        <aside class="price">
-          <h2>One flat monthly plan.</h2>
-          <div class="amount">$99.99</div>
-          <div>per month</div>
-          <ul>
-            <li>Teams up to 50 people</li>
-            <li>Scheduling, availability, and swaps</li>
-            <li>Time clock and manager alerts</li>
-            <li>Reservations, floor, CRM, inventory, reports</li>
-            <li>One login across web signup and mobile app</li>
+      <div class="wrap pricing-grid">
+        <article class="price-card">
+          <p class="eyebrow" style="color:#b5e1da">Simple, flat pricing</p>
+          <h2>One plan. The whole venue.</h2>
+          <div class="price"><strong>$99.99</strong><span>per month</span></div>
+          <ul class="included">
+            <li><span class="material-symbols-rounded" aria-hidden="true">check_circle</span>One venue workspace</li>
+            <li><span class="material-symbols-rounded" aria-hidden="true">check_circle</span>Teams up to 50 people</li>
+            <li><span class="material-symbols-rounded" aria-hidden="true">check_circle</span>AI Command Center included</li>
+            <li><span class="material-symbols-rounded" aria-hidden="true">check_circle</span>Scheduling, floor, reservations, inventory, CRM, and reports</li>
+            <li><span class="material-symbols-rounded" aria-hidden="true">check_circle</span>No per-seat fees</li>
           </ul>
-          <p>Create your workspace here, then use the same login in the mobile app. Your team can be invited as soon as the workspace is ready.</p>
-        </aside>
-        <section class="signup" aria-labelledby="signup-title">
-          <h3 id="signup-title">Create your workspace</h3>
-          <p>Start on the web, then log in with the same email in the iOS app. Your business, owner profile, and venue workspace stay in sync.</p>
+        </article>
+
+        <section class="signup-card" aria-labelledby="signup-title">
+          <h3 id="signup-title">Start your workspace</h3>
+          <p>Create the owner account now. You can add venue details and invite your team after you sign in.</p>
           <form id="signupForm">
             <div class="form-grid">
               <label>Owner name<input name="ownerName" autocomplete="name" required placeholder="Alex Morgan" /></label>
+              <label>Business name<input name="businessName" autocomplete="organization" required placeholder="North Room" /></label>
               <label>Email<input name="email" type="email" autocomplete="email" required placeholder="owner@example.com" /></label>
               <label>Password<input name="password" type="password" autocomplete="new-password" minlength="8" required placeholder="At least 8 characters" /></label>
-              <label>Business name<input name="businessName" autocomplete="organization" required placeholder="North Room" /></label>
-              <label>Venue type<select name="venueType"><option value="restaurant">Restaurant</option><option value="bar">Bar</option><option value="hotel">Hotel</option><option value="cafe">Cafe</option><option value="nightclub">Nightclub</option><option value="event_venue">Event venue</option><option value="other">Other</option></select></label>
-              <label>Team size<select name="staffRange"><option value="1-15">1-15 staff</option><option value="16-30">16-30 staff</option><option value="31-50">31-50 staff</option></select></label>
-              <label class="full">Address<input name="address" autocomplete="street-address" placeholder="123 Main Street" /></label>
-              <label class="full">Phone<input name="phone" autocomplete="tel" placeholder="(555) 123-4567" /></label>
+              <input name="venueType" type="hidden" value="restaurant" />
+              <input name="staffRange" type="hidden" value="1-15" />
             </div>
-            <label class="full" style="display:flex; align-items:flex-start; gap:8px; font-weight:600; margin-top:16px;">
-              <input name="termsAccepted" type="checkbox" required style="width:auto; margin-top:3px;" />
-              <span>I agree to the <a href="terms/" style="color:var(--green);">Terms of Service</a> and <a href="privacy/" style="color:var(--green);">Privacy Policy</a>.</span>
-            </label>
-            <div style="height:16px"></div>
-            <button class="btn" type="submit" id="signupButton">Start workspace</button>
-            <div id="verificationStep" hidden style="margin-top:16px;">
+            <label class="terms"><input name="termsAccepted" type="checkbox" required /><span>I agree to the <a href="terms/">Terms of Service</a> and <a href="privacy/">Privacy Policy</a>.</span></label>
+            <button class="btn form-submit" type="submit" id="signupButton">Create my workspace</button>
+            <div class="verification" id="verificationStep" hidden>
               <label>Email verification code<input id="verificationCode" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="8-digit code" /></label>
-              <div style="height:12px"></div>
-              <button class="btn" type="button" id="verifyButton">Verify email &amp; create workspace</button>
+              <button class="btn form-submit" type="button" id="verifyButton">Verify email &amp; create workspace</button>
             </div>
             <div class="status" id="signupStatus" role="status" aria-live="polite"></div>
           </form>
         </section>
       </div>
     </section>
+
+    <section class="final-cta">
+      <div class="wrap final-cta-inner">
+        <div><h2>Ask. Approve. Done.</h2><p>Give your next shift an AI command center built for hospitality.</p></div>
+        <a class="btn" href="#pricing">Start your workspace</a>
+      </div>
+    </section>
   </main>
 
   <footer class="footer">
     <div class="wrap footer-inner">
-      <div><strong>Venue Wrangler</strong><br />© 2026 Loungeability LLC. Built for restaurants, bars, and event venues.</div>
-      <div>
-        <a href="#integrations">Integrations</a>
-        <a href="support/">Support</a>
-        <a href="privacy/">Privacy</a>
-        <a href="terms/">Terms</a>
-        <a href="faq/">FAQ</a>
-        <a href="support/">Contact</a>
-      </div>
+      <div><strong>Venue Wrangler</strong><br />© 2026 Loungeability LLC. Built for restaurants, bars, hotels, and event venues.</div>
+      <div class="footer-links"><a href="faq/">FAQ</a><a href="support/">Support</a><a href="privacy/">Privacy</a><a href="terms/">Terms</a><a href="/app/sign-in">Login</a></div>
     </div>
   </footer>
 
-  <div class="modal" id="demoModal" aria-hidden="true" role="dialog" aria-label="Venue Wrangler interactive intro">
-    <button class="close" type="button" data-close-demo aria-label="Close">×</button>
-    <div class="modal-card">
-      <div class="modal-media">
-        <img src="assets/screen-command.png" alt="" />
-        <img src="assets/screen-reports.png" alt="" />
-      </div>
-      <div class="modal-copy">
-        <h2>Service moves fast. The app should keep up.</h2>
-        <p>Venue Wrangler connects the operational pieces that usually live in separate tools: schedules, staff, tables, guests, inventory, reporting, and billing.</p>
-        <p>Use the signup form to create the venue workspace. Then open the app and log in with the same email and password.</p>
-        <a class="btn" href="#pricing" data-close-demo>Start workspace</a>
-      </div>
-    </div>
-  </div>
-
   <script>
-    const API_BASE = "https://venue-wrangler-api-c57mm72zpa-ue.a.run.app/api";
-    const modal = document.getElementById("demoModal");
-    document.querySelectorAll("[data-open-demo]").forEach((button) => {
-      button.addEventListener("click", () => {
-        modal.classList.add("open");
-        modal.setAttribute("aria-hidden", "false");
-        document.body.classList.add("modal-open");
-      });
-    });
-    document.querySelectorAll("[data-close-demo]").forEach((button) => {
-      button.addEventListener("click", () => {
-        modal.classList.remove("open");
-        modal.setAttribute("aria-hidden", "true");
-        document.body.classList.remove("modal-open");
-      });
-    });
-    modal.addEventListener("click", (event) => {
-      if (event.target === modal) {
-        modal.classList.remove("open");
-        modal.setAttribute("aria-hidden", "true");
-        document.body.classList.remove("modal-open");
+    const demoContent = {
+      brief: {
+        request: "Brief me before doors open",
+        answer: "Tonight is forecast for 132 reservations. Three shifts still need coverage, two VIP notes need review, and tequila inventory is below par.",
+        plan: ["Prioritize the three staffing gaps", "Surface VIP reservation notes to the floor lead", "Create a follow-up for the low-stock items"],
+        approval: "Review the priority plan before Venue Wrangler assigns the follow-up work.",
+        completed: "Pre-shift priorities organized. Staffing outreach and inventory follow-up are ready for the assigned managers."
+      },
+      staff: {
+        request: "Fill tonight's staffing gap",
+        answer: "We're short 2 servers and 1 bartender from 6–11 PM. I found six available team members who match the roles and availability.",
+        plan: ["Offer the open server shifts to qualified staff", "Offer the bar shift to available bartenders", "Update the schedule after staff accept"],
+        approval: "Review the plan before Venue Wrangler contacts your team.",
+        completed: "Open shifts sent to six qualified team members. The schedule will update as responses arrive."
+      },
+      floor: {
+        request: "Show tables running behind",
+        answer: "Four occupied tables are beyond their expected turn time. Table 22 is the highest priority and has an unassigned dessert course.",
+        plan: ["Alert the floor lead to Table 22", "Show the four delayed tables in priority order", "Create a five-minute follow-up check"],
+        approval: "Review the floor response before Venue Wrangler alerts the floor lead.",
+        completed: "Floor lead notified. Delayed tables are prioritized and a follow-up check is scheduled."
       }
+    };
+    const promptButtons = document.querySelectorAll("[data-demo]");
+    const requestEl = document.getElementById("demoRequest");
+    const answerEl = document.getElementById("demoAnswer");
+    const planEl = document.getElementById("demoPlan");
+    const approvalEl = document.getElementById("demoApproval");
+    const approvalCopyEl = document.getElementById("demoApprovalCopy");
+    const completedEl = document.getElementById("demoCompleted");
+    const completedCopyEl = document.getElementById("demoCompletedCopy");
+    const approveDemo = document.getElementById("approveDemo");
+    const editDemo = document.getElementById("editDemo");
+    let activeDemo = "staff";
+
+    function renderDemo(key) {
+      const demo = demoContent[key];
+      activeDemo = key;
+      requestEl.textContent = demo.request;
+      answerEl.textContent = demo.answer;
+      planEl.innerHTML = demo.plan.map((item) => `<li><span class="material-symbols-rounded" aria-hidden="true">check_circle</span>${item}</li>`).join("");
+      approvalCopyEl.textContent = demo.approval;
+      completedCopyEl.textContent = demo.completed;
+      approvalEl.classList.remove("hide");
+      completedEl.classList.remove("show");
+      promptButtons.forEach((button) => button.classList.toggle("active", button.dataset.demo === key));
+    }
+    promptButtons.forEach((button) => button.addEventListener("click", () => renderDemo(button.dataset.demo)));
+    approveDemo.addEventListener("click", () => {
+      approvalEl.classList.add("hide");
+      completedEl.classList.add("show");
+      completedEl.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "nearest" });
+    });
+    editDemo.addEventListener("click", () => {
+      requestEl.textContent = demoContent[activeDemo].request + " — adjusted for tonight";
+      editDemo.textContent = "Plan updated";
+      setTimeout(() => { editDemo.textContent = "Edit plan"; }, 1400);
     });
 
+    const menuToggle = document.getElementById("menuToggle");
+    const mobileMenu = document.getElementById("mobileMenu");
+    menuToggle.addEventListener("click", () => {
+      const open = mobileMenu.classList.toggle("open");
+      menuToggle.setAttribute("aria-expanded", String(open));
+      menuToggle.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
+      menuToggle.querySelector(".material-symbols-rounded").textContent = open ? "close" : "menu";
+    });
+    mobileMenu.querySelectorAll("a").forEach((link) => link.addEventListener("click", () => {
+      mobileMenu.classList.remove("open");
+      menuToggle.setAttribute("aria-expanded", "false");
+      menuToggle.setAttribute("aria-label", "Open navigation");
+      menuToggle.querySelector(".material-symbols-rounded").textContent = "menu";
+    }));
+
+    const API_BASE = "https://venue-wrangler-api-c57mm72zpa-ue.a.run.app/api";
     async function api(path, options = {}, token) {
       const response = await fetch(API_BASE + path, {
         ...options,
@@ -856,9 +630,7 @@
       });
       const text = await response.text();
       const data = text ? JSON.parse(text) : null;
-      if (!response.ok) {
-        throw new Error(data?.message || data?.error || "Request failed.");
-      }
+      if (!response.ok) throw new Error(data?.message || data?.error || "Request failed.");
       return data;
     }
 
@@ -872,10 +644,7 @@
     let pendingWorkspace = null;
 
     async function createWorkspace() {
-      const result = await api("/v1/app/register-venue", {
-        method: "POST",
-        body: JSON.stringify(pendingWorkspace),
-      }, pendingSession.token);
+      const result = await api("/v1/app/register-venue", { method: "POST", body: JSON.stringify(pendingWorkspace) }, pendingSession.token);
       statusEl.className = "status success";
       statusEl.textContent = `Workspace created for ${result.venue?.name || pendingWorkspace.businessName}. Log in to the iOS app with this same email and password.`;
       form.reset();
@@ -907,15 +676,9 @@
           if (!String(error.message || "").includes("account already exists")) throw error;
           session = await api("/v1/auth/password", {
             method: "POST",
-            body: JSON.stringify({
-              email: String(data.email || "").trim(),
-              password: String(data.password || ""),
-              flow: "signIn",
-            }),
+            body: JSON.stringify({ email: String(data.email || "").trim(), password: String(data.password || ""), flow: "signIn" }),
           });
-          if (!session.profile?.emailVerified) {
-            await api("/v1/auth/verify-email/send", { method: "POST" }, session.token);
-          }
+          if (!session.profile?.emailVerified) await api("/v1/auth/verify-email/send", { method: "POST" }, session.token);
         }
         pendingSession = session;
         pendingWorkspace = {
@@ -962,59 +725,6 @@
         verifyButton.disabled = false;
       }
     });
-  </script>
-  <script>
-  /* Opening transition: play the Venue Wrangler intro once per session, then
-     dissolve into the landing page. Fails safe — the overlay is JS-gated and
-     can never trap the page (reduced-motion, no-JS, load error, or timeout all
-     reveal the page). */
-  (function () {
-    var KEY = 'vw-opener-seen';
-    var host = document.getElementById('vw-opener');
-    var skip = document.getElementById('vw-skip');
-    if (!host) return;
-    var reduced = false, seen = false;
-    try { reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
-    try { seen = !!sessionStorage.getItem(KEY); } catch (e) {}
-    if (seen || reduced) { host.remove(); if (skip) skip.remove(); return; }
-
-    document.documentElement.classList.add('vw-lock');
-    host.classList.add('vw-show');
-
-    var finished = false;
-    function finish() {
-      if (finished) return; finished = true;
-      try { sessionStorage.setItem(KEY, '1'); } catch (e) {}
-      host.classList.add('vw-hide');
-      if (skip) skip.classList.remove('vw-show');
-      document.documentElement.classList.remove('vw-lock');
-      setTimeout(function () { host.remove(); if (skip) skip.remove(); }, 950);
-    }
-    if (skip) skip.addEventListener('click', finish);
-    var safety = setTimeout(finish, 16000);
-
-    function loadScript(src, integrity) {
-      return new Promise(function (resolve, reject) {
-        var s = document.createElement('script');
-        s.src = src; s.async = false; s.crossOrigin = 'anonymous';
-        if (integrity) s.integrity = integrity;
-        s.onload = function () { resolve(); };
-        s.onerror = function () { reject(new Error('failed ' + src)); };
-        document.head.appendChild(s);
-      });
-    }
-
-    loadScript('https://unpkg.com/react@18.3.1/umd/react.production.min.js', 'sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z')
-      .then(function () { return loadScript('https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js', 'sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1'); })
-      .then(function () { return loadScript('opener.js'); })
-      .then(function () {
-        if (!window.VenueWranglerOpener || !window.React || !window.ReactDOM) { finish(); return; }
-        if (skip) skip.classList.add('vw-show');
-        var root = window.ReactDOM.createRoot(host);
-        root.render(window.React.createElement(window.VenueWranglerOpener, { onDone: function () { clearTimeout(safety); finish(); } }));
-      })
-      .catch(function () { finish(); });
-  })();
   </script>
 </body>
 </html>
