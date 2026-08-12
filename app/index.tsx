@@ -15,7 +15,7 @@ export default function Index() {
   const href = !user
     ? "/(auth)/sign-in"
     : !venue
-      ? "/(auth)/sign-in"
+      ? "/(auth)/no-venue"
       : "/(tabs)/home";
   return <Redirect href={href} />;
 }

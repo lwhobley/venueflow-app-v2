@@ -39,10 +39,10 @@ export default function TabsLayout() {
     return <Redirect href="/(auth)/sign-in" />;
   }
 
-  // Enforce venue membership: a signed-in user without a venue can't use the
-  // app and is sent to choose or join a team.
+  // Enforce venue membership without creating a silent sign-in loop. The
+  // dedicated route explains that authentication worked and assignment did not.
   if (hydrated && localUser && !venue) {
-    return <Redirect href="/(auth)/sign-in" />;
+    return <Redirect href="/(auth)/no-venue" />;
   }
 
   return (

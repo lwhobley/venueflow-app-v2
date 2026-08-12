@@ -70,7 +70,7 @@ export default function SignInScreen() {
         token,
       });
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace(venue ? "/(tabs)/home" : "/(auth)/sign-in");
+      router.replace(venue ? "/(tabs)/home" : "/(auth)/no-venue");
     } catch (error) {
       const message =
         error instanceof Error
