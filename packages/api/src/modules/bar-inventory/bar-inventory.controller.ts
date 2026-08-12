@@ -12,6 +12,7 @@ import {
   Post,
   Query,
   UseGuards,
+  Headers,
 } from '@nestjs/common';
 import { ArrayMaxSize, IsArray, IsIn, IsNumber, IsOptional, IsString, Matches, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -28,6 +29,7 @@ import { NotificationsService } from '../../notifications/notifications.service'
 import { EmailService } from '../../email/email.service';
 import { BarInventoryParserService } from './bar-inventory-parser.service';
 import { BarInventoryReportsService } from './bar-inventory-reports.service';
+import { AsyncWriteService } from '../../async-write/async-write.service';
 
 const CATEGORIES = [
   'spirit', 'wine', 'beer', 'mixer', 'garnish', 'supply', 'other',
@@ -307,6 +309,7 @@ export class BarInventoryController {
     private readonly email: EmailService,
     private readonly parser: BarInventoryParserService,
     private readonly reports: BarInventoryReportsService,
+    private readonly asyncWrites: AsyncWriteService,
   ) {}
 
   @RequireSubscription('active')
@@ -388,9 +391,18 @@ export class BarInventoryController {
     @CurrentUser() user: AuthUser,
     @Param('id') itemId: string,
     @Body() body: RecordMovementDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
     const profile = await this.requireManagerProfile(user);
     const venueId = profile.venueId!;
+    // Counts are reconciliation records and remain synchronous. Negative movements
+    // are the halftime hot path and are persisted by the consumer in order.
+    if (this.asyncWrites.isEnabled() && body.movementType !== 'count' && body.quantity < 0) {
+      return this.asyncWrites.enqueue('inventory_decrement', idempotencyKey ?? '', {
+        itemId, venueId, movementType: body.movementType, quantity: body.quantity,
+        notes: cleanText(body.notes), createdBy: profile.id,
+      });
+    }
     const { movement, item, previousOnHand, nextOnHand } = await this.prisma.$transaction(async (tx) => {
       const lockKey = `bar-inventory-${itemId}`;
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;

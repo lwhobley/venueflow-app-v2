@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Post,
 } from '@nestjs/common';
 import { IsBoolean, IsNumber, IsString, IsIn, Max, Min } from 'class-validator';
@@ -16,6 +17,7 @@ import { todayInZone, weekStartFor } from '../../common/pay-period';
 import { mapClockEntry, minutesToTime } from '../../common/mappers';
 import { zonedDayOfWeek, zonedMinutesOfDay, zonedDayBounds } from '../../common/venue-time';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AsyncWriteService } from '../../async-write/async-write.service';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 
@@ -48,7 +50,7 @@ class BreakStartDto {
 
 @Controller('v1/time-clock')
 export class TimeClockController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly asyncWrites: AsyncWriteService) {}
 
   @RequireSubscription()
   @Get('board')
@@ -202,7 +204,7 @@ export class TimeClockController {
 
   @RequireSubscription()
   @Post('clock-in')
-  async clockIn(@VenueScope() scope: Scope, @Body() body: ClockPunchDto) {
+  async clockIn(@VenueScope() scope: Scope, @Body() body: ClockPunchDto, @Headers('idempotency-key') idempotencyKey?: string) {
     if (!scope) throw new BadRequestException('Profile is not initialized');
     const venue = await this.prisma.venue.findUnique({ where: { id: scope.venueId } });
     if (!venue) throw new BadRequestException('Assigned venue not found');
@@ -239,6 +241,13 @@ export class TimeClockController {
           );
         }
       }
+    }
+
+    if (this.asyncWrites.isEnabled()) {
+      return this.asyncWrites.enqueue('clock_in', idempotencyKey ?? '', {
+        profileId: scope.profileId, venueId: venue.id, lat: body.lat, lng: body.lng,
+        accuracy: body.accuracy, mocked: body.mocked, clockInAt: new Date().toISOString(),
+      });
     }
 
     try {

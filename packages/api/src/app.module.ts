@@ -6,6 +6,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthGuard } from './auth/auth.guard';
 import { AuthController } from './auth/auth.controller';
 import { AuthModule } from './auth/auth.module';
+import { EnterpriseSsoModule } from './auth/enterprise-sso.module';
 import { BillingModule } from './billing/billing.module';
 import { EmailModule } from './email/email.module';
 import { HealthController } from './health.controller';
@@ -42,6 +43,7 @@ import { WranglerOperatorController } from './modules/operations/wrangler/wrangl
 import { WranglerOperatorService } from './modules/operations/wrangler/wrangler-operator.service';
 import { SafeWranglerOperatorService } from './modules/operations/wrangler/safe-wrangler-operator.service';
 import { StadiumModule } from './modules/stadium/stadium.module';
+import { AsyncWriteModule } from './async-write/async-write.module';
 
 @Module({
   imports: [
@@ -58,6 +60,7 @@ import { StadiumModule } from './modules/stadium/stadium.module';
     ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
+    EnterpriseSsoModule,
     VenueModule,
     BillingModule,
     EmailModule,
@@ -76,6 +79,7 @@ import { StadiumModule } from './modules/stadium/stadium.module';
     WorkforceModule,
     DocumentsModule,
     StadiumModule,
+    AsyncWriteModule,
   ],
   controllers: [
     HealthController,

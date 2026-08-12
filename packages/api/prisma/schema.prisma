@@ -23,6 +23,20 @@ enum Role {
   warehouse_manager
   premium_manager
   finance_viewer
+  concourse_supervisor
+  suite_manager
+  auditor
+}
+
+enum EnterpriseSsoProtocol {
+  saml
+  oidc
+}
+
+enum EnterpriseSsoProviderStatus {
+  draft
+  active
+  disabled
 }
 
 enum DocumentCategory {
@@ -388,6 +402,8 @@ model User {
   decidedJoinRequests       WorkplaceJoinRequest[]      @relation("WorkplaceJoinRequestDecider")
   joinRequestEvents         WorkplaceJoinRequestEvent[]
   organizationMemberships   OrganizationMembership[]
+  enterpriseSsoIdentities   EnterpriseSsoIdentity[]
+  enterpriseSsoLoginTickets EnterpriseSsoLoginTicket[]
 }
 
 model Session {
@@ -425,11 +441,11 @@ model PasswordCredential {
 }
 
 model Organization {
-  id               String                   @id @default(cuid())
+  id               String                          @id @default(cuid())
   name             String
-  code             String                   @unique
-  createdAt        DateTime                 @default(now())
-  updatedAt        DateTime                 @updatedAt
+  code             String                          @unique
+  createdAt        DateTime                        @default(now())
+  updatedAt        DateTime                        @updatedAt
   venues           Venue[]
   eventIssues      EventIssue[]
   eventAuditLogs   EventAuditLog[]
@@ -440,10 +456,12 @@ model Organization {
   terminals        Terminal[]
   memberships      OrganizationMembership[]
   scopeAssignments ScopeAssignment[]
+  ssoProviders     EnterpriseSsoProvider[]
+  ssoGroupMappings EnterpriseSsoGroupRoleMapping[]
 }
 
 model Facility {
-  id               String            @id @default(cuid())
+  id               String                          @id @default(cuid())
   organizationId   String
   code             String
   name             String
@@ -452,15 +470,17 @@ model Facility {
   latitude         Float?
   longitude        Float?
   capacity         Int?
-  active           Boolean           @default(true)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  active           Boolean                         @default(true)
+  createdAt        DateTime                        @default(now())
+  updatedAt        DateTime                        @updatedAt
+  organization     Organization                    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   zones            FacilityZone[]
   subVenues        SubVenue[]
   outlets          Outlet[]
   terminals        Terminal[]
   scopeAssignments ScopeAssignment[]
+  ssoProviders     EnterpriseSsoProvider[]         @relation("SsoProviderDefaultFacility")
+  ssoGroupMappings EnterpriseSsoGroupRoleMapping[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -468,23 +488,24 @@ model Facility {
 }
 
 model FacilityZone {
-  id               String            @id @default(cuid())
+  id               String                          @id @default(cuid())
   organizationId   String
   facilityId       String
   code             String
   name             String
-  zoneType         FacilityZoneType  @default(concourse)
+  zoneType         FacilityZoneType                @default(concourse)
   level            String?
-  sortOrder        Int               @default(0)
-  active           Boolean           @default(true)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility         Facility          @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  sortOrder        Int                             @default(0)
+  active           Boolean                         @default(true)
+  createdAt        DateTime                        @default(now())
+  updatedAt        DateTime                        @updatedAt
+  organization     Organization                    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility         Facility                        @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
   subVenues        SubVenue[]
   outlets          Outlet[]
   terminals        Terminal[]
   scopeAssignments ScopeAssignment[]
+  ssoGroupMappings EnterpriseSsoGroupRoleMapping[]
 
   @@unique([organizationId, facilityId, id])
   @@unique([organizationId, facilityId, code])
@@ -598,6 +619,110 @@ model ScopeAssignment {
   // partial unique indexes because PostgreSQL treats NULLs as distinct.
   @@index([membershipId])
   @@index([organizationId, facilityId, zoneId, active])
+}
+
+// Enterprise SSO configuration is tenant-owned. Client secrets never appear
+// here: clientSecretEnvKey points to a Cloud Run Secret Manager environment
+// variable, while SAML IdP certificates are public verification material.
+model EnterpriseSsoProvider {
+  id                        String                          @id @default(cuid())
+  organizationId            String
+  slug                      String
+  displayName               String
+  protocol                  EnterpriseSsoProtocol
+  status                    EnterpriseSsoProviderStatus     @default(draft)
+  defaultFacilityId         String?
+  jitProvisioningEnabled    Boolean                         @default(false)
+  allowedEmailDomains       String[]                        @default([])
+  groupClaim                String                          @default("groups")
+  postLoginRedirectUri      String?
+  oidcIssuer                String?
+  oidcClientId              String?
+  clientSecretEnvKey        String?
+  samlEntryPoint            String?
+  samlIdpCertificate        String?
+  samlServiceProviderIssuer String?
+  createdAt                 DateTime                        @default(now())
+  updatedAt                 DateTime                        @updatedAt
+  organization              Organization                    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  defaultFacility           Facility?                       @relation("SsoProviderDefaultFacility", fields: [organizationId, defaultFacilityId], references: [organizationId, id], onDelete: Restrict)
+  groupRoleMappings         EnterpriseSsoGroupRoleMapping[]
+  identities                EnterpriseSsoIdentity[]
+  loginRequests             EnterpriseSsoLoginRequest[]
+  loginTickets              EnterpriseSsoLoginTicket[]
+
+  @@unique([organizationId, slug])
+  @@unique([organizationId, id])
+  @@index([organizationId, status])
+}
+
+model EnterpriseSsoGroupRoleMapping {
+  id             String                @id @default(cuid())
+  organizationId String
+  providerId     String
+  externalGroup  String
+  role           Role
+  facilityId     String?
+  zoneId         String?
+  priority       Int                   @default(0)
+  active         Boolean               @default(true)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  provider       EnterpriseSsoProvider @relation(fields: [organizationId, providerId], references: [organizationId, id], onDelete: Cascade)
+  facility       Facility?             @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Restrict)
+  zone           FacilityZone?         @relation(fields: [organizationId, facilityId, zoneId], references: [organizationId, facilityId, id], onDelete: Restrict)
+
+  @@unique([providerId, externalGroup])
+  @@index([providerId, active, priority])
+  @@index([organizationId, facilityId, zoneId])
+}
+
+model EnterpriseSsoIdentity {
+  id                  String                @id @default(cuid())
+  providerId          String
+  userId              String
+  subject             String
+  email               String
+  lastAuthenticatedAt DateTime              @default(now())
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  provider            EnterpriseSsoProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  user                User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, subject])
+  @@unique([providerId, userId])
+  @@index([userId])
+}
+
+model EnterpriseSsoLoginRequest {
+  id            String                @id @default(cuid())
+  providerId    String
+  stateHash     String?               @unique
+  nonceHash     String?
+  samlRequestId String?               @unique
+  expiresAt     DateTime
+  consumedAt    DateTime?
+  createdAt     DateTime              @default(now())
+  provider      EnterpriseSsoProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId, expiresAt])
+}
+
+model EnterpriseSsoLoginTicket {
+  id         String                @id @default(cuid())
+  providerId String
+  userId     String
+  profileId  String
+  secretHash String                @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime              @default(now())
+  provider   EnterpriseSsoProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  user       User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([providerId, expiresAt])
 }
 
 model Venue {

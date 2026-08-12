@@ -10,10 +10,22 @@ export function canManageVenue(role?: string | null, allAccess = false): boolean
   return allAccess || isAdminRole(role) || ['event_manager', 'outlet_manager', 'executive_chef', 'warehouse_manager', 'premium_manager'].includes(role ?? '');
 }
 
+/**
+ * Roles that may run operational actions, but only through endpoints that
+ * enforce their persisted facility/zone assignment. Do not use this for
+ * venue-wide legacy routes.
+ */
+export function canManageAssignedScope(role?: string | null): boolean {
+  return ['concourse_supervisor', 'suite_manager'].includes(role ?? '');
+}
+
 const ROLE_RANK: Record<string, number> = {
   staff: 0,
   server: 1,
   manager: 2,
+  concourse_supervisor: 2,
+  suite_manager: 2,
+  auditor: 1,
   owner: 3,
   admin: 3,
 };

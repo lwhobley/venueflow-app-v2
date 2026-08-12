@@ -6,9 +6,10 @@ import { BillingModule } from '../../billing/billing.module';
 import { NotificationsModule } from '../../notifications/notifications.module';
 import { EmailModule } from '../../email/email.module';
 import { BarInventoryParserService } from './bar-inventory-parser.service';
+import { AsyncWriteModule } from '../../async-write/async-write.module';
 
 @Module({
-  imports: [PrismaModule, BillingModule, NotificationsModule, EmailModule],
+  imports: [PrismaModule, BillingModule, NotificationsModule, EmailModule, AsyncWriteModule],
   controllers: [BarInventoryController],
   providers: [BarInventoryParserService, BarInventoryReportsService],
 })
