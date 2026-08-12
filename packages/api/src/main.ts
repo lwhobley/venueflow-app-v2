@@ -9,22 +9,7 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { jsonBodyLimitForPath } from './common/body-limit';
 import { initSentry } from './observability/sentry';
-
-const DEFAULT_CORS_ORIGINS = [
-  'https://www.venuewrangler.com',
-  'https://venuewrangler.com',
-];
-
-function isAllowedOrigin(origin: string, isProduction: boolean): boolean {
-  if (!/^https?:\/\//i.test(origin)) return false;
-  if (!isProduction) return true;
-  try {
-    const host = new URL(origin).hostname.toLowerCase();
-    return host === 'venuewrangler.com' || host.endsWith('.venuewrangler.com');
-  } catch {
-    return false;
-  }
-}
+import { DEFAULT_CORS_ORIGINS, isAllowedOrigin } from './common/cors-origin';
 
 async function bootstrap() {
   // Error tracking — no-op unless SENTRY_DSN is set.
@@ -48,7 +33,7 @@ async function bootstrap() {
   }
   app.getHttpAdapter().getInstance().set('trust proxy', trustProxyHops);
   // Only accept fully-qualified http(s) origins. In production, further
-  // restrict to venuewrangler.com hosts so a mis-set CORS_ORIGINS cannot
+  // restrict to product domains and local Expo previews so a mis-set CORS_ORIGINS cannot
   // open credentialed browser access to an attacker origin.
   const isProduction = process.env.NODE_ENV === 'production';
   const origins = config
