@@ -43,27 +43,27 @@ export const designPalettes = {
   },
   light: {
     mode: "light" as const,
-    background: "#0B3D20",
-    backgroundAlt: "#FFF4DD",
-    surface: "transparent",
-    surfaceStrong: "transparent",
-    surfaceSoft: "transparent",
-    glass: "transparent",
-    primary: "#F0C36A",
-    secondary: "#FFF4DD",
-    charcoal: "#FFF4DD",
-    muted: "#E7C99D",
-    border: "#BD7B43",
-    divider: "#8E4D29",
-    success: "#A9DB91",
-    danger: "#FFB0A1",
-    warning: "#F0C36A",
-    info: "#AFD9F0",
-    cream: "transparent",
-    glow: "transparent",
-    shadow: "#1F1009",
+    background: "#F7F7F4",
+    backgroundAlt: "#FFFFFF",
+    surface: "#FFFFFF",
+    surfaceStrong: "#FFFFFF",
+    surfaceSoft: "#F1F2EE",
+    glass: "#FFFFFF",
+    primary: "#17643B",
+    secondary: "#A86514",
+    charcoal: "#1D2420",
+    muted: "#68706A",
+    border: "#DDE1DA",
+    divider: "#E5E8E2",
+    success: "#17643B",
+    danger: "#B4483F",
+    warning: "#A86514",
+    info: "#4A6678",
+    cream: "#EEF5F0",
+    glow: "#EEF5F0",
+    shadow: "#69736B",
     // Text/icons drawn on top of `primary` fills (dark-green in light mode).
-    buttonText: "#291208",
+    buttonText: "#FFFFFF",
   },
 } as const;
 
@@ -77,16 +77,16 @@ export const useDesignTheme = () => {
 export const colors = designPalettes.light;
 
 export const authColors = {
-  background: "transparent",
-  surface: "transparent",
-  primary: "#FFF4DD",
-  text: "#FFFDF7",
-  muted: "#E9D6B7",
-  border: "#FFF4DD",
+  background: colors.background,
+  surface: colors.surface,
+  primary: colors.primary,
+  text: "#1F241E",
+  muted: "#6F766B",
+  border: "#E8E2D8",
   danger: colors.danger,
   success: colors.success,
-  buttonText: "#241005",
-  highlight: "transparent",
+  buttonText: "#FFFFFF",
+  highlight: "#F0F7F2",
 };
 
 export const authInputProps = {
@@ -180,16 +180,18 @@ export const shadow = {
 } as const;
 
 export const authCardStyle = {
-  backgroundColor: "transparent",
-  borderRadius: 0,
-  borderWidth: 0,
-  borderColor: "transparent",
+  backgroundColor: authColors.surface,
+  borderRadius: radius.soft,
+  borderWidth: 1,
+  borderColor: authColors.border,
 } as const;
 
 export const glass = {
-  backgroundColor: "transparent",
-  borderWidth: 0,
-  borderColor: "transparent",
+  backgroundColor: designPalettes.light.glass,
+  borderWidth: 1,
+  borderColor: designPalettes.light.border,
+  backdropFilter: "blur(20px)",
+  WebkitBackdropFilter: "blur(20px)",
 } as const;
 
 export const makePaperTheme = (mode: ThemeMode) => {
