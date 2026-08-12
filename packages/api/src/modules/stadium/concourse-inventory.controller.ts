@@ -1,80 +1,110 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ConcourseInventoryService, CreateStandSheetDto, RecordCountOutDto, CreateTransferDto, HawkerCheckoutDto, HawkerSettleDto } from './concourse-inventory.service';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
-import { Public } from '../../auth/public.decorator';
+import { canManageVenue } from '../../auth/roles';
+import { PrismaService } from '../../prisma/prisma.service';
+import { RequireSubscription } from '../../billing/require-subscription.decorator';
+import { IsIn, IsString } from 'class-validator';
 
 type Scope = NonNullable<VenueScopedRequest['venueScope']>;
 
+class UpdateTransferStatusDto {
+  @IsIn(['approved', 'in_transit', 'completed', 'rejected'])
+  status!: 'approved' | 'in_transit' | 'completed' | 'rejected';
+}
+
+class SeedOutletsDto { @IsString() zoneId!: string; }
+
 @Controller('v1/stadium/concourse')
+@RequireSubscription()
 export class ConcourseInventoryController {
-  constructor(private readonly service: ConcourseInventoryService) {}
+  constructor(private readonly service: ConcourseInventoryService, private readonly prisma: PrismaService) {}
+
+  private async assertOperator(scope: Scope, zoneId?: string) {
+    if (canManageVenue(scope.role, scope.allAccess)) return;
+    if (scope.role !== 'concourse_supervisor') {
+      throw new ForbiddenException('Concourse operations manager access is required.');
+    }
+    const assignment = await this.prisma.scopeAssignment.findFirst({
+      where: {
+        organizationId: await this.organizationIdFor(scope.venueId), active: true,
+        membership: { userId: scope.userId, status: 'active' },
+        AND: [
+          { OR: [{ facilityId: null }, { facilityId: scope.venueId }] },
+          zoneId ? { OR: [{ zoneId: null }, { zoneId }] } : { zoneId: null },
+        ],
+      },
+      select: { id: true },
+    });
+    if (!assignment) throw new ForbiddenException('This concourse operation is outside your assigned facility or zone.');
+  }
+
+  private async organizationIdFor(facilityId: string) {
+    const venue = await this.prisma.venue.findUniqueOrThrow({ where: { id: facilityId }, select: { organizationId: true } });
+    return venue.organizationId;
+  }
 
   @Get('stand-sheets')
   async listStandSheets(@VenueScope() scope: Scope, @Query('zoneId') zoneId?: string, @Query('outletId') outletId?: string) {
+    await this.assertOperator(scope, zoneId);
     return this.service.listStandSheets(scope.venueId, zoneId, outletId);
-  }
-
-  @Public()
-  @Get('stand-sheets-public')
-  async listStandSheetsPublic(@Query('facilityId') facilityId: string, @Query('zoneId') zoneId?: string, @Query('outletId') outletId?: string) {
-    return this.service.listStandSheets(facilityId || 'facility-1', zoneId, outletId);
   }
 
   @Post('stand-sheets')
   async createStandSheet(@VenueScope() scope: Scope, @Body() body: CreateStandSheetDto) {
-    return this.service.createStandSheet({ ...body, facilityId: scope.venueId });
-  }
-
-  @Public()
-  @Post('stand-sheets-public')
-  async createStandSheetPublic(@Body() body: CreateStandSheetDto) {
-    return this.service.createStandSheet(body);
+    await this.assertOperator(scope, body.zoneId);
+    return this.service.createStandSheet({
+      ...body, organizationId: await this.organizationIdFor(scope.venueId), facilityId: scope.venueId,
+      supervisorId: scope.profileId, supervisorName: scope.fullName,
+    });
   }
 
   @Post('stand-sheets/:id/reconcile')
-  async reconcileStandSheet(@Param('id') id: string, @Body() body: RecordCountOutDto) {
-    return this.service.reconcileStandSheet(id, body);
+  async reconcileStandSheet(@VenueScope() scope: Scope, @Param('id') id: string, @Body() body: RecordCountOutDto) {
+    const sheet = await this.prisma.standSheet.findFirst({ where: { id, facilityId: scope.venueId }, select: { zoneId: true } });
+    if (!sheet) throw new ForbiddenException('Stand sheet is unavailable in this facility.');
+    await this.assertOperator(scope, sheet.zoneId);
+    return this.service.reconcileStandSheet(scope.venueId, id, body);
   }
 
   @Get('transfers')
   async listTransfers(@VenueScope() scope: Scope) {
+    await this.assertOperator(scope);
     return this.service.listTransfers(scope.venueId);
   }
 
-  @Public()
-  @Get('transfers-public')
-  async listTransfersPublic(@Query('facilityId') facilityId: string) {
-    return this.service.listTransfers(facilityId || 'facility-1');
-  }
-
   @Post('transfers')
-  async submitTransferRequest(@Body() body: CreateTransferDto) {
-    return this.service.submitTransferRequest(body);
+  async submitTransferRequest(@VenueScope() scope: Scope, @Body() body: CreateTransferDto) {
+    await this.assertOperator(scope);
+    return this.service.submitTransferRequest({ ...body, organizationId: await this.organizationIdFor(scope.venueId), facilityId: scope.venueId, requestedBy: scope.fullName });
   }
 
   @Patch('transfers/:id/status')
-  async updateTransferStatus(@Param('id') id: string, @Body() body: { status: 'approved' | 'in_transit' | 'completed' | 'rejected' }) {
-    return this.service.updateTransferStatus(id, body.status);
+  async updateTransferStatus(@VenueScope() scope: Scope, @Param('id') id: string, @Body() body: UpdateTransferStatusDto) {
+    await this.assertOperator(scope);
+    return this.service.updateTransferStatus(scope.venueId, id, body.status);
   }
 
   @Post('hawkers/checkout')
-  async checkoutHawkerInventory(@Body() body: HawkerCheckoutDto) {
-    return this.service.checkoutHawkerInventory(body);
+  async checkoutHawkerInventory(@VenueScope() scope: Scope, @Body() body: HawkerCheckoutDto) {
+    await this.assertOperator(scope);
+    return this.service.checkoutHawkerInventory({ ...body, organizationId: await this.organizationIdFor(scope.venueId), facilityId: scope.venueId });
   }
 
   @Post('hawkers/:id/settle')
-  async settleHawkerSession(@Param('id') id: string, @Body() body: HawkerSettleDto) {
-    return this.service.settleHawkerSession(id, body);
+  async settleHawkerSession(@VenueScope() scope: Scope, @Param('id') id: string, @Body() body: HawkerSettleDto) {
+    await this.assertOperator(scope);
+    return this.service.settleHawkerSession(scope.venueId, id, body);
   }
 
-  @Public()
   @Post('seed-outlets')
-  async seedOutlets(@Body() body: { facilityId?: string; organizationId?: string; zoneId?: string }) {
+  async seedOutlets(@VenueScope() scope: Scope, @Body() body: SeedOutletsDto) {
+    await this.assertOperator(scope, body.zoneId);
     return this.service.seedConcourseOutletsAndWarehouse(
-      body.facilityId ?? 'facility-1',
-      body.organizationId ?? 'org-stadium-1',
-      body.zoneId ?? 'zone-north',
+      scope.venueId,
+      await this.organizationIdFor(scope.venueId),
+      body.zoneId,
     );
   }
 }

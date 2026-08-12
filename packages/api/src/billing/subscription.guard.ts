@@ -88,6 +88,7 @@ export class SubscriptionGuard implements CanActivate {
     });
 
     request.venueScope = {
+      userId: user.sub,
       profileId: profile.id,
       fullName: profile.fullName,
       venueId: profile.venueId,

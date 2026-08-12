@@ -20,11 +20,13 @@ describe('ConcourseInventoryService', () => {
       inventoryTransferRequest: {
         findMany: vi.fn(),
         findUnique: vi.fn(),
+        findFirst: vi.fn(),
         create: vi.fn(),
         update: vi.fn(),
       },
       hawkerVendorSession: {
         findUnique: vi.fn(),
+        findFirst: vi.fn(),
         create: vi.fn(),
         update: vi.fn(),
       },
@@ -37,6 +39,7 @@ describe('ConcourseInventoryService', () => {
       outlet: {
         upsert: vi.fn().mockResolvedValue({ id: 'outlet_1', code: 'STAND-101' }),
       },
+      $transaction: vi.fn(async (cb) => cb(prisma)),
     };
 
     wsGateway = {
@@ -61,10 +64,10 @@ describe('ConcourseInventoryService', () => {
       ],
     };
 
-    prisma.standSheet.findUnique.mockResolvedValue(mockExistingSheet);
+    prisma.standSheet.findFirst.mockResolvedValue(mockExistingSheet);
     prisma.standSheet.update.mockImplementation(async ({ data }) => ({ id: 'sheet_1', ...data }));
 
-    const result = await service.reconcileStandSheet('sheet_1', {
+    const result = await service.reconcileStandSheet('facility-1', 'sheet_1', {
       countOutItems: [
         { code: 'BEER-IPA', name: 'IPA Pint', count: 30, unitPriceCents: 1400 },
         { code: 'HOTDOG', name: 'Hot Dog', count: 10, unitPriceCents: 1000 },
@@ -107,15 +110,17 @@ describe('ConcourseInventoryService', () => {
     expect(transfer.id).toBe('t_101');
     expect(wsGateway.broadcastReplenishment).toHaveBeenCalledOnce();
 
-    prisma.inventoryTransferRequest.findUnique.mockResolvedValue({
+    prisma.inventoryTransferRequest.findFirst.mockResolvedValue({
       id: 't_101',
+      facilityId: 'facility-1',
       toOutletId: 'STAND-112',
       items: [{ code: 'BEER-IPA', name: 'IPA Pint', quantity: 24 }],
+      status: 'in_transit',
     });
     prisma.standSheet.findFirst.mockResolvedValue({ id: 'sheet_101', restocks: [] });
     prisma.inventoryTransferRequest.update.mockResolvedValue({ id: 't_101', status: 'completed' });
 
-    const completed = await service.updateTransferStatus('t_101', 'completed');
+    const completed = await service.updateTransferStatus('facility-1', 't_101', 'completed');
     expect(completed.status).toBe('completed');
     expect(prisma.standSheet.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -125,16 +130,17 @@ describe('ConcourseInventoryService', () => {
   });
 
   it('calculates hawker vendor sales and 15% commission payout', async () => {
-    prisma.hawkerVendorSession.findUnique.mockResolvedValue({
+    prisma.hawkerVendorSession.findFirst.mockResolvedValue({
       id: 'hawker_1',
       hawkerId: 'HAWKER-88',
       itemsCheckedOut: [{ code: 'BEER-IPA', name: 'IPA Pint', quantity: 50, unitPriceCents: 1000 }],
       commissionRateBps: 1500, // 15%
+      status: 'active',
     });
 
     prisma.hawkerVendorSession.update.mockImplementation(async ({ data }) => ({ id: 'hawker_1', ...data }));
 
-    const settled = await service.settleHawkerSession('hawker_1', {
+    const settled = await service.settleHawkerSession('facility-1', 'hawker_1', {
       itemsCheckedIn: [{ code: 'BEER-IPA', quantity: 10 }], // 40 sold
       cashCollectedCents: 25000,
       cardCollectedCents: 15000,
@@ -145,6 +151,18 @@ describe('ConcourseInventoryService', () => {
     expect(settled.grossSalesCents).toBe(40000);
     expect(settled.commissionPayoutCents).toBe(6000);
     expect(settled.status).toBe('settled');
+  });
+
+  it('does not duplicate a completed transfer after a retry', async () => {
+    prisma.inventoryTransferRequest.findFirst.mockResolvedValue({
+      id: 't_done', facilityId: 'facility-1', status: 'completed', toOutletId: 'STAND-112', items: [],
+    });
+
+    await expect(service.updateTransferStatus('facility-1', 't_done', 'completed')).rejects.toThrow(
+      'Cannot transition a transfer from completed to completed.',
+    );
+    expect(prisma.inventoryTransferRequest.update).not.toHaveBeenCalled();
+    expect(prisma.standSheet.update).not.toHaveBeenCalled();
   });
 
   it('enforces Family Event Mode (alcoholDisabled) and Concert Mode (+15% surcharge) dynamic pricing', async () => {

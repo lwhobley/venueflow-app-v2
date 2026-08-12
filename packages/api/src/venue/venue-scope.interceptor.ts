@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 export type VenueScopedRequest = AuthenticatedRequest & {
   venueScope?: {
+    userId: string;
     profileId: string;
     fullName: string;
     venueId: string;
@@ -71,7 +72,7 @@ export class VenueScopeInterceptor implements NestInterceptor {
     if (!profile?.venueId || !profile.venue) return next.handle();
 
     const subscriptionStatus = await resolveVenueSubscriptionStatus(this.prisma, { venueId: profile.venueId, venueStatus: profile.venue.subscriptionStatus, trialEndsAt: profile.trialEndsAt });
-    request.venueScope = { profileId: profile.id, fullName: profile.fullName, venueId: profile.venueId, venueName: profile.venue.name, role: profile.role, allAccess: profile.allAccess, subscriptionStatus, trialEndsAt: profile.trialEndsAt ?? null };
+    request.venueScope = { userId: user.sub, profileId: profile.id, fullName: profile.fullName, venueId: profile.venueId, venueName: profile.venue.name, role: profile.role, allAccess: profile.allAccess, subscriptionStatus, trialEndsAt: profile.trialEndsAt ?? null };
 
     return bindAiUsageContext(
       { venueId: profile.venueId, profileId: profile.id, prisma: this.prisma },

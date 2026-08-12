@@ -2,15 +2,22 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SuiteHospitalityGateway } from './suite-hospitality.gateway';
 import { EventPresetType } from '@prisma/client';
+import { IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 
-export interface CreateMenuOverlayDto {
-  organizationId: string;
-  facilityId: string;
+export class CreateMenuOverlayDto {
+  @IsOptional() @IsString() organizationId!: string;
+  @IsOptional() @IsString() facilityId!: string;
+  @IsOptional() @IsString()
   eventId?: string;
-  name: string;
-  presetType: EventPresetType;
+  @IsString()
+  name!: string;
+  @IsIn(['family_event', 'concert_mode', 'custom'])
+  presetType!: EventPresetType;
+  @IsOptional() @IsBoolean()
   alcoholDisabled?: boolean;
+  @IsOptional() @IsNumber() @Min(0) @Max(100)
   surchargePercentage?: number;
+  @IsOptional() @IsArray() @IsString({ each: true })
   appliedOutletTypes?: string[];
 }
 
@@ -73,8 +80,8 @@ export class EventMenuService {
     return overlay;
   }
 
-  async toggleOverlay(id: string, active: boolean) {
-    const existing = await this.prisma.eventMenuOverlay.findUnique({ where: { id } });
+  async toggleOverlay(facilityId: string, id: string, active: boolean) {
+    const existing = await this.prisma.eventMenuOverlay.findFirst({ where: { id, facilityId } });
     if (!existing) throw new NotFoundException('Event menu overlay not found.');
 
     const updated = await this.prisma.eventMenuOverlay.update({

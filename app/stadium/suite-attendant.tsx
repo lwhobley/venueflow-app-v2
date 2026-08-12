@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert } from 'react-native';
+import { apiRequest } from '../../lib/api-client';
 
 export interface BEOItem {
   code: string;
@@ -31,41 +32,34 @@ export default function SuiteAttendantRunnerScreen() {
   const [replenishSummary, setReplenishSummary] = useState<string>('');
   const [signatureName, setSignatureName] = useState<string>('');
 
-  const fetchRunnerOrders = async () => {
+  const fetchRunnerOrders = async (silent = false) => {
     try {
-      const apiHost = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-      const res = await fetch(`${apiHost}/v1/stadium/suite-beos/public-kds?facilityId=facility-1`);
-      if (res.ok) {
-        const data = await res.json();
-        setBeos(data);
-      } else {
-        setBeos(getMockAttendantData());
-      }
-    } catch {
-      setBeos(getMockAttendantData());
+      setBeos(await apiRequest<SuiteBEO[]>('/v1/stadium/suite-beos'));
+    } catch (error) {
+      setBeos([]);
+      if (!silent) Alert.alert('Runner sync failed', error instanceof Error ? error.message : 'Unable to load suite deliveries.');
     }
   };
 
   useEffect(() => {
     fetchRunnerOrders();
-    const interval = setInterval(fetchRunnerOrders, 4000);
+    const interval = setInterval(() => fetchRunnerOrders(true), 4000);
     return () => clearInterval(interval);
   }, []);
 
   const handleMarkDelivered = async () => {
     if (!deliveryModalBeo) return;
     try {
-      const apiHost = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-      await fetch(`${apiHost}/v1/stadium/suite-beos/${deliveryModalBeo.id}/deliver-public`, {
+      await apiRequest(`/v1/stadium/suite-beos/${deliveryModalBeo.id}/deliver`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           deliveredBy: signatureName || 'Attendant Runner',
           notes: 'Signed by host on runner mobile device.',
-        }),
+        },
       });
-    } catch {
-      setBeos(prev => prev.map(b => b.id === deliveryModalBeo.id ? { ...b, status: 'delivered' } : b));
+    } catch (error) {
+      Alert.alert('Delivery update failed', error instanceof Error ? error.message : 'The delivery was not changed.');
+      return;
     }
     setDeliveryModalBeo(null);
     setSignatureName('');
@@ -78,20 +72,16 @@ export default function SuiteAttendantRunnerScreen() {
     if (!text.trim()) return;
 
     try {
-      const apiHost = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-      await fetch(`${apiHost}/v1/stadium/suite-beos/${replenishModalBeo.id}/replenish`, {
+      await apiRequest(`/v1/stadium/suite-beos/${replenishModalBeo.id}/replenish`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          subVenueId: replenishModalBeo.subVenue?.name || 'VIP Suite',
-          zoneId: replenishModalBeo.zone?.name || 'East VIP',
+        body: {
           itemSummary: text,
           priority: 'urgent',
-          requestedBy: 'Suite Attendant Mobile',
-        }),
+        },
       });
-    } catch {
-      // Mock fallback
+    } catch (error) {
+      Alert.alert('Request failed', error instanceof Error ? error.message : 'The replenishment was not sent.');
+      return;
     }
 
     Alert.alert('Replenishment Alert Sent!', `High-priority alert sent to Central Supply: "${text}"`);
@@ -107,7 +97,7 @@ export default function SuiteAttendantRunnerScreen() {
           <Text style={styles.headerTitle}>SUITE ATTENDANT RUNNER</Text>
           <Text style={styles.headerSub}>LEVEL 3 VIP SUITES • RUNNER MOBILE INTERFACE</Text>
         </View>
-        <TouchableOpacity style={styles.refreshIconBtn} onPress={fetchRunnerOrders}>
+        <TouchableOpacity style={styles.refreshIconBtn} onPress={() => fetchRunnerOrders()}>
           <Text style={styles.refreshIconText}>🔄</Text>
         </TouchableOpacity>
       </View>
@@ -245,44 +235,6 @@ export default function SuiteAttendantRunnerScreen() {
       )}
     </View>
   );
-}
-
-function getMockAttendantData(): SuiteBEO[] {
-  const now = new Date();
-  return [
-    {
-      id: 'beo_101',
-      beoNumber: 'BEO-SUITE-2001',
-      subVenue: { name: 'VIP Suite 101 (Owner Box)', code: 'S-101' },
-      zone: { name: 'East Concourse VIP', level: 'Level 3 VIP' },
-      hostName: 'Global Corp Host',
-      guestCount: 16,
-      deliveryWindowStart: new Date(now.getTime() + 10 * 60 * 1000).toISOString(),
-      deliveryWindowEnd: new Date(now.getTime() + 40 * 60 * 1000).toISOString(),
-      specialInstructions: 'Peanut allergy. Serve Dom Pérignon extra chilled at 45°F.',
-      cateringLineItems: [
-        { code: 'CAVIAR', name: 'Petrossian Caviar & Blinis', quantity: 2 },
-        { code: 'SLIDER', name: 'Wagyu Beef Sliders (12pc)', quantity: 3 },
-        { code: 'CHAMP', name: 'Dom Pérignon Vintage Champagne', quantity: 2 },
-      ],
-      status: 'en_route',
-    },
-    {
-      id: 'beo_102',
-      beoNumber: 'BEO-SUITE-2002',
-      subVenue: { name: 'VIP Suite 102 (Presidential)', code: 'S-102' },
-      zone: { name: 'East Concourse VIP', level: 'Level 3 VIP' },
-      hostName: 'Apex Capital Host',
-      guestCount: 20,
-      deliveryWindowStart: new Date(now.getTime() + 25 * 60 * 1000).toISOString(),
-      deliveryWindowEnd: new Date(now.getTime() + 55 * 60 * 1000).toISOString(),
-      cateringLineItems: [
-        { code: 'CHARCUTERIE', name: 'Artisanal Cheese & Charcuterie', quantity: 2 },
-        { code: 'SUSHI', name: 'Premium Sashimi & Nigiri Platter', quantity: 2 },
-      ],
-      status: 'prep_initiated',
-    },
-  ];
 }
 
 const styles = StyleSheet.create({

@@ -21,6 +21,7 @@ describe('Mass Temp Staffing & Union Compliance Services', () => {
       },
       shiftPunch: {
         findMany: vi.fn(),
+        findFirst: vi.fn(),
         create: vi.fn(),
       },
       tempAgency: {
@@ -38,7 +39,7 @@ describe('Mass Temp Staffing & Union Compliance Services', () => {
   });
 
   it('calculates 10-hour shift math cleanly: 8.0 hrs Regular + 2.0 hrs Overtime + 1.0 hr Meal Penalty Pay', async () => {
-    prisma.workerProfile.findUnique.mockResolvedValue({
+    prisma.workerProfile.findFirst.mockResolvedValue({
       id: 'w_101',
       firstName: 'TempWorker',
       lastName: '1',
@@ -92,23 +93,25 @@ describe('Mass Temp Staffing & Union Compliance Services', () => {
 
   it('evaluates Staff Gate Check-In status: GREEN for assigned outlet, RED for expired certs', async () => {
     // Valid worker with assigned outlet -> GREEN
-    prisma.workerProfile.findFirst.mockResolvedValueOnce({
+    const validWorker = {
       id: 'w_1',
       organizationId: 'org-1',
       facilityId: 'facility-1',
       firstName: 'Alex',
       lastName: 'Mercer',
-      pinCode: '1001',
-      qrCodeIdentifier: 'QR-STADIUM-1001',
+      pinCode: '100001',
+      qrCodeIdentifier: 'QR-STADIUM-facility-1-100001',
       certFoodSafety: true,
       certAlcohol: true,
       certAlcoholExpiry: new Date('2028-01-01'),
       active: true,
-    });
+    };
+    prisma.workerProfile.findFirst.mockResolvedValueOnce(validWorker).mockResolvedValueOnce(validWorker);
 
     prisma.shiftPunch.create.mockResolvedValue({ id: 'p_101' });
+    prisma.shiftPunch.findFirst.mockResolvedValue(null);
 
-    const greenResult = await staffingService.kioskCheckIn('facility-1', '1001', 'STAND-104');
+    const greenResult = await staffingService.kioskCheckIn('facility-1', '100001', 'STAND-104');
     expect(greenResult.status).toBe('GREEN');
     expect(greenResult.worker.assignedOutlet).toBe('STAND-104');
 
@@ -119,15 +122,15 @@ describe('Mass Temp Staffing & Union Compliance Services', () => {
       facilityId: 'facility-1',
       firstName: 'John',
       lastName: 'Doe',
-      pinCode: '1013',
-      qrCodeIdentifier: 'QR-STADIUM-1013',
+      pinCode: '100013',
+      qrCodeIdentifier: 'QR-STADIUM-facility-1-100013',
       certFoodSafety: true,
       certAlcohol: true,
       certAlcoholExpiry: new Date('2025-01-01'), // Expired!
       active: true,
     });
 
-    const redResult = await staffingService.kioskCheckIn('facility-1', '1013');
+    const redResult = await staffingService.kioskCheckIn('facility-1', '100013');
     expect(redResult.status).toBe('RED');
     expect(redResult.message).toContain('CHECK-IN BLOCKED');
   });

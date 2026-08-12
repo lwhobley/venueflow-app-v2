@@ -1,14 +1,20 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UnionComplianceService } from './union-compliance.service';
+import { IsBoolean, IsDateString, IsOptional, IsString } from 'class-validator';
 
-export interface RosterImportRow {
-  firstName: string;
-  lastName: string;
+export class RosterImportRow {
+  @IsString() firstName!: string;
+  @IsString() lastName!: string;
+  @IsOptional() @IsString()
   agencyCode?: string;
+  @IsOptional() @IsString()
   unionMemberId?: string;
+  @IsOptional() @IsBoolean()
   certFoodSafety?: boolean;
+  @IsOptional() @IsBoolean()
   certAlcohol?: boolean;
+  @IsOptional() @IsDateString()
   certAlcoholExpiry?: string;
 }
 
@@ -20,8 +26,6 @@ export interface KioskCheckInResult {
     fullName: string;
     unionMemberId?: string;
     agencyName?: string;
-    pinCode: string;
-    qrCodeIdentifier: string;
     assignedOutlet?: string;
   };
 }
@@ -51,11 +55,11 @@ export class TempStaffingService {
     }
 
     const createdWorkers = [];
-    let pinCounter = 1000 + (await this.prisma.workerProfile.count({ where: { facilityId } }));
+    let pinCounter = 100000 + (await this.prisma.workerProfile.count({ where: { facilityId } }));
 
     for (const row of rows) {
-      const pinCode = String(pinCounter++).padStart(4, '0');
-      const qrCodeIdentifier = `QR-STADIUM-${pinCode}-${Date.now().toString().slice(-4)}`;
+      const pinCode = String(pinCounter++).padStart(6, '0');
+      const qrCodeIdentifier = `QR-STADIUM-${facilityId}-${pinCode}`;
 
       const worker = await this.prisma.workerProfile.create({
         data: {
@@ -114,8 +118,6 @@ export class TempStaffingService {
           fullName: `${worker.firstName} ${worker.lastName}`,
           unionMemberId: worker.unionMemberId ?? undefined,
           agencyName: worker.agency?.name,
-          pinCode: worker.pinCode,
-          qrCodeIdentifier: worker.qrCodeIdentifier,
         },
       };
     }
@@ -141,8 +143,6 @@ export class TempStaffingService {
           fullName: `${worker.firstName} ${worker.lastName}`,
           unionMemberId: worker.unionMemberId ?? undefined,
           agencyName: worker.agency?.name,
-          pinCode: worker.pinCode,
-          qrCodeIdentifier: worker.qrCodeIdentifier,
           assignedOutlet: outletId,
         },
       };
@@ -156,8 +156,6 @@ export class TempStaffingService {
         fullName: `${worker.firstName} ${worker.lastName}`,
         unionMemberId: worker.unionMemberId ?? undefined,
         agencyName: worker.agency?.name,
-        pinCode: worker.pinCode,
-        qrCodeIdentifier: worker.qrCodeIdentifier,
       },
     };
   }
@@ -168,7 +166,7 @@ export class TempStaffingService {
       rows.push({
         firstName: `TempWorker`,
         lastName: `${i}`,
-        unionMemberId: `LOCAL226-${1000 + i}`,
+        unionMemberId: `LOCAL226-${100000 + i}`,
         certFoodSafety: true,
         certAlcohol: i !== 13, // Worker 13 has expired alcohol cert for RED test
         certAlcoholExpiry: i === 13 ? '2025-01-01T00:00:00.000Z' : '2027-12-31T00:00:00.000Z',

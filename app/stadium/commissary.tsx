@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { apiRequest } from '../../lib/api-client';
 
 export interface RestockTransfer {
   id: string;
@@ -28,44 +29,15 @@ export default function CentralCommissaryDashboard() {
 
   const fetchData = async () => {
     try {
-      const apiHost = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-      const res = await fetch(`${apiHost}/v1/stadium/concourse/transfers-public?facilityId=facility-1`);
-      if (res.ok) {
-        const data = await res.json();
-        setTransfers(data);
-      } else {
-        setMockData();
-      }
-    } catch {
-      setMockData();
+      setTransfers(await apiRequest<RestockTransfer[]>('/v1/stadium/concourse/transfers'));
+      setHawkerSessions([]);
+    } catch (error) {
+      setTransfers([]);
+      setHawkerSessions([]);
+      Alert.alert('Commissary sync failed', error instanceof Error ? error.message : 'Unable to load live transfers.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const setMockData = () => {
-    setTransfers([
-      {
-        id: 'transfer_101',
-        fromOutletId: 'WH-CENTRAL-01',
-        toOutletId: 'Concourse Stand 112',
-        requestedBy: 'Concourse Supervisor Dave',
-        status: 'pending',
-        items: [{ code: 'BEER-IPA', name: 'Craft IPA Cases (24x)', quantity: 10 }],
-        createdAt: new Date().toISOString(),
-      },
-    ]);
-    setHawkerSessions([
-      {
-        id: 'hawker_1',
-        hawkerId: 'HAWKER-88',
-        hawkerName: 'Hawker Vendor Marcus',
-        grossSalesCents: 48000,
-        commissionRateBps: 1500, // 15%
-        commissionPayoutCents: 7200, // $72.00
-        status: 'active',
-      },
-    ]);
   };
 
   useEffect(() => {
@@ -74,14 +46,13 @@ export default function CentralCommissaryDashboard() {
 
   const handleUpdateTransfer = async (id: string, nextStatus: 'approved' | 'completed') => {
     try {
-      const apiHost = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-      await fetch(`${apiHost}/v1/stadium/concourse/transfers/${id}/status`, {
+      await apiRequest(`/v1/stadium/concourse/transfers/${id}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: nextStatus }),
+        body: { status: nextStatus },
       });
-    } catch {
-      // Optimistic mock update
+    } catch (error) {
+      Alert.alert('Transfer update failed', error instanceof Error ? error.message : 'The transfer was not changed.');
+      return;
     }
     setTransfers(prev => prev.map(t => t.id === id ? { ...t, status: nextStatus } : t));
     Alert.alert('Transfer Dispatched', `Restock Transfer marked ${nextStatus.toUpperCase()}. Restock items appended to Stand Sheet.`);
@@ -89,18 +60,17 @@ export default function CentralCommissaryDashboard() {
 
   const handleSettleHawker = async (sessionId: string) => {
     try {
-      const apiHost = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-      await fetch(`${apiHost}/v1/stadium/concourse/hawkers/${sessionId}/settle`, {
+      await apiRequest(`/v1/stadium/concourse/hawkers/${sessionId}/settle`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           itemsCheckedIn: [{ code: 'BEER-IPA', quantity: 5 }],
           cashCollectedCents: 30000,
           cardCollectedCents: 18000,
-        }),
+        },
       });
-    } catch {
-      // Optimistic update
+    } catch (error) {
+      Alert.alert('Settlement failed', error instanceof Error ? error.message : 'No settlement was recorded.');
+      return;
     }
     setHawkerSessions(prev => prev.map(s => s.id === sessionId ? { ...s, status: 'settled' } : s));
     Alert.alert('Hawker Commission Settled', 'Hawker Marcus Checked In: Gross Sales $480.00 | Commission Payout (15%): $72.00');

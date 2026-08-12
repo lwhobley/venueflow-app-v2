@@ -1,56 +1,71 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SuiteHospitalityGateway } from './suite-hospitality.gateway';
+import { Type } from 'class-transformer';
+import { ArrayMaxSize, IsArray, IsInt, IsNumber, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
 
-export interface StandItemCount {
-  code: string;
-  name: string;
-  count: number;
-  unitPriceCents: number;
+export class StandItemCount {
+  @IsString() code!: string;
+  @IsString() name!: string;
+  @IsNumber() @Min(0) count!: number;
+  @IsInt() @Min(0) unitPriceCents!: number;
 }
 
-export interface CreateStandSheetDto {
-  organizationId: string;
-  facilityId: string;
-  zoneId: string;
-  outletId: string;
-  eventId?: string;
-  supervisorId?: string;
-  supervisorName?: string;
-  countInItems: StandItemCount[];
+export class CreateStandSheetDto {
+  @IsOptional() @IsString() organizationId!: string;
+  @IsOptional() @IsString() facilityId!: string;
+  @IsString() zoneId!: string;
+  @IsString() outletId!: string;
+  @IsOptional() @IsString() eventId?: string;
+  @IsOptional() @IsString() supervisorId?: string;
+  @IsOptional() @IsString() supervisorName?: string;
+  @IsArray() @ArrayMaxSize(500) @ValidateNested({ each: true }) @Type(() => StandItemCount)
+  countInItems!: StandItemCount[];
 }
 
-export interface RecordCountOutDto {
-  countOutItems: StandItemCount[];
-  wasteItems: StandItemCount[];
-  posItemsSold: StandItemCount[];
-  actualPosRevenueCents: number;
+export class RecordCountOutDto {
+  @IsArray() @ArrayMaxSize(500) @ValidateNested({ each: true }) @Type(() => StandItemCount) countOutItems!: StandItemCount[];
+  @IsArray() @ArrayMaxSize(500) @ValidateNested({ each: true }) @Type(() => StandItemCount) wasteItems!: StandItemCount[];
+  @IsArray() @ArrayMaxSize(500) @ValidateNested({ each: true }) @Type(() => StandItemCount) posItemsSold!: StandItemCount[];
+  @IsInt() @Min(0) actualPosRevenueCents!: number;
 }
 
-export interface CreateTransferDto {
-  organizationId: string;
-  facilityId: string;
-  fromOutletId: string;
-  toOutletId: string;
-  eventId?: string;
-  requestedBy?: string;
-  items: Array<{ code: string; name: string; quantity: number }>;
+export class TransferItemDto {
+  @IsString() code!: string;
+  @IsString() name!: string;
+  @IsNumber() @Min(0.001) quantity!: number;
 }
 
-export interface HawkerCheckoutDto {
-  organizationId: string;
-  facilityId: string;
-  hawkerId: string;
-  hawkerName: string;
-  eventId?: string;
-  itemsCheckedOut: Array<{ code: string; name: string; quantity: number; unitPriceCents: number }>;
-  commissionRateBps?: number;
+export class CreateTransferDto {
+  @IsOptional() @IsString() organizationId!: string;
+  @IsOptional() @IsString() facilityId!: string;
+  @IsString() fromOutletId!: string;
+  @IsString() toOutletId!: string;
+  @IsOptional() @IsString() eventId?: string;
+  @IsOptional() @IsString() requestedBy?: string;
+  @IsArray() @ArrayMaxSize(200) @ValidateNested({ each: true }) @Type(() => TransferItemDto)
+  items!: TransferItemDto[];
 }
 
-export interface HawkerSettleDto {
-  itemsCheckedIn: Array<{ code: string; name: string; quantity: number }>;
-  cashCollectedCents: number;
-  cardCollectedCents: number;
+export class HawkerCheckoutItemDto extends TransferItemDto {
+  @IsInt() @Min(0) unitPriceCents!: number;
+}
+
+export class HawkerCheckoutDto {
+  @IsOptional() @IsString() organizationId!: string;
+  @IsOptional() @IsString() facilityId!: string;
+  @IsString() hawkerId!: string;
+  @IsString() hawkerName!: string;
+  @IsOptional() @IsString() eventId?: string;
+  @IsArray() @ArrayMaxSize(200) @ValidateNested({ each: true }) @Type(() => HawkerCheckoutItemDto)
+  itemsCheckedOut!: HawkerCheckoutItemDto[];
+  @IsOptional() @IsInt() @Min(0) @Max(10000) commissionRateBps?: number;
+}
+
+export class HawkerSettleDto {
+  @IsArray() @ArrayMaxSize(200) @ValidateNested({ each: true }) @Type(() => TransferItemDto) itemsCheckedIn!: TransferItemDto[];
+  @IsInt() @Min(0) cashCollectedCents!: number;
+  @IsInt() @Min(0) cardCollectedCents!: number;
 }
 
 @Injectable()
@@ -97,8 +112,8 @@ export class ConcourseInventoryService {
     return standSheet;
   }
 
-  async reconcileStandSheet(standSheetId: string, dto: RecordCountOutDto) {
-    const existing = await this.prisma.standSheet.findUnique({ where: { id: standSheetId } });
+  async reconcileStandSheet(facilityId: string, standSheetId: string, dto: RecordCountOutDto) {
+    const existing = await this.prisma.standSheet.findFirst({ where: { id: standSheetId, facilityId } });
     if (!existing) throw new NotFoundException('Stand sheet not found.');
 
     const countInMap = new Map<string, StandItemCount>((existing.countIn as any[]).map(i => [i.code, i]));
@@ -205,41 +220,38 @@ export class ConcourseInventoryService {
     return transfer;
   }
 
-  async updateTransferStatus(transferId: string, status: 'approved' | 'in_transit' | 'completed' | 'rejected') {
-    const transfer = await this.prisma.inventoryTransferRequest.findUnique({ where: { id: transferId } });
+  async updateTransferStatus(facilityId: string, transferId: string, status: 'approved' | 'in_transit' | 'completed' | 'rejected') {
+    const transfer = await this.prisma.inventoryTransferRequest.findFirst({ where: { id: transferId, facilityId } });
     if (!transfer) throw new NotFoundException('Transfer request not found.');
+    const allowed: Record<string, string[]> = {
+      pending: ['approved', 'rejected'], approved: ['in_transit', 'rejected'], in_transit: ['completed'], completed: [], rejected: [],
+    };
+    if (!allowed[transfer.status]?.includes(status)) {
+      throw new BadRequestException(`Cannot transition a transfer from ${transfer.status} to ${status}.`);
+    }
 
-    const updated = await this.prisma.inventoryTransferRequest.update({
-      where: { id: transferId },
-      data: {
-        status,
-        ...(status === 'completed' ? { completedAt: new Date() } : {}),
-      },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.inventoryTransferRequest.update({
+        where: { id: transferId },
+        data: { status, ...(status === 'completed' ? { completedAt: new Date() } : {}) },
+      });
+      if (status !== 'completed') return updated;
 
-    // If completed, append to target stand sheet restocks automatically
-    if (status === 'completed') {
-      const activeSheet = await this.prisma.standSheet.findFirst({
-        where: { outletId: transfer.toOutletId, status: { in: ['count_in_recorded', 'active_event'] } },
+      const activeSheet = await tx.standSheet.findFirst({
+        where: { facilityId, outletId: transfer.toOutletId, status: { in: ['count_in_recorded', 'active_event'] } },
         orderBy: { createdAt: 'desc' },
       });
-
-      if (activeSheet) {
-        const existingRestocks = (activeSheet.restocks as any[]) || [];
-        existingRestocks.push({
-          transferId: transfer.id,
-          items: transfer.items,
-          addedAt: new Date().toISOString(),
-        });
-
-        await this.prisma.standSheet.update({
+      if (!activeSheet) return updated;
+      const existingRestocks = (activeSheet.restocks as any[]) || [];
+      if (!existingRestocks.some((entry) => entry.transferId === transfer.id)) {
+        existingRestocks.push({ transferId: transfer.id, items: transfer.items, addedAt: new Date().toISOString() });
+        await tx.standSheet.update({
           where: { id: activeSheet.id },
           data: { restocks: existingRestocks as any, status: 'active_event' },
         });
       }
-    }
-
-    return updated;
+      return updated;
+    });
   }
 
   // --- Hawker Vendor Commissions ---
@@ -258,9 +270,10 @@ export class ConcourseInventoryService {
     });
   }
 
-  async settleHawkerSession(sessionId: string, dto: HawkerSettleDto) {
-    const session = await this.prisma.hawkerVendorSession.findUnique({ where: { id: sessionId } });
+  async settleHawkerSession(facilityId: string, sessionId: string, dto: HawkerSettleDto) {
+    const session = await this.prisma.hawkerVendorSession.findFirst({ where: { id: sessionId, facilityId } });
     if (!session) throw new NotFoundException('Hawker session not found.');
+    if (session.status === 'settled') throw new BadRequestException('Hawker session is already settled.');
 
     const checkedOutMap = new Map<string, { name: string; quantity: number; unitPriceCents: number }>(
       (session.itemsCheckedOut as any[]).map(i => [i.code, i])

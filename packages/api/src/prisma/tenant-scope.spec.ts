@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { isVenueScoped, scopeArgs, shouldScopeOperation, VENUE_SCOPED_MODELS } from './tenant-scope';
+import { FACILITY_SCOPED_MODELS, isVenueScoped, scopeArgs, scopeFieldForModel, shouldScopeOperation, VENUE_SCOPED_MODELS } from './tenant-scope';
 
 const VENUE = 'venue-1';
 
@@ -28,6 +28,12 @@ describe('isVenueScoped', () => {
     expect(isVenueScoped('Venue')).toBe(false);
     expect(isVenueScoped(undefined)).toBe(false);
     expect(isVenueScoped(null)).toBe(false);
+  });
+
+  it('recognises facility-scoped stadium operational models', () => {
+    expect(FACILITY_SCOPED_MODELS.has('SuiteBeoOrder')).toBe(true);
+    expect(scopeFieldForModel('InventoryTransferRequest')).toBe('facilityId');
+    expect(isVenueScoped('ShiftPunch')).toBe(true);
   });
 
   it('covers a representative slice of the scoped set', () => {
@@ -111,6 +117,11 @@ describe('scopeArgs — security invariants', () => {
     const out = scopeArgs('findMany', { where: { venueId: 'other-venue' } }, VENUE);
     // Both predicates must hold → matches nothing, so cross-tenant reads return empty.
     expect(out).toEqual({ where: { AND: [{ venueId: VENUE }, { venueId: 'other-venue' }] } });
+  });
+
+  it('a hostile facilityId cannot widen a facility-scoped query', () => {
+    const out = scopeArgs('findMany', { where: { facilityId: 'other-facility' } }, VENUE, 'facilityId');
+    expect(out).toEqual({ where: { AND: [{ facilityId: VENUE }, { facilityId: 'other-facility' }] } });
   });
 
   it('a create cannot write into another tenant — venueId is forced', () => {

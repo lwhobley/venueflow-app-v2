@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { apiRequest } from '../../lib/api-client';
 
 export interface BEOItem {
   code: string;
@@ -31,19 +32,12 @@ export default function KitchenBumpScreen() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [lastSynced, setLastSynced] = useState<string>('');
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (silent = false) => {
     try {
-      const apiHost = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-      const res = await fetch(`${apiHost}/v1/stadium/suite-beos/public-kds?facilityId=facility-1`);
-      if (res.ok) {
-        const data = await res.json();
-        setBeos(data);
-      } else {
-        // Fallback demo data if API server is offline during dev UI preview
-        setBeos(getMockKdsData());
-      }
-    } catch {
-      setBeos(getMockKdsData());
+      setBeos(await apiRequest<SuiteBEO[]>('/v1/stadium/suite-beos'));
+    } catch (error) {
+      setBeos([]);
+      if (!silent) Alert.alert('KDS sync failed', error instanceof Error ? error.message : 'Unable to load live orders.');
     } finally {
       setLoading(false);
       setLastSynced(new Date().toLocaleTimeString());
@@ -52,21 +46,18 @@ export default function KitchenBumpScreen() {
 
   useEffect(() => {
     fetchOrders();
-    const interval = setInterval(fetchOrders, 5000);
+    const interval = setInterval(() => fetchOrders(true), 5000);
     return () => clearInterval(interval);
   }, []);
 
   const handleBumpStatus = async (id: string, nextStatus: 'prep_initiated' | 'en_route') => {
     try {
-      const apiHost = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-      await fetch(`${apiHost}/v1/stadium/suite-beos/${id}/status-public`, {
+      await apiRequest(`/v1/stadium/suite-beos/${id}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: nextStatus, actorName: 'Kitchen Staff' }),
+        body: { status: nextStatus },
       });
-    } catch {
-      // Optimistic state update for instant UI feedback
-      setBeos(prev => prev.map(b => b.id === id ? { ...b, status: nextStatus } : b));
+    } catch (error) {
+      Alert.alert('Status update failed', error instanceof Error ? error.message : 'The order was not changed.');
     }
     fetchOrders();
   };
@@ -83,12 +74,12 @@ export default function KitchenBumpScreen() {
       {/* Header Bar */}
       <View style={styles.header}>
         <View style={styles.headerTitleGroup}>
-          <Text style={styles.headerTitle}>CHEF'S BUMP SCREEN</style>
+          <Text style={styles.headerTitle}>CHEF'S BUMP SCREEN</Text>
           <Text style={styles.headerSub}>STADIUM CENTRAL KITCHEN KDS • LIVE WEBSOCKET SYNC</Text>
         </View>
         <View style={styles.headerRight}>
           <Text style={styles.syncText}>LAST SYNC: {lastSynced || 'LIVE'}</Text>
-          <TouchableOpacity style={styles.seedBtn} onPress={fetchOrders}>
+          <TouchableOpacity style={styles.seedBtn} onPress={() => fetchOrders()}>
             <Text style={styles.seedBtnText}>REFRESH</Text>
           </TouchableOpacity>
         </View>
@@ -193,65 +184,6 @@ export default function KitchenBumpScreen() {
       )}
     </View>
   );
-}
-
-function getMockKdsData(): SuiteBEO[] {
-  const now = new Date();
-  return [
-    {
-      id: 'beo_101',
-      beoNumber: 'BEO-SUITE-2001',
-      subVenue: { name: 'VIP Suite 101 (Owner Box)', code: 'S-101' },
-      zone: { name: 'East Concourse VIP', level: 'Level 3' },
-      hostName: 'Global Corp Host',
-      guestCount: 16,
-      deliveryWindowStart: new Date(now.getTime() + 10 * 60 * 1000).toISOString(),
-      deliveryWindowEnd: new Date(now.getTime() + 40 * 60 * 1000).toISOString(),
-      specialInstructions: 'Peanut allergy. Serve Dom Pérignon extra chilled at 45°F.',
-      cateringLineItems: [
-        { code: 'CAVIAR', name: 'Petrossian Caviar & Blinis', quantity: 2, unitPriceCents: 15000, category: 'Appetizers' },
-        { code: 'SLIDER', name: 'Wagyu Beef Sliders (12pc)', quantity: 3, unitPriceCents: 8500, category: 'Platters' },
-        { code: 'CHAMP', name: 'Dom Pérignon Vintage Champagne', quantity: 2, unitPriceCents: 35000, category: 'Beverage' },
-      ],
-      status: 'confirmed_beo',
-      urgencyColor: '#ef4444',
-      minutesUntilDelivery: 10,
-    },
-    {
-      id: 'beo_102',
-      beoNumber: 'BEO-SUITE-2002',
-      subVenue: { name: 'VIP Suite 102 (Presidential)', code: 'S-102' },
-      zone: { name: 'East Concourse VIP', level: 'Level 3' },
-      hostName: 'Apex Capital Host',
-      guestCount: 20,
-      deliveryWindowStart: new Date(now.getTime() + 25 * 60 * 1000).toISOString(),
-      deliveryWindowEnd: new Date(now.getTime() + 55 * 60 * 1000).toISOString(),
-      cateringLineItems: [
-        { code: 'CHARCUTERIE', name: 'Artisanal Cheese & Charcuterie', quantity: 2, unitPriceCents: 12000, category: 'Platters' },
-        { code: 'SUSHI', name: 'Premium Sashimi & Nigiri Platter', quantity: 2, unitPriceCents: 18000, category: 'Platters' },
-      ],
-      status: 'prep_initiated',
-      urgencyColor: '#f59e0b',
-      minutesUntilDelivery: 25,
-    },
-    {
-      id: 'beo_103',
-      beoNumber: 'BEO-SUITE-2003',
-      subVenue: { name: 'VIP Suite 103 (Loge Suite)', code: 'S-103' },
-      zone: { name: 'North Club VIP', level: 'Level 2' },
-      hostName: 'TechVentures Host',
-      guestCount: 12,
-      deliveryWindowStart: new Date(now.getTime() + 45 * 60 * 1000).toISOString(),
-      deliveryWindowEnd: new Date(now.getTime() + 75 * 60 * 1000).toISOString(),
-      cateringLineItems: [
-        { code: 'SLIDER', name: 'Wagyu Beef Sliders (12pc)', quantity: 2, unitPriceCents: 8500, category: 'Platters' },
-        { code: 'WINGS', name: 'Jumbo Buffalo Wings Platter', quantity: 2, unitPriceCents: 6500, category: 'Appetizers' },
-      ],
-      status: 'confirmed_beo',
-      urgencyColor: '#10b981',
-      minutesUntilDelivery: 45,
-    },
-  ];
 }
 
 const styles = StyleSheet.create({

@@ -12,6 +12,7 @@ describe('SuiteHospitalityService', () => {
       suiteBeoOrder: {
         findMany: vi.fn(),
         findUnique: vi.fn(),
+        findFirst: vi.fn(),
         create: vi.fn(),
         update: vi.fn(),
       },
@@ -85,17 +86,17 @@ describe('SuiteHospitalityService', () => {
       cateringLineItems: [],
     };
 
-    prisma.suiteBeoOrder.findUnique.mockResolvedValue(existing);
+    prisma.suiteBeoOrder.findFirst.mockResolvedValue(existing);
     prisma.suiteBeoOrder.update.mockResolvedValue({ ...existing, status: 'closed_invoiced' });
 
-    const result = await service.updateOrderStatus('beo_1', 'closed_invoiced', 'user_1', 'Chef', 'Closing order');
+    const result = await service.updateOrderStatus('facility-1', 'beo_1', 'closed_invoiced', 'user_1', 'Chef', 'Closing order');
 
     expect(result.status).toBe('closed_invoiced');
     expect(webhooks.emitSuiteBeoWebhook).toHaveBeenCalledWith(expect.objectContaining({ eventType: 'suite.beo.closed_invoiced' }));
   });
 
   it('creates quick replenishment request and broadcasts alert via WebSocket', async () => {
-    prisma.suiteBeoOrder.findUnique.mockResolvedValue({ id: 'beo_1', facilityId: 'facility-1', zoneId: 'zone-1' });
+    prisma.suiteBeoOrder.findFirst.mockResolvedValue({ id: 'beo_1', facilityId: 'facility-1', zoneId: 'zone-1', subVenueId: 'sub-1' });
     prisma.suiteBeoReplenishmentRequest.create.mockResolvedValue({
       id: 'replenish_1',
       beoOrderId: 'beo_1',
@@ -103,7 +104,7 @@ describe('SuiteHospitalityService', () => {
       priority: 'urgent',
     });
 
-    const result = await service.createReplenishment('beo_1', {
+    const result = await service.createReplenishment('facility-1', 'beo_1', {
       subVenueId: 'sub-1',
       zoneId: 'zone-1',
       itemSummary: 'Need 2x Ice Bags',
@@ -118,7 +119,7 @@ describe('SuiteHospitalityService', () => {
     prisma.subVenue.findMany.mockResolvedValue(
       Array.from({ length: 10 }, (_, i) => ({ id: `sub_${i + 1}`, name: `VIP Suite ${101 + i}` }))
     );
-    prisma.suiteBeoOrder.findUnique.mockResolvedValue(null);
+    prisma.suiteBeoOrder.findFirst.mockResolvedValue(null);
     prisma.suiteBeoOrder.create.mockImplementation(({ data }) => Promise.resolve({ id: `beo_${data.beoNumber}`, ...data }));
 
     const orders = await service.seed10VipSuites('facility-1', 'org-1', 'zone-1');

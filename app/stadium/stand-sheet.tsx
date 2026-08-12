@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert } from 'react-native';
+import { apiRequest } from '../../lib/api-client';
 
 export interface StandSheetItem {
   code: string;
@@ -39,40 +40,16 @@ export default function StandSheetAuditScreen() {
 
   const fetchSheets = async () => {
     try {
-      const apiHost = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-      const res = await fetch(`${apiHost}/v1/stadium/concourse/stand-sheets-public?facilityId=facility-1`);
-      if (res.ok) {
-        const data = await res.json();
-        setSheets(data);
-        if (data.length && !activeSheet) setActiveSheet(data[0]);
-      } else {
-        setMockSheetData();
-      }
-    } catch {
-      setMockSheetData();
+      const data = await apiRequest<StandSheetData[]>('/v1/stadium/concourse/stand-sheets');
+      setSheets(data);
+      if (data.length && !activeSheet) setActiveSheet(data[0]);
+    } catch (error) {
+      setSheets([]);
+      setActiveSheet(null);
+      Alert.alert('Stand sheets unavailable', error instanceof Error ? error.message : 'Unable to load live stand sheets.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const setMockSheetData = () => {
-    const mock: StandSheetData = {
-      id: 'sheet_101',
-      outlet: { name: 'Concourse Stand 112 (Grill & Draft)', code: 'STAND-112' },
-      zone: { name: 'East Main Concourse' },
-      supervisorName: 'Concourse Supervisor Dave',
-      status: 'active_event',
-      expectedSalesRevenueCents: 245000,
-      actualPosRevenueCents: 245000,
-      varianceAmountCents: 0,
-      inventoryVariance: [
-        { code: 'BEER-IPA', name: 'Craft IPA Pint', countIn: 100, restocks: 50, countOut: 30, waste: 2, expectedSold: 118, posSold: 118, varianceQuantity: 0, unitPriceCents: 1400, varianceDollarsCents: 0 },
-        { code: 'HOTDOG-SUPREME', name: 'Jumbo Stadium Hotdog', countIn: 80, restocks: 0, countOut: 15, waste: 0, expectedSold: 65, posSold: 65, varianceQuantity: 0, unitPriceCents: 1200, varianceDollarsCents: 0 },
-        { code: 'PRETZEL-BAVARIAN', name: 'Warm Bavarian Pretzel', countIn: 50, restocks: 20, countOut: 10, waste: 1, expectedSold: 59, posSold: 59, varianceQuantity: 0, unitPriceCents: 900, varianceDollarsCents: 0 },
-      ],
-    };
-    setSheets([mock]);
-    setActiveSheet(mock);
   };
 
   useEffect(() => {
@@ -88,24 +65,19 @@ export default function StandSheetAuditScreen() {
     const actualCents = Math.round(parseFloat(actualRevenue || '0') * 100);
 
     try {
-      const apiHost = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-      const res = await fetch(`${apiHost}/v1/stadium/concourse/stand-sheets/${activeSheet.id}/reconcile`, {
+      const updated = await apiRequest<StandSheetData>(`/v1/stadium/concourse/stand-sheets/${activeSheet.id}/reconcile`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           countOutItems,
           wasteItems,
           posItemsSold,
           actualPosRevenueCents: actualCents,
-        }),
+        },
       });
-      if (res.ok) {
-        const updated = await res.json();
-        setActiveSheet(updated);
-        Alert.alert('Stand Sheet Reconciled', `Inventory Variance: $${(updated.varianceAmountCents / 100).toFixed(2)}`);
-      }
-    } catch {
-      Alert.alert('Reconciliation Verified', 'Stand Sheet reconciled with $0.00 stock variance.');
+      setActiveSheet(updated);
+      Alert.alert('Stand Sheet Reconciled', `Inventory Variance: $${(updated.varianceAmountCents / 100).toFixed(2)}`);
+    } catch (error) {
+      Alert.alert('Reconciliation failed', error instanceof Error ? error.message : 'No inventory counts were changed.');
     }
   };
 

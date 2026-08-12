@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { createHmac } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 
 export interface EnterpriseWebhookPayload {
@@ -21,31 +20,26 @@ export class EnterpriseWebhookService {
   constructor(private readonly prisma: PrismaService) {}
 
   async emitSuiteBeoWebhook(payload: EnterpriseWebhookPayload): Promise<{ success: boolean; targetSystem: string; responseCode: number }> {
-    const targetSystem = payload.eventType === 'suite.beo.closed_invoiced' ? 'NetSuite Financials' : 'Oracle MICROS Simphony';
-    const secret = process.env.ENTERPRISE_WEBHOOK_SECRET ?? 'whsec_stadium_enterprise_beo_key_v1';
-    
-    const signature = createHmac('sha256', secret)
-      .update(JSON.stringify(payload))
-      .digest('hex');
+    // Provider integrations are intentionally not fabricated. Until an
+    // authenticated adapter exists, retain an auditable manual-export record.
+    const targetSystem = 'manual_csv_export';
+    this.logger.warn(`Queued ${payload.eventType} for manual enterprise export; no provider adapter is configured.`);
 
-    this.logger.log(`Emitting Enterprise Webhook [${payload.eventType}] to ${targetSystem} (Signature: ${signature.slice(0, 12)}...)`);
-
-    // Record Webhook Dispatch in DB
     await this.prisma.enterpriseWebhookLog.create({
       data: {
         organizationId: payload.organizationId,
         eventType: payload.eventType,
         targetSystem,
         payload: payload as any,
-        responseCode: 200,
-        status: 'delivered',
+        responseCode: 0,
+        status: 'pending_manual_export',
       },
     });
 
     return {
-      success: true,
+      success: false,
       targetSystem,
-      responseCode: 200,
+      responseCode: 0,
     };
   }
 }

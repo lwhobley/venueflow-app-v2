@@ -2439,7 +2439,7 @@ model SuiteBeoOrder {
   zoneId                  String
   subVenueId              String
   eventId                 String?
-  beoNumber               String                        @unique
+  beoNumber               String
   hostName                String
   hostPhone               String?
   hostEmail               String?
@@ -2465,6 +2465,7 @@ model SuiteBeoOrder {
   replenishments          SuiteBeoReplenishmentRequest[]
 
   @@index([organizationId, facilityId, zoneId, status])
+  @@unique([organizationId, facilityId, beoNumber])
   @@index([subVenueId, deliveryWindowStart])
   @@index([eventId, status])
   @@index([deliveryWindowStart, deliveryWindowEnd])

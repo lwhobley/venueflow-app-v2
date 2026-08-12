@@ -1,35 +1,58 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Post, Query } from '@nestjs/common';
 import { UnionComplianceService } from './union-compliance.service';
-import { Public } from '../../auth/public.decorator';
 import { PunchType, PunchVerification } from '@prisma/client';
+import { VenueScope } from '../../venue/venue-scope.decorator';
+import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
+import { canManageVenue } from '../../auth/roles';
+import { PrismaService } from '../../prisma/prisma.service';
+import { RequireSubscription } from '../../billing/require-subscription.decorator';
+import { IsIn, IsOptional, IsString, Matches } from 'class-validator';
+
+type Scope = NonNullable<VenueScopedRequest['venueScope']>;
+class RecordPunchDto {
+  @IsString() workerId!: string;
+  @IsIn(['IN', 'OUT', 'MEAL_START', 'MEAL_END']) punchType!: PunchType;
+  @IsOptional() @IsIn(['qr_scan', 'pin_entry', 'supervisor_override']) verifiedVia?: PunchVerification;
+  @IsOptional() @IsString() zoneId?: string;
+  @IsOptional() @IsString() outletId?: string;
+  @IsOptional() @IsString() overrideReason?: string;
+}
 
 @Controller('v1/stadium/union-compliance')
+@RequireSubscription()
 export class UnionComplianceController {
-  constructor(private readonly service: UnionComplianceService) {}
+  constructor(private readonly service: UnionComplianceService, private readonly prisma: PrismaService) {}
 
-  @Public()
-  @Get('shift-summary-public')
-  async getShiftSummaryPublic(@Query('workerId') workerId: string, @Query('facilityId') facilityId?: string) {
-    return this.service.calculateWorkerShiftSummary(workerId, facilityId ?? 'facility-1');
+  private assertManager(scope: Scope) {
+    if (!canManageVenue(scope.role, scope.allAccess)) throw new ForbiddenException('Workforce manager access is required.');
   }
 
-  @Public()
-  @Post('punch-public')
-  async recordPunchPublic(
-    @Body() body: {
-      organizationId?: string;
-      facilityId?: string;
-      workerId: string;
-      punchType: PunchType;
-      verifiedVia?: PunchVerification;
-      zoneId?: string;
-      outletId?: string;
-      overrideReason?: string;
-    },
+  private async organizationIdFor(facilityId: string) {
+    return (await this.prisma.venue.findUniqueOrThrow({ where: { id: facilityId }, select: { organizationId: true } })).organizationId;
+  }
+
+  @Get('shift-summary')
+  async getShiftSummary(
+    @VenueScope() scope: Scope,
+    @Query('workerId') workerId: string,
+    @Query('businessDate') businessDate?: string,
   ) {
+    this.assertManager(scope);
+    return this.service.calculateWorkerShiftSummary(workerId, scope.venueId, businessDate);
+  }
+
+  @Get('shift-summaries')
+  async getShiftSummaries(@VenueScope() scope: Scope, @Query('businessDate') businessDate?: string) {
+    this.assertManager(scope);
+    return this.service.listFacilityShiftSummaries(scope.venueId, businessDate);
+  }
+
+  @Post('punch')
+  async recordPunch(@VenueScope() scope: Scope, @Body() body: RecordPunchDto) {
+    this.assertManager(scope);
     return this.service.recordPunch(
-      body.organizationId ?? 'org-stadium-1',
-      body.facilityId ?? 'facility-1',
+      await this.organizationIdFor(scope.venueId),
+      scope.venueId,
       body.workerId,
       body.punchType,
       body.verifiedVia ?? 'pin_entry',

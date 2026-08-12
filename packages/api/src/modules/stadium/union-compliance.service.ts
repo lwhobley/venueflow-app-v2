@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SuiteHospitalityGateway } from './suite-hospitality.gateway';
 import { PunchType, PunchVerification } from '@prisma/client';
@@ -42,15 +42,21 @@ export class UnionComplianceService {
     };
   }
 
-  async calculateWorkerShiftSummary(workerId: string, facilityId: string): Promise<ShiftSummary> {
-    const worker = await this.prisma.workerProfile.findUnique({
-      where: { id: workerId },
+  async calculateWorkerShiftSummary(workerId: string, facilityId: string, requestedBusinessDate?: string): Promise<ShiftSummary> {
+    const worker = await this.prisma.workerProfile.findFirst({
+      where: { id: workerId, facilityId },
       include: { agency: true },
     });
     if (!worker) throw new NotFoundException('Worker profile not found.');
 
+    if (requestedBusinessDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedBusinessDate)) {
+      throw new BadRequestException('businessDate must use YYYY-MM-DD format.');
+    }
+    const businessDate = requestedBusinessDate ?? new Date().toISOString().slice(0, 10);
+    const dayStart = new Date(`${businessDate}T00:00:00.000Z`);
+    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
     const punches = await this.prisma.shiftPunch.findMany({
-      where: { workerId, facilityId },
+      where: { workerId, facilityId, timestamp: { gte: dayStart, lt: dayEnd } },
       orderBy: { timestamp: 'asc' },
     });
 
@@ -61,12 +67,12 @@ export class UnionComplianceService {
     let mealStart: Date | null = null;
     let mealEnd: Date | null = null;
 
-    punches.forEach(p => {
+    for (const p of punches) {
       if (p.punchType === 'IN' && !inTime) inTime = new Date(p.timestamp);
       if (p.punchType === 'OUT') outTime = new Date(p.timestamp);
       if (p.punchType === 'MEAL_START') mealStart = new Date(p.timestamp);
       if (p.punchType === 'MEAL_END') mealEnd = new Date(p.timestamp);
-    });
+    }
 
     if (!inTime) {
       return {
@@ -136,6 +142,16 @@ export class UnionComplianceService {
     };
   }
 
+  async listFacilityShiftSummaries(facilityId: string, businessDate?: string): Promise<ShiftSummary[]> {
+    const workers = await this.prisma.workerProfile.findMany({
+      where: { facilityId, active: true },
+      select: { id: true },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      take: 500,
+    });
+    return Promise.all(workers.map((worker) => this.calculateWorkerShiftSummary(worker.id, facilityId, businessDate)));
+  }
+
   async recordPunch(
     organizationId: string,
     facilityId: string,
@@ -146,6 +162,25 @@ export class UnionComplianceService {
     outletId?: string,
     overrideReason?: string,
   ) {
+    const worker = await this.prisma.workerProfile.findFirst({
+      where: { id: workerId, organizationId, facilityId, active: true },
+      select: { id: true },
+    });
+    if (!worker) throw new NotFoundException('Active worker profile not found in this facility.');
+    if (verifiedVia === 'supervisor_override' && !overrideReason?.trim()) {
+      throw new BadRequestException('Supervisor overrides require a reason.');
+    }
+    const previous = await this.prisma.shiftPunch.findFirst({
+      where: { workerId, facilityId },
+      orderBy: { timestamp: 'desc' },
+      select: { punchType: true },
+    });
+    const allowed: Record<PunchType | 'NONE', PunchType[]> = {
+      NONE: ['IN'], IN: ['MEAL_START', 'OUT'], MEAL_START: ['MEAL_END'], MEAL_END: ['OUT'], OUT: ['IN'],
+    };
+    if (!allowed[previous?.punchType ?? 'NONE'].includes(punchType)) {
+      throw new BadRequestException(`Invalid punch transition from ${previous?.punchType ?? 'no punch'} to ${punchType}.`);
+    }
     const punch = await this.prisma.shiftPunch.create({
       data: {
         organizationId,

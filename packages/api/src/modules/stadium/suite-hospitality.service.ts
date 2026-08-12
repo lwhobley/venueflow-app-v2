@@ -3,38 +3,69 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { SuiteHospitalityGateway } from './suite-hospitality.gateway';
 import { EnterpriseWebhookService } from '../integrations/enterprise-webhook.service';
 import { SuiteBeoStatus } from '@prisma/client';
+import { Type } from 'class-transformer';
+import { ArrayMaxSize, IsArray, IsDateString, IsEmail, IsIn, IsInt, IsObject, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
 
-export interface CreateSuiteBeoDto {
-  organizationId: string;
-  facilityId: string;
-  zoneId: string;
-  subVenueId: string;
+export class CateringLineItemDto {
+  @IsString() code!: string;
+  @IsString() name!: string;
+  @IsInt() @Min(1) quantity!: number;
+  @IsInt() @Min(0) unitPriceCents!: number;
+  @IsString() category!: string;
+}
+
+export class CreateSuiteBeoDto {
+  @IsOptional() @IsString() organizationId!: string;
+  @IsOptional() @IsString() facilityId!: string;
+  @IsString()
+  zoneId!: string;
+  @IsString()
+  subVenueId!: string;
+  @IsOptional() @IsString()
   eventId?: string;
-  beoNumber: string;
-  hostName: string;
+  @IsString()
+  beoNumber!: string;
+  @IsString()
+  hostName!: string;
+  @IsOptional() @IsString()
   hostPhone?: string;
+  @IsOptional() @IsEmail()
   hostEmail?: string;
+  @IsOptional() @IsInt() @Min(1) @Max(500)
   guestCount?: number;
-  deliveryWindowStart: string;
-  deliveryWindowEnd: string;
+  @IsDateString()
+  deliveryWindowStart!: string;
+  @IsDateString()
+  deliveryWindowEnd!: string;
+  @IsOptional() @IsString()
   specialInstructions?: string;
-  cateringLineItems: Array<{ code: string; name: string; quantity: number; unitPriceCents: number; category: string }>;
+  @IsArray() @ArrayMaxSize(200) @ValidateNested({ each: true }) @Type(() => CateringLineItemDto)
+  cateringLineItems!: CateringLineItemDto[];
+  @IsOptional() @IsObject()
   parReplenishmentTriggers?: Record<string, unknown>;
+  @IsOptional() @IsInt() @Min(0)
   totalCents?: number;
 }
 
-export interface CompleteDeliveryDto {
-  deliveredBy: string;
+export class CompleteDeliveryDto {
+  @IsOptional() @IsString()
+  deliveredBy!: string;
+  @IsOptional() @IsString()
   deliverySignatureUrl?: string;
+  @IsOptional() @IsString()
   deliveryPhotoUrl?: string;
+  @IsOptional() @IsString()
   notes?: string;
 }
 
-export interface CreateReplenishmentDto {
-  subVenueId: string;
-  zoneId: string;
-  itemSummary: string;
+export class CreateReplenishmentDto {
+  @IsOptional() @IsString() subVenueId!: string;
+  @IsOptional() @IsString() zoneId!: string;
+  @IsString()
+  itemSummary!: string;
+  @IsOptional() @IsIn(['normal', 'high', 'urgent'])
   priority?: 'normal' | 'high' | 'urgent';
+  @IsOptional() @IsString()
   requestedBy?: string;
 }
 
@@ -79,6 +110,11 @@ export class SuiteHospitalityService {
   }
 
   async createBeoOrder(dto: CreateSuiteBeoDto) {
+    const deliveryStart = new Date(dto.deliveryWindowStart);
+    const deliveryEnd = new Date(dto.deliveryWindowEnd);
+    if (!Number.isFinite(deliveryStart.getTime()) || !Number.isFinite(deliveryEnd.getTime()) || deliveryEnd <= deliveryStart) {
+      throw new BadRequestException('Delivery window must contain valid dates with the end after the start.');
+    }
     const totalCents = dto.totalCents ?? dto.cateringLineItems.reduce((acc, item) => acc + item.quantity * item.unitPriceCents, 0);
     const order = await this.prisma.$transaction(async (tx) => {
       const created = await tx.suiteBeoOrder.create({
@@ -93,8 +129,8 @@ export class SuiteHospitalityService {
           hostPhone: dto.hostPhone ?? null,
           hostEmail: dto.hostEmail ?? null,
           guestCount: dto.guestCount ?? 12,
-          deliveryWindowStart: new Date(dto.deliveryWindowStart),
-          deliveryWindowEnd: new Date(dto.deliveryWindowEnd),
+          deliveryWindowStart: deliveryStart,
+          deliveryWindowEnd: deliveryEnd,
           specialInstructions: dto.specialInstructions ?? null,
           cateringLineItems: dto.cateringLineItems as any,
           parReplenishmentTriggers: dto.parReplenishmentTriggers as any ?? { icePar: 2, champagnePar: 1 },
@@ -127,16 +163,27 @@ export class SuiteHospitalityService {
       beoNumber: order.beoNumber,
       subVenueId: order.subVenueId,
       totalCents: order.totalCents,
-      lineItems: dto.cateringLineItems,
+      lineItems: dto.cateringLineItems.map((item) => ({ ...item })),
       timestamp: new Date().toISOString(),
     });
 
     return order;
   }
 
-  async updateOrderStatus(beoOrderId: string, toStatus: SuiteBeoStatus, actorId?: string, actorName?: string, notes?: string) {
-    const existing = await this.prisma.suiteBeoOrder.findUnique({ where: { id: beoOrderId } });
+  async updateOrderStatus(facilityId: string, beoOrderId: string, toStatus: SuiteBeoStatus, actorId?: string, actorName?: string, notes?: string) {
+    const existing = await this.prisma.suiteBeoOrder.findFirst({ where: { id: beoOrderId, facilityId } });
     if (!existing) throw new NotFoundException('Suite BEO order not found.');
+    const allowed: Record<SuiteBeoStatus, SuiteBeoStatus[]> = {
+      draft: ['confirmed_beo'],
+      confirmed_beo: ['prep_initiated'],
+      prep_initiated: ['en_route'],
+      en_route: ['delivered'],
+      delivered: ['closed_invoiced'],
+      closed_invoiced: [],
+    };
+    if (!allowed[existing.status].includes(toStatus)) {
+      throw new BadRequestException(`Cannot transition a BEO from ${existing.status} to ${toStatus}.`);
+    }
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const order = await tx.suiteBeoOrder.update({
@@ -180,9 +227,10 @@ export class SuiteHospitalityService {
     return updated;
   }
 
-  async markDelivered(beoOrderId: string, dto: CompleteDeliveryDto) {
-    const existing = await this.prisma.suiteBeoOrder.findUnique({ where: { id: beoOrderId } });
+  async markDelivered(facilityId: string, beoOrderId: string, dto: CompleteDeliveryDto) {
+    const existing = await this.prisma.suiteBeoOrder.findFirst({ where: { id: beoOrderId, facilityId } });
     if (!existing) throw new NotFoundException('Suite BEO order not found.');
+    if (existing.status !== 'en_route') throw new BadRequestException('Only an en-route BEO can be marked delivered.');
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const order = await tx.suiteBeoOrder.update({
@@ -191,8 +239,8 @@ export class SuiteHospitalityService {
           status: 'delivered',
           deliveredAt: new Date(),
           deliveredBy: dto.deliveredBy,
-          deliverySignatureUrl: dto.deliverySignatureUrl ?? 'https://stadium-assets.example.com/signatures/suite-host-sig.png',
-          deliveryPhotoUrl: dto.deliveryPhotoUrl ?? 'https://stadium-assets.example.com/photos/suite-delivery-proof.jpg',
+          deliverySignatureUrl: dto.deliverySignatureUrl ?? null,
+          deliveryPhotoUrl: dto.deliveryPhotoUrl ?? null,
         },
       });
 
@@ -213,15 +261,15 @@ export class SuiteHospitalityService {
     return updated;
   }
 
-  async createReplenishment(beoOrderId: string, dto: CreateReplenishmentDto) {
-    const beo = await this.prisma.suiteBeoOrder.findUnique({ where: { id: beoOrderId } });
+  async createReplenishment(facilityId: string, beoOrderId: string, dto: CreateReplenishmentDto) {
+    const beo = await this.prisma.suiteBeoOrder.findFirst({ where: { id: beoOrderId, facilityId } });
     if (!beo) throw new NotFoundException('Suite BEO order not found.');
 
     const req = await this.prisma.suiteBeoReplenishmentRequest.create({
       data: {
         beoOrderId,
-        subVenueId: dto.subVenueId,
-        zoneId: dto.zoneId,
+        subVenueId: beo.subVenueId,
+        zoneId: beo.zoneId,
         itemSummary: dto.itemSummary,
         priority: dto.priority ?? 'high',
         status: 'pending',
@@ -242,7 +290,8 @@ export class SuiteHospitalityService {
 
     const createdOrders = [];
     for (let i = 0; i < 10; i++) {
-      const suite = suites[i] ?? { id: `sub_suite_${i + 1}`, name: `VIP Suite ${101 + i}` };
+      const suite = suites[i];
+      if (!suite) break;
       const startOffsetMin = (i - 2) * 15; // Staggered delivery windows (-30m to +105m)
       const deliveryStart = new Date(now.getTime() + startOffsetMin * 60 * 1000);
       const deliveryEnd = new Date(deliveryStart.getTime() + 30 * 60 * 1000);
@@ -255,7 +304,7 @@ export class SuiteHospitalityService {
         { code: 'CHARCUTERIE', name: 'Artisanal Cheese & Charcuterie', quantity: 1, unitPriceCents: 12000, category: 'Platters' },
       ];
 
-      const existing = await this.prisma.suiteBeoOrder.findUnique({ where: { beoNumber } });
+      const existing = await this.prisma.suiteBeoOrder.findFirst({ where: { facilityId, beoNumber } });
       if (existing) {
         createdOrders.push(existing);
         continue;

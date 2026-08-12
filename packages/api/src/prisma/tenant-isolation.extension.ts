@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { getTenantVenueId } from './tenant-context';
-import { isVenueScoped, scopeArgs, shouldScopeOperation } from './tenant-scope';
+import { scopeArgs, scopeFieldForModel, shouldScopeOperation } from './tenant-scope';
 
 /**
  * Prisma Client extension that enforces tenant isolation as a database-layer
@@ -24,10 +24,11 @@ export function tenantIsolationExtension() {
       $allModels: {
         async $allOperations({ model, operation, args, query }) {
           const venueId = getTenantVenueId();
-          if (!venueId || !isVenueScoped(model) || !shouldScopeOperation(operation)) {
+          const scopeField = scopeFieldForModel(model);
+          if (!venueId || !scopeField || !shouldScopeOperation(operation)) {
             return query(args);
           }
-          return query(scopeArgs(operation, args as Record<string, any>, venueId));
+          return query(scopeArgs(operation, args as Record<string, any>, venueId, scopeField));
         },
       },
     },
