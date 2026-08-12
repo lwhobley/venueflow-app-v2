@@ -143,7 +143,7 @@ export default function SignInScreen() {
               loading={submitting}
               onPress={() => void submit()}
             >
-              Enter Stadium Wrangler
+              Enter Venue Wrangler Enterprise
             </Button>
           </Card.Content>
         </Card>
