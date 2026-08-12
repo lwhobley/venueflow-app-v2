@@ -36,9 +36,13 @@ export function CommandSurface({
     <View
       style={[
         {
-          backgroundColor: "transparent",
-          borderWidth: 0,
-          borderColor: "transparent",
+          backgroundColor: strong
+            ? palette.surfaceStrong
+            : inset
+              ? palette.surfaceSoft
+              : palette.surface,
+          borderWidth: inset ? 0 : StyleSheet.hairlineWidth,
+          borderColor: palette.border,
           borderRadius: strong ? radius.soft : radius.sharp,
           padding: inset ? spacing.md : spacing.lg,
           overflow: "hidden",
