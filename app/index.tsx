@@ -1,5 +1,5 @@
-import { Redirect } from 'expo-router';
-import { useAuthStore, type AuthState } from '../lib/auth-store';
+import { Redirect } from "expo-router";
+import { useAuthStore, type AuthState } from "../lib/auth-store";
 
 export default function Index() {
   const hydrated = useAuthStore((state: AuthState) => state.hydrated);
@@ -10,9 +10,12 @@ export default function Index() {
     return null;
   }
 
-  // A signed-in user must belong to a venue before reaching the app. New
-  // accounts (and anyone removed from their venue) are sent to invite-only team
-  // onboarding; public App Store builds do not offer business registration.
-  const href = !user ? '/(auth)/welcome' : !venue ? '/(auth)/team-choice' : '/(tabs)/home';
+  // Stadium Wrangler is provisioned by an administrator: staff sign in with
+  // their assigned email and six-digit PIN. There is no public onboarding.
+  const href = !user
+    ? "/(auth)/sign-in"
+    : !venue
+      ? "/(auth)/sign-in"
+      : "/(tabs)/home";
   return <Redirect href={href} />;
 }

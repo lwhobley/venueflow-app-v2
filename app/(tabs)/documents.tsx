@@ -196,7 +196,7 @@ function DocumentsScreenInner() {
 
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor: palette.background }}
+      style={{ flex: 1, backgroundColor: 'transparent' }}
       contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxxl, gap: spacing.lg }}
       showsVerticalScrollIndicator={false}
     >

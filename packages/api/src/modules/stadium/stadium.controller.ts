@@ -1,10 +1,11 @@
-import { Body, Controller, ForbiddenException, Get, NotFoundException, Param, Patch, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, NotFoundException, Param, Patch, Post } from '@nestjs/common';
 import { IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { canManageVenue } from '../../auth/roles';
 import { RequireSubscription } from '../../billing/require-subscription.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
+import { assertEventTransition, EVENT_OPERATIONAL_STATES, legacyStatusForState, type EventOperationalState } from './event-state';
 
 type Scope = NonNullable<VenueScopedRequest['venueScope']>;
 
@@ -16,6 +17,7 @@ const EVENT_STATUSES = ['draft', 'planning', 'ready', 'live', 'completed', 'canc
 const READINESS_STATUSES = ['not_started', 'in_progress', 'ready', 'blocked'] as const;
 const PARTNER_TYPES = ['local_concept', 'restaurant_concept', 'pop_up', 'licensed_brand', 'food_vendor', 'beverage_vendor', 'distributor', 'other'] as const;
 const PARTNER_STATUSES = ['onboarding', 'approved', 'active', 'paused', 'noncompliant', 'terminated'] as const;
+const ISSUE_SEVERITIES = ['low', 'medium', 'high', 'critical'] as const;
 
 class CreateZoneDto {
   @IsString() code!: string;
@@ -46,6 +48,12 @@ class CreateEventDto {
 
 class UpdateEventStatusDto {
   @IsIn(EVENT_STATUSES) status!: (typeof EVENT_STATUSES)[number];
+  @IsOptional() @IsString() reason?: string;
+}
+
+class UpdateEventOperationalStateDto {
+  @IsIn(EVENT_OPERATIONAL_STATES) state!: EventOperationalState;
+  @IsOptional() @IsString() reason?: string;
 }
 
 class EventPlanOptionsDto {
@@ -67,6 +75,19 @@ class GenerateEventPlanDto {
 class UpdateReadinessDto {
   @IsIn(READINESS_STATUSES) status!: (typeof READINESS_STATUSES)[number];
   @IsOptional() @IsString() notes?: string;
+}
+
+class CreateEventIssueDto {
+  @IsOptional() @IsString() outletId?: string;
+  @IsString() issueType!: string;
+  @IsIn(ISSUE_SEVERITIES) severity!: (typeof ISSUE_SEVERITIES)[number];
+  @IsString() title!: string;
+  @IsString() description!: string;
+  @IsOptional() @IsString() ownerUserId?: string;
+}
+
+class ResolveEventIssueDto {
+  @IsString() resolutionNotes!: string;
 }
 
 class UpsertPartnerDto {
@@ -93,6 +114,11 @@ export class StadiumController {
     }
   }
 
+  private async organizationIdFor(venueId: string) {
+    const venue = await this.prisma.venue.findUniqueOrThrow({ where: { id: venueId }, select: { organizationId: true } });
+    return venue.organizationId;
+  }
+
   @Get('overview')
   async overview(@VenueScope() scope: Scope) {
     const now = new Date();
@@ -109,7 +135,10 @@ export class StadiumController {
         where: { venueId: scope.venueId, startsAt: { gte: now } },
         orderBy: { startsAt: 'asc' },
         take: 20,
-        include: { fnbReadiness: { select: { status: true } } },
+        include: {
+          fnbReadiness: { select: { status: true } },
+          issues: { where: { status: { not: 'resolved' } }, select: { severity: true } },
+        },
       }),
       this.prisma.fnbPartner.findMany({ where: { venueId: scope.venueId }, orderBy: [{ status: 'asc' }, { name: 'asc' }] }),
     ]);
@@ -124,7 +153,9 @@ export class StadiumController {
           ...event,
           expectedAttendance: event.expectedGuests,
           readinessPercent: readinessTotal ? Math.round((readinessReady / readinessTotal) * 100) : 0,
+          openHighOrCriticalIssueCount: event.issues.filter((issue) => issue.severity === 'high' || issue.severity === 'critical').length,
           fnbReadiness: undefined,
+          issues: undefined,
         };
       }),
       partners,
@@ -161,6 +192,7 @@ export class StadiumController {
   async createEvent(@VenueScope() scope: Scope, @Body() body: CreateEventDto) {
     this.assertManager(scope);
     return this.prisma.$transaction(async (tx) => {
+      const venue = await tx.venue.findUniqueOrThrow({ where: { id: scope.venueId }, select: { organizationId: true } });
       const event = await tx.venueEvent.create({
         data: {
           venueId: scope.venueId,
@@ -182,16 +214,88 @@ export class StadiumController {
           data: zones.map((zone) => ({ venueId: scope.venueId, eventId: event.id, zoneId: zone.id })),
         });
       }
+      await tx.eventAuditLog.create({ data: { organizationId: venue.organizationId, venueId: scope.venueId, eventId: event.id, actorProfileId: scope.profileId, entityType: 'event', entityId: event.id, action: 'event_created', metadata: { eventType: event.eventType, expectedAttendance: event.expectedGuests } } });
       return event;
     });
   }
 
   @Patch('events/:id/status')
   async updateEventStatus(@VenueScope() scope: Scope, @Param('id') id: string, @Body() body: UpdateEventStatusDto) {
+    const legacyMap: Record<(typeof EVENT_STATUSES)[number], EventOperationalState> = { draft: 'draft', planning: 'planning', ready: 'pre_open', live: 'live', completed: 'closed', cancelled: 'archived' };
+    return this.transitionEvent(scope, id, legacyMap[body.status], body.reason);
+  }
+
+  @Patch('events/:id/state')
+  async updateEventOperationalState(@VenueScope() scope: Scope, @Param('id') id: string, @Body() body: UpdateEventOperationalStateDto) {
+    return this.transitionEvent(scope, id, body.state, body.reason);
+  }
+
+  private async transitionEvent(scope: Scope, id: string, target: EventOperationalState, reason?: string) {
     this.assertManager(scope);
+    const event = await this.prisma.venueEvent.findFirst({ where: { id, venueId: scope.venueId }, select: { id: true, operationalState: true } });
+    if (!event) throw new NotFoundException('Stadium event not found.');
+    assertEventTransition(event.operationalState as EventOperationalState, target, reason);
+    const organizationId = await this.organizationIdFor(scope.venueId);
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.venueEvent.update({ where: { id }, data: { operationalState: target, stateChangedAt: new Date(), status: legacyStatusForState(target), ...(target === 'approved' ? { approvedAt: new Date(), approvedBy: scope.profileId } : {}) } });
+      await tx.eventAuditLog.create({ data: { organizationId, venueId: scope.venueId, eventId: id, actorProfileId: scope.profileId, entityType: 'event', entityId: id, action: 'event_state_changed', reason: reason?.trim() || null, metadata: { from: event.operationalState, to: target } } });
+      return updated;
+    });
+  }
+
+  @Get('events/:id/issues')
+  async listEventIssues(@VenueScope() scope: Scope, @Param('id') id: string) {
     const event = await this.prisma.venueEvent.findFirst({ where: { id, venueId: scope.venueId }, select: { id: true } });
     if (!event) throw new NotFoundException('Stadium event not found.');
-    return this.prisma.venueEvent.update({ where: { id }, data: { status: body.status } });
+    return this.prisma.eventIssue.findMany({ where: { venueId: scope.venueId, eventId: id }, orderBy: [{ severity: 'desc' }, { openedAt: 'desc' }] });
+  }
+
+  @Get('events/:id/audit')
+  async listEventAudit(@VenueScope() scope: Scope, @Param('id') id: string) {
+    const event = await this.prisma.venueEvent.findFirst({ where: { id, venueId: scope.venueId }, select: { id: true } });
+    if (!event) throw new NotFoundException('Stadium event not found.');
+    return this.prisma.eventAuditLog.findMany({ where: { venueId: scope.venueId, eventId: id }, orderBy: { createdAt: 'desc' } });
+  }
+
+  @Post('events/:id/issues')
+  async createEventIssue(@VenueScope() scope: Scope, @Param('id') eventId: string, @Body() body: CreateEventIssueDto) {
+    const [event, organizationId, outlet] = await Promise.all([
+      this.prisma.venueEvent.findFirst({ where: { id: eventId, venueId: scope.venueId }, select: { id: true, operationalState: true } }),
+      this.organizationIdFor(scope.venueId),
+      body.outletId ? this.prisma.fnbOperationUnit.findFirst({ where: { id: body.outletId, venueId: scope.venueId }, select: { id: true } }) : Promise.resolve(null),
+    ]);
+    if (!event) throw new NotFoundException('Stadium event not found.');
+    if (body.outletId && !outlet) throw new NotFoundException('F&B outlet not found.');
+    if (['closed', 'archived'].includes(event.operationalState)) throw new ForbiddenException('Issues cannot be opened after event closeout. Use an authorized adjustment workflow.');
+    return this.prisma.$transaction(async (tx) => {
+      const issue = await tx.eventIssue.create({ data: { organizationId, venueId: scope.venueId, eventId, outletId: body.outletId ?? null, issueType: body.issueType.trim(), severity: body.severity, title: body.title.trim(), description: body.description.trim(), reportedByUserId: scope.profileId, ownerUserId: body.ownerUserId?.trim() || null } });
+      await tx.eventAuditLog.create({ data: { organizationId, venueId: scope.venueId, eventId, issueId: issue.id, actorProfileId: scope.profileId, entityType: 'event_issue', entityId: issue.id, action: 'issue_created', metadata: { issueType: issue.issueType, severity: issue.severity, outletId: issue.outletId } } });
+      return issue;
+    });
+  }
+
+  @Patch('issues/:id/acknowledge')
+  async acknowledgeEventIssue(@VenueScope() scope: Scope, @Param('id') id: string) {
+    const issue = await this.prisma.eventIssue.findFirst({ where: { id, venueId: scope.venueId }, select: { id: true, eventId: true, organizationId: true, status: true } });
+    if (!issue) throw new NotFoundException('Event issue not found.');
+    if (issue.status === 'resolved') throw new BadRequestException('A resolved issue cannot be acknowledged.');
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.eventIssue.update({ where: { id }, data: { status: 'acknowledged', acknowledgedAt: new Date(), ownerUserId: scope.profileId } });
+      await tx.eventAuditLog.create({ data: { organizationId: issue.organizationId, venueId: scope.venueId, eventId: issue.eventId, issueId: id, actorProfileId: scope.profileId, entityType: 'event_issue', entityId: id, action: 'issue_acknowledged' } });
+      return updated;
+    });
+  }
+
+  @Patch('issues/:id/resolve')
+  async resolveEventIssue(@VenueScope() scope: Scope, @Param('id') id: string, @Body() body: ResolveEventIssueDto) {
+    const issue = await this.prisma.eventIssue.findFirst({ where: { id, venueId: scope.venueId }, select: { id: true, eventId: true, organizationId: true, status: true } });
+    if (!issue) throw new NotFoundException('Event issue not found.');
+    if (issue.status === 'resolved') throw new BadRequestException('Event issue is already resolved.');
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.eventIssue.update({ where: { id }, data: { status: 'resolved', resolvedAt: new Date(), resolutionNotes: body.resolutionNotes.trim(), ownerUserId: scope.profileId } });
+      await tx.eventAuditLog.create({ data: { organizationId: issue.organizationId, venueId: scope.venueId, eventId: issue.eventId, issueId: id, actorProfileId: scope.profileId, entityType: 'event_issue', entityId: id, action: 'issue_resolved', metadata: { resolutionNotes: body.resolutionNotes.trim() } } });
+      return updated;
+    });
   }
 
   @Post('event-plan')
@@ -242,10 +346,15 @@ export class StadiumController {
       this.prisma.fnbOperationUnit.findFirst({ where: { id: zoneId, venueId: scope.venueId }, select: { id: true } }),
     ]);
     if (!event || !zone) throw new NotFoundException('Event or facility zone not found.');
-    return this.prisma.eventFnbReadiness.upsert({
-      where: { eventId_zoneId: { eventId, zoneId } },
-      create: { venueId: scope.venueId, eventId, zoneId, status: body.status, notes: body.notes?.trim() || null, checkedBy: scope.profileId, checkedAt: new Date() },
-      update: { status: body.status, notes: body.notes?.trim() || null, checkedBy: scope.profileId, checkedAt: new Date() },
+    const organizationId = await this.organizationIdFor(scope.venueId);
+    return this.prisma.$transaction(async (tx) => {
+      const readiness = await tx.eventFnbReadiness.upsert({
+        where: { eventId_zoneId: { eventId, zoneId } },
+        create: { venueId: scope.venueId, eventId, zoneId, status: body.status, notes: body.notes?.trim() || null, checkedBy: scope.profileId, checkedAt: new Date() },
+        update: { status: body.status, notes: body.notes?.trim() || null, checkedBy: scope.profileId, checkedAt: new Date() },
+      });
+      await tx.eventAuditLog.create({ data: { organizationId, venueId: scope.venueId, eventId, actorProfileId: scope.profileId, entityType: 'event_readiness', entityId: readiness.id, action: 'outlet_readiness_updated', metadata: { zoneId, status: body.status } } });
+      return readiness;
     });
   }
 

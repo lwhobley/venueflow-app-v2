@@ -29,8 +29,8 @@ describe('PrismaService cutover (integration)', () => {
 
     // Seed without a tenant context — extension stays inert during setup.
     const [a, b] = await Promise.all([
-      setup.prisma.venue.create({ data: { name: 'Cutover A', code: 'VW-CUTOVERA01', latitude: 0, longitude: 0, geofenceRadiusM: 100, timezone: 'UTC' } }),
-      setup.prisma.venue.create({ data: { name: 'Cutover B', code: 'VW-CUTOVERB01', latitude: 0, longitude: 0, geofenceRadiusM: 100, timezone: 'UTC' } }),
+      setup.prisma.venue.create({ data: { name: 'Cutover A', code: 'VW-CUTOVERA01', latitude: 0, longitude: 0, geofenceRadiusM: 100, timezone: 'UTC', organization: { create: { name: 'Cutover Org A', code: 'ORG-CUTOVERA01' } } } }),
+      setup.prisma.venue.create({ data: { name: 'Cutover B', code: 'VW-CUTOVERB01', latitude: 0, longitude: 0, geofenceRadiusM: 100, timezone: 'UTC', organization: { create: { name: 'Cutover Org B', code: 'ORG-CUTOVERB01' } } } }),
     ]);
     venueA = a.id;
     venueB = b.id;

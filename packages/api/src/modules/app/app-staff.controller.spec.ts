@@ -44,7 +44,8 @@ function makeController() {
   };
   const staffImportParser = { parse: vi.fn() };
 
-  const controller = new AppStaffController(prisma, email as any, profiles as any, staffImportParser as any);
+  const auth = {};
+  const controller = new AppStaffController(prisma, email as any, profiles as any, staffImportParser as any, auth as any);
   return { controller, prisma, email, profiles, staffImportParser };
 }
 

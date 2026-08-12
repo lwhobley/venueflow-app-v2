@@ -1,7 +1,7 @@
-import { MD3DarkTheme, MD3LightTheme } from 'react-native-paper';
-import { create } from 'zustand';
+import { MD3DarkTheme, MD3LightTheme } from "react-native-paper";
+import { create } from "zustand";
 
-type ThemeMode = 'dark' | 'light';
+type ThemeMode = "dark" | "light";
 
 type AppearanceState = {
   mode: ThemeMode;
@@ -10,59 +10,60 @@ type AppearanceState = {
 };
 
 export const useAppearanceStore = create<AppearanceState>((set) => ({
-  mode: 'light',
+  mode: "light",
   setMode: (mode) => set({ mode }),
-  toggleMode: () => set((state) => ({ mode: state.mode === 'dark' ? 'light' : 'dark' })),
+  toggleMode: () =>
+    set((state) => ({ mode: state.mode === "dark" ? "light" : "dark" })),
 }));
 
 export const designPalettes = {
   dark: {
-    mode: 'dark' as const,
-    background: '#172019',
-    backgroundAlt: '#1D2820',
-    surface: '#1D2820',
-    surfaceStrong: '#243026',
-    surfaceSoft: '#2A382D',
-    glass: '#1D2820',
-    primary: '#7ECA98',
-    secondary: '#E1A853',
-    charcoal: '#F7F7F4',
-    muted: '#B8C2BA',
-    border: '#3A493D',
-    divider: '#334136',
-    success: '#7ECA98',
-    danger: '#F09A90',
-    warning: '#E1A853',
-    info: '#9FC8DB',
-    cream: '#283B2D',
-    glow: '#283B2D',
-    shadow: '#000000',
+    mode: "dark" as const,
+    background: "#172019",
+    backgroundAlt: "#1D2820",
+    surface: "#1D2820",
+    surfaceStrong: "#243026",
+    surfaceSoft: "#2A382D",
+    glass: "#1D2820",
+    primary: "#7ECA98",
+    secondary: "#E1A853",
+    charcoal: "#F7F7F4",
+    muted: "#B8C2BA",
+    border: "#3A493D",
+    divider: "#334136",
+    success: "#7ECA98",
+    danger: "#F09A90",
+    warning: "#E1A853",
+    info: "#9FC8DB",
+    cream: "#283B2D",
+    glow: "#283B2D",
+    shadow: "#000000",
     // Text/icons drawn on top of `primary` fills (light-green in dark mode).
-    buttonText: '#172019',
+    buttonText: "#172019",
   },
   light: {
-    mode: 'light' as const,
-    background: '#F7F7F4',
-    backgroundAlt: '#FFFFFF',
-    surface: '#FFFFFF',
-    surfaceStrong: '#FFFFFF',
-    surfaceSoft: '#F1F2EE',
-    glass: '#FFFFFF',
-    primary: '#17643B',
-    secondary: '#A86514',
-    charcoal: '#1D2420',
-    muted: '#68706A',
-    border: '#DDE1DA',
-    divider: '#E5E8E2',
-    success: '#17643B',
-    danger: '#B4483F',
-    warning: '#A86514',
-    info: '#4A6678',
-    cream: '#EEF5F0',
-    glow: '#EEF5F0',
-    shadow: '#69736B',
+    mode: "light" as const,
+    background: "#0B3D20",
+    backgroundAlt: "#FFF4DD",
+    surface: "transparent",
+    surfaceStrong: "transparent",
+    surfaceSoft: "transparent",
+    glass: "transparent",
+    primary: "#F0C36A",
+    secondary: "#FFF4DD",
+    charcoal: "#FFF4DD",
+    muted: "#E7C99D",
+    border: "#BD7B43",
+    divider: "#8E4D29",
+    success: "#A9DB91",
+    danger: "#FFB0A1",
+    warning: "#F0C36A",
+    info: "#AFD9F0",
+    cream: "transparent",
+    glow: "transparent",
+    shadow: "#1F1009",
     // Text/icons drawn on top of `primary` fills (dark-green in light mode).
-    buttonText: '#FFFFFF',
+    buttonText: "#291208",
   },
 } as const;
 
@@ -76,16 +77,16 @@ export const useDesignTheme = () => {
 export const colors = designPalettes.light;
 
 export const authColors = {
-  background: colors.background,
-  surface: colors.surface,
-  primary: colors.primary,
-  text: '#1F241E',
-  muted: '#6F766B',
-  border: '#E8E2D8',
+  background: "transparent",
+  surface: "transparent",
+  primary: "#FFF4DD",
+  text: "#FFFDF7",
+  muted: "#E9D6B7",
+  border: "#FFF4DD",
   danger: colors.danger,
   success: colors.success,
-  buttonText: '#FFFFFF',
-  highlight: '#F0F7F2',
+  buttonText: "#241005",
+  highlight: "transparent",
 };
 
 export const authInputProps = {
@@ -97,12 +98,12 @@ export const authInputProps = {
 };
 
 export const accents = [
-  { bg: '#EEF5F0', fg: '#1D2420', icon: '#17643B' },
-  { bg: '#FFF4DE', fg: '#1D2420', icon: '#A86514' },
-  { bg: '#EEF3F7', fg: '#1D2420', icon: '#4A6678' },
-  { bg: '#F8EEE8', fg: '#1D2420', icon: '#A35E35' },
-  { bg: '#F0F1E9', fg: '#1D2420', icon: '#63705A' },
-  { bg: '#FBEDEC', fg: '#1D2420', icon: '#B4483F' },
+  { bg: "#EEF5F0", fg: "#1D2420", icon: "#17643B" },
+  { bg: "#FFF4DE", fg: "#1D2420", icon: "#A86514" },
+  { bg: "#EEF3F7", fg: "#1D2420", icon: "#4A6678" },
+  { bg: "#F8EEE8", fg: "#1D2420", icon: "#A35E35" },
+  { bg: "#F0F1E9", fg: "#1D2420", icon: "#63705A" },
+  { bg: "#FBEDEC", fg: "#1D2420", icon: "#B4483F" },
 ] as const;
 
 export const spacing = {
@@ -147,9 +148,24 @@ export const type = {
   subtitle: { fontSize: 14, lineHeight: 20, letterSpacing: 0.1 },
   body: { fontSize: 15, lineHeight: 22, letterSpacing: 0 },
   bodyLarge: { fontSize: 17, lineHeight: 24, letterSpacing: 0 },
-  heading: { fontSize: 20, lineHeight: 26, letterSpacing: -0.2, fontWeight: '700' },
-  title: { fontSize: 28, lineHeight: 34, letterSpacing: -0.4, fontWeight: '700' },
-  display: { fontSize: 40, lineHeight: 44, letterSpacing: -0.6, fontWeight: '700' },
+  heading: {
+    fontSize: 20,
+    lineHeight: 26,
+    letterSpacing: -0.2,
+    fontWeight: "700",
+  },
+  title: {
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: -0.4,
+    fontWeight: "700",
+  },
+  display: {
+    fontSize: 40,
+    lineHeight: 44,
+    letterSpacing: -0.6,
+    fontWeight: "700",
+  },
 } as const;
 
 // No default drop shadow — surfaces are separated by hairline rules and
@@ -164,27 +180,25 @@ export const shadow = {
 } as const;
 
 export const authCardStyle = {
-  backgroundColor: authColors.surface,
-  borderRadius: radius.soft,
-  borderWidth: 1,
-  borderColor: authColors.border,
+  backgroundColor: "transparent",
+  borderRadius: 0,
+  borderWidth: 0,
+  borderColor: "transparent",
 } as const;
 
 export const glass = {
-  backgroundColor: designPalettes.light.glass,
-  borderWidth: 1,
-  borderColor: designPalettes.light.border,
-  backdropFilter: 'blur(20px)',
-  WebkitBackdropFilter: 'blur(20px)',
+  backgroundColor: "transparent",
+  borderWidth: 0,
+  borderColor: "transparent",
 } as const;
 
 export const makePaperTheme = (mode: ThemeMode) => {
   const palette = designPalettes[mode];
-  const base = mode === 'dark' ? MD3DarkTheme : MD3LightTheme;
+  const base = mode === "dark" ? MD3DarkTheme : MD3LightTheme;
 
   return {
     ...base,
-    dark: mode === 'dark',
+    dark: mode === "dark",
     roundness: radius.sharp,
     colors: {
       ...base.colors,
@@ -205,5 +219,5 @@ export const makePaperTheme = (mode: ThemeMode) => {
   };
 };
 
-export const lightTheme = makePaperTheme('light');
-export const darkTheme = makePaperTheme('dark');
+export const lightTheme = makePaperTheme("light");
+export const darkTheme = makePaperTheme("dark");

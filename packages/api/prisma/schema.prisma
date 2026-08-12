@@ -14,6 +14,15 @@ enum Role {
   manager
   server
   staff
+  platform_admin
+  organization_admin
+  fnb_director
+  event_manager
+  outlet_manager
+  executive_chef
+  warehouse_manager
+  premium_manager
+  finance_viewer
 }
 
 enum DocumentCategory {
@@ -221,6 +230,30 @@ enum StadiumEventStatus {
   cancelled
 }
 
+enum EventOperationalState {
+  draft
+  planning
+  approved
+  pre_open
+  live
+  closing
+  closed
+  archived
+}
+
+enum EventIssueSeverity {
+  low
+  medium
+  high
+  critical
+}
+
+enum EventIssueStatus {
+  open
+  acknowledged
+  resolved
+}
+
 enum FnbOperationType {
   concession_stand
   grab_and_go
@@ -361,8 +394,20 @@ model PasswordCredential {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+model Organization {
+  id              String          @id @default(cuid())
+  name            String
+  code            String          @unique
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  venues          Venue[]
+  eventIssues     EventIssue[]
+  eventAuditLogs  EventAuditLog[]
+}
+
 model Venue {
   id                            String                    @id @default(cuid())
+  organizationId                String
   name                          String
   latitude                      Float
   longitude                     Float
@@ -454,6 +499,11 @@ model Venue {
   fnbOperationUnits             FnbOperationUnit[]
   eventFnbReadiness             EventFnbReadiness[]
   fnbPartners                   FnbPartner[]
+  organization                  Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  eventIssues                   EventIssue[]
+  eventAuditLogs                EventAuditLog[]
+
+  @@index([organizationId])
 }
 
 model Profile {
@@ -1659,6 +1709,10 @@ model VenueEvent {
   eventCode           String?
   eventType           StadiumEventType    @default(other)
   status              StadiumEventStatus  @default(planning)
+  operationalState    EventOperationalState @default(draft)
+  stateChangedAt      DateTime             @default(now())
+  approvedAt          DateTime?
+  approvedBy          String?
   startsAt            DateTime
   gatesOpenAt         DateTime?
   endsAt              DateTime?
@@ -1673,10 +1727,13 @@ model VenueEvent {
   updatedAt           DateTime            @updatedAt
   venue               Venue               @relation(fields: [venueId], references: [id], onDelete: Cascade)
   fnbReadiness        EventFnbReadiness[]
+  issues              EventIssue[]
+  auditLogs           EventAuditLog[]
 
   @@unique([venueId, eventCode])
   @@index([venueId, startsAt])
   @@index([venueId, status, startsAt])
+  @@index([venueId, operationalState, startsAt])
   @@index([reservationId])
 }
 
@@ -1696,11 +1753,62 @@ model FnbOperationUnit {
   updatedAt      DateTime            @updatedAt
   venue          Venue               @relation(fields: [venueId], references: [id], onDelete: Cascade)
   eventReadiness EventFnbReadiness[]
+  issues         EventIssue[]
 
   @@unique([venueId, code])
   @@index([venueId, department, stadiumZone])
   @@index([venueId, type])
   @@index([venueId, status])
+}
+
+model EventIssue {
+  id                  String             @id @default(cuid())
+  organizationId      String
+  venueId             String
+  eventId             String
+  outletId            String?
+  issueType           String
+  severity            EventIssueSeverity
+  status              EventIssueStatus   @default(open)
+  title               String
+  description         String
+  reportedByUserId    String
+  ownerUserId         String?
+  openedAt            DateTime           @default(now())
+  acknowledgedAt      DateTime?
+  resolvedAt          DateTime?
+  resolutionNotes     String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  organization        Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  venue               Venue              @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  event               VenueEvent         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  outlet              FnbOperationUnit?  @relation(fields: [outletId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, venueId, eventId, status])
+  @@index([venueId, eventId, severity, status])
+  @@index([outletId])
+}
+
+model EventAuditLog {
+  id              String       @id @default(cuid())
+  organizationId  String
+  venueId         String
+  eventId         String
+  issueId         String?
+  entityType      String
+  entityId        String
+  action          String
+  actorProfileId  String?
+  reason          String?
+  metadata        Json?
+  createdAt       DateTime     @default(now())
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  venue           Venue        @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  event           VenueEvent   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, venueId, eventId, createdAt])
+  @@index([eventId, entityType, entityId, createdAt])
 }
 
 model EventFnbReadiness {

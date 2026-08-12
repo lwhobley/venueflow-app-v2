@@ -1,0 +1,17 @@
+.gcloudignore
+.git
+.gitignore
+.codex
+.expo
+.superdesign
+node_modules
+**/node_modules
+dist
+**/dist
+coverage
+screenshots
+builds
+.env
+.env.*
+!.env.example
+*.log

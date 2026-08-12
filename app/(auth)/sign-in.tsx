@@ -1,272 +1,188 @@
-import { useEffect, useState } from 'react';
-import { Alert, Image, KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
-import * as Haptics from 'expo-haptics';
-import { Button, Card, Checkbox, Chip, SegmentedButtons, Text, TextInput } from 'react-native-paper';
-import { appApi } from '../../lib/api-client';
-import { authCardStyle, authColors, spacing, type } from '../../lib/theme';
-import { Kicker } from '../../components/AppCard';
-import { useAuthStore, type AuthState } from '../../lib/auth-store';
-import { useI18n } from '../../lib/i18n';
+import { useState } from "react";
+import {
+  Alert,
+  Image,
+  ImageBackground,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
+import { router } from "expo-router";
+import * as Haptics from "expo-haptics";
+import { Button, Text, TextInput } from "react-native-paper";
+import { appApi } from "../../lib/api-client";
+import { authColors, spacing, type } from "../../lib/theme";
+import { Kicker } from "../../components/AppCard";
+import { useAuthStore, type AuthState } from "../../lib/auth-store";
 
-type InvitePreview = { expired?: boolean; venueName?: string; jobTitle?: string };
-
-const logoSource = require('../../assets/venue-wrangler-logo.jpg');
+const logoSource = require("../../assets/stadium-wrangler-logo.png");
+const turfSource = require("../../assets/stadium-turf-texture.png");
 
 export default function SignInScreen() {
   const setSession = useAuthStore((state: AuthState) => state.setSession);
   const clearSession = useAuthStore((state: AuthState) => state.clearSession);
-  const { t } = useI18n();
-
-  const authInputProps = {
-    outlineColor: authColors.border,
-    activeOutlineColor: authColors.primary,
-    textColor: authColors.text,
-    placeholderTextColor: authColors.muted,
-    style: { backgroundColor: authColors.surface },
-  };
-  const authControlTheme = {
-    colors: {
-      primary: authColors.primary,
-      secondaryContainer: authColors.highlight,
-      onSecondaryContainer: authColors.text,
-      onSurface: authColors.text,
-      outline: authColors.border,
-    },
-  };
-
-  const { invite: inviteParam, phone: phoneParam, tab } = useLocalSearchParams<{ invite?: string; phone?: string; tab?: string }>();
-  const inviteToken = typeof inviteParam === 'string' ? inviteParam : undefined;
-  const invitePhone = typeof phoneParam === 'string' ? phoneParam : undefined;
-  const [invitePreview, setInvitePreview] = useState<InvitePreview | null>(null);
-
-  useEffect(() => {
-    if (!inviteToken) {
-      setInvitePreview(null);
-      return;
-    }
-    let cancelled = false;
-    appApi.previewInvite(inviteToken)
-      .then((result) => {
-        if (cancelled) return;
-        setInvitePreview({ venueName: result.venueName, jobTitle: result.jobTitle });
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setInvitePreview({ expired: true });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [inviteToken]);
-
-  const [flow, setFlow] = useState<'signIn' | 'signUp'>(inviteToken && tab !== 'signIn' ? 'signUp' : 'signIn');
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [email, setEmail] = useState("");
+  const [pin, setPin] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const showError = (title: string, message: string) => {
-    setFormError(message);
-    Alert.alert(title, message);
-  };
-
-  const finishSession = async (options?: { inviteToken?: string }) => {
-    const last = await appApi.passwordAuth({
-      email: email.trim(),
-      phone: invitePhone,
-      password,
-      flow,
-      fullName: fullName.trim() || undefined,
-      inviteToken: options?.inviteToken,
-      termsAccepted: flow === 'signUp' ? termsAccepted : undefined,
-    });
-
-    const { profile, venue, token } = last;
-    setSession({
-      user: {
-        id: profile._id,
-        email: profile.email,
-        full_name: profile.fullName,
-        email_verified: profile.emailVerified === true,
-        role: profile.role,
-        job_title: profile.jobTitle,
-        venue_id: profile.venueId ?? null,
-        all_access: profile.allAccess === true,
-      },
-      venue: venue
-        ? {
-            id: venue._id,
-            name: venue.name,
-            latitude: venue.latitude,
-            longitude: venue.longitude,
-            geofence_radius_m: venue.geofenceRadiusM,
-          }
-        : null,
-      token,
-    });
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    // After signup, route to email verification first.
-    // verify-email.tsx calls redeemInvite / redeemMyInvite after code entry
-    // to finalize venue membership before taking the user into the app.
-    if (!profile.emailVerified && flow === 'signUp') {
-      if (options?.inviteToken) {
-        router.replace({ pathname: '/(auth)/verify-email', params: { invite: options.inviteToken } });
-      } else {
-        router.replace('/(auth)/verify-email');
-      }
-    } else {
-      router.replace(venue ? '/(tabs)/home' : '/(auth)/team-choice');
-    }
-  };
-
-  const resetExistingSession = () => {
-    clearSession();
-  };
-
   const submit = async () => {
-    const trimmed = email.trim();
-    const minPasswordLength = flow === 'signUp' ? 8 : 6;
-    if (!trimmed.includes('@') || password.trim().length < minPasswordLength) {
-      Alert.alert(t('signIn.invalidDetailsTitle'), t('signIn.invalidDetailsMessage', { count: minPasswordLength }));
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail.includes("@") || !/^\d{6}$/.test(pin)) {
+      const message =
+        "Enter the email assigned by your administrator and your six-digit access PIN.";
+      setFormError(message);
+      Alert.alert("Check your access details", message);
       return;
     }
-    if (flow === 'signUp' && !fullName.trim()) {
-      Alert.alert(t('signIn.nameRequiredTitle'), t('signIn.nameRequiredMessage'));
-      return;
-    }
-    if (flow === 'signUp' && !termsAccepted) {
-      Alert.alert(t('signIn.invalidDetailsTitle'), t('register.errors.termsRequired'));
-      return;
-    }
+
     setSubmitting(true);
     setFormError(null);
     try {
-      resetExistingSession();
-      await finishSession({ inviteToken });
-    } catch (e) {
-      showError(
-        flow === 'signUp' ? t('signIn.createAccountFailedTitle') : t('signIn.signInFailedTitle'),
-        e instanceof Error ? e.message : t('signIn.tryAgain'),
-      );
+      clearSession();
+      const { profile, venue, token } = await appApi.pinAuth({
+        email: normalizedEmail,
+        pin,
+        flow: "signIn",
+      });
+      setSession({
+        user: {
+          id: profile._id,
+          email: profile.email,
+          full_name: profile.fullName,
+          email_verified: profile.emailVerified === true,
+          role: profile.role,
+          job_title: profile.jobTitle,
+          venue_id: profile.venueId ?? null,
+          all_access: profile.allAccess === true,
+        },
+        venue: venue
+          ? {
+              id: venue._id,
+              name: venue.name,
+              latitude: venue.latitude,
+              longitude: venue.longitude,
+              geofence_radius_m: venue.geofenceRadiusM,
+            }
+          : null,
+        token,
+      });
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace(venue ? "/(tabs)/home" : "/(auth)/sign-in");
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unable to sign in. Please try again.";
+      setFormError(message);
+      Alert.alert("Sign in failed", message);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const inviteBanner = inviteToken && invitePreview && !invitePreview.expired ? (
-    <View style={{ alignItems: 'center', gap: 6, marginBottom: spacing.sm }}>
-      <Text variant="titleMedium" style={{ fontWeight: '700', color: authColors.primary, textAlign: 'center' }}>
-        {t('signIn.inviteBannerTitle')}
-      </Text>
-      <Text variant="titleLarge" style={{ fontWeight: '800', textAlign: 'center', color: authColors.text }}>
-        {invitePreview.venueName}
-      </Text>
-      <Chip compact>{invitePreview.jobTitle}</Chip>
-    </View>
-  ) : null;
-
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: authColors.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={{ flexGrow: 1, padding: spacing.lg, justifyContent: 'center', gap: spacing.md }}>
-        <View style={{ marginBottom: spacing.sm, alignItems: 'center', gap: 10 }}>
-          <Image source={logoSource} style={styles.logo} />
-          <Kicker>{flow === 'signUp' ? t('signIn.kickerSignUp') : t('signIn.kickerSignIn')}</Kicker>
-          <Text style={{ ...type.title, color: authColors.text }}>{t('signIn.brand')}</Text>
-          {!inviteToken ? (
-            <Text variant="bodyMedium" style={{ color: authColors.muted, marginTop: 6, textAlign: 'center' }}>
-              {t('signIn.subtitle')}
+    <ImageBackground source={turfSource} resizeMode="cover" style={{ flex: 1 }}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.branding}>
+            <Image source={logoSource} style={styles.logo} />
+            <Kicker>Stadium F&B operations</Kicker>
+            <Text
+              style={{
+                ...type.title,
+                color: authColors.text,
+                textAlign: "center",
+              }}
+            >
+              Administrator Access
             </Text>
-          ) : null}
-        </View>
+            <Text variant="bodyMedium" style={styles.subtitle}>
+              Administrator access only. Sign in with your assigned email and
+              six-digit PIN.
+            </Text>
+          </View>
 
-        <Card style={styles.authCard}>
-          <Card.Content style={{ gap: spacing.md }}>
-            {inviteBanner}
-            {inviteToken ? (
-              <Text style={{ color: authColors.muted, textAlign: 'center', marginBottom: spacing.sm }}>
-                {t('signIn.inviteInstructions')}
+          <View style={styles.form}>
+            {formError ? (
+              <Text selectable style={styles.error}>
+                {formError}
               </Text>
             ) : null}
-            {formError ? (
-              <Text style={{ color: authColors.danger, textAlign: 'center' }}>{formError}</Text>
-            ) : null}
-
-            {inviteToken ? (
-              <SegmentedButtons
-                theme={authControlTheme}
-                value={flow}
-                onValueChange={(v) => setFlow(v as 'signIn' | 'signUp')}
-                buttons={[{ value: 'signUp', label: t('signIn.tabCreateAccount') }, { value: 'signIn', label: t('signIn.tabSignIn') }]}
-              />
-            ) : null}
-
-            {flow === 'signUp' ? (
-              <TextInput {...authInputProps} label={t('signIn.nameLabel')} value={fullName} onChangeText={setFullName} mode="outlined" />
-            ) : null}
-            <TextInput {...authInputProps} label={t('signIn.emailLabel')} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" mode="outlined" />
-            <TextInput {...authInputProps} label={t('signIn.passwordLabel')} value={password} onChangeText={setPassword} secureTextEntry mode="outlined" />
-            {flow === 'signIn' ? (
-              <Button mode="text" compact textColor={authColors.primary} onPress={() => router.push('/(auth)/reset-password')}>
-                {t('signIn.forgotPassword')}
-              </Button>
-            ) : null}
-
-            <Button mode="contained" buttonColor={authColors.primary} textColor={authColors.buttonText} loading={submitting} onPress={() => void submit()}>
-              {flow === 'signUp'
-                ? (inviteToken && invitePreview && !invitePreview.expired ? t('signIn.joinVenueButton', { venueName: invitePreview.venueName ?? '' }) : t('signIn.createAccountButton'))
-                : t('signIn.signInButton')}
+            <TextInput
+              label="Administrator email"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              mode="outlined"
+              outlineColor={authColors.border}
+              activeOutlineColor={authColors.primary}
+              textColor={authColors.text}
+              placeholderTextColor={authColors.muted}
+              style={styles.input}
+            />
+            <TextInput
+              label="Six-digit administrator PIN"
+              value={pin}
+              onChangeText={(value) =>
+                setPin(value.replace(/\D/g, "").slice(0, 6))
+              }
+              keyboardType="number-pad"
+              secureTextEntry
+              maxLength={6}
+              mode="outlined"
+              outlineColor={authColors.border}
+              activeOutlineColor={authColors.primary}
+              textColor={authColors.text}
+              style={styles.input}
+            />
+            <Button
+              mode="contained"
+              buttonColor={authColors.primary}
+              textColor={authColors.buttonText}
+              loading={submitting}
+              onPress={() => void submit()}
+            >
+              Enter Stadium Wrangler
             </Button>
+          </View>
 
-            {flow === 'signUp' ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Checkbox status={termsAccepted ? 'checked' : 'unchecked'} onPress={() => setTermsAccepted((value) => !value)} color={authColors.primary} />
-                <Text style={{ color: authColors.muted, fontSize: 12, flex: 1 }}>
-                  {t('signIn.termsPrefix')}{' '}
-                  <Text style={{ color: authColors.primary, fontSize: 12 }} onPress={() => void Linking.openURL('https://www.venuewrangler.com/terms')}>
-                    {t('signIn.termsOfService')}
-                  </Text>{' '}{t('signIn.and')}{' '}
-                  <Text style={{ color: authColors.primary, fontSize: 12 }} onPress={() => void Linking.openURL('https://www.venuewrangler.com/privacy')}>
-                    {t('signIn.privacyPolicy')}
-                  </Text>.
-                </Text>
-              </View>
-            ) : null}
-          </Card.Content>
-        </Card>
-
-        {!inviteToken ? (
-          <Button
-            mode="outlined"
-            textColor={authColors.primary}
-            onPress={() => router.push('/(auth)/invite-check')}
-          >
-            {t('signIn.haveInviteButton')}
-          </Button>
-        ) : null}
-
-        <View style={{ alignItems: 'center', marginTop: spacing.sm, gap: 6 }}>
-          <Text style={{ color: authColors.muted, fontSize: 13, textAlign: 'center' }}>
-            {t('signIn.footerNote')}
+          <Text selectable style={styles.help}>
+            Need administrator access or a new PIN? Contact the venue owner.
           </Text>
-          <Text style={{ color: authColors.muted, fontSize: 12, fontWeight: '700' }}>{t('common.venueWrangler')}</Text>
-          <Text style={{ color: authColors.muted, fontSize: 11 }}>{t('common.loungeability')}</Text>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
+  content: {
+    flexGrow: 1,
+    justifyContent: "center",
+    gap: spacing.xl,
+    padding: spacing.lg,
+  },
+  branding: { alignItems: "center", gap: spacing.sm },
   logo: {
-    width: '100%',
+    width: "100%",
     maxWidth: 340,
     aspectRatio: 1024 / 559,
-    resizeMode: 'contain',
+    resizeMode: "contain",
   },
-  authCard: {
-    ...authCardStyle,
-  },
+  subtitle: { color: authColors.muted, textAlign: "center", maxWidth: 360 },
+  form: { gap: spacing.md },
+  input: { backgroundColor: "rgba(9, 57, 29, 0.18)" },
+  error: { color: "#FFE1D9", textAlign: "center" },
+  help: { color: authColors.muted, fontSize: 13, textAlign: "center" },
 });

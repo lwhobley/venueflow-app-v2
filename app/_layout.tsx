@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Platform, View } from 'react-native';
+import { ImageBackground, Platform, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -111,15 +111,17 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <PaperProvider theme={makePaperTheme(themeMode)}>
             <A0PurchaseProvider config={{ appUserId: venueId ?? undefined, debug }}>
-              {/* Top inset keeps content below the status bar / notch; the tab
-                  bar and screens handle the bottom inset. */}
-              <SafeAreaView style={{ flex: 1, backgroundColor: palette.background }} edges={['top', 'left', 'right']}>
-                <ErrorBoundary>
-                  <SubscriptionGate>
-                    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.background } }} />
-                  </SubscriptionGate>
-                </ErrorBoundary>
-              </SafeAreaView>
+              <ImageBackground source={require('../assets/stadium-turf-texture.png')} resizeMode="cover" style={{ flex: 1 }}>
+                {/* Top inset keeps content below the status bar / notch; the tab
+                    bar and screens handle the bottom inset. */}
+                <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }} edges={['top', 'left', 'right']}>
+                  <ErrorBoundary>
+                    <SubscriptionGate>
+                      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }} />
+                    </SubscriptionGate>
+                  </ErrorBoundary>
+                </SafeAreaView>
+              </ImageBackground>
             </A0PurchaseProvider>
           </PaperProvider>
         </QueryClientProvider>

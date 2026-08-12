@@ -74,7 +74,7 @@ export default function JoinRequestsScreen() {
   const requests: JoinRequest[] = data?.requests ?? [];
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: palette.background }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }}>
       <View style={[styles.header, { borderBottomColor: palette.divider }]}>
         <Button
           icon="arrow-left"

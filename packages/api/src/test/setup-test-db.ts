@@ -70,6 +70,7 @@ export async function seedSchedulingFixtures(prisma: PrismaClient) {
       longitude: -74.0,
       geofenceRadiusM: 100,
       timezone: 'America/New_York',
+      organization: { create: { name: 'Test Organization', code: 'org-vw-schedule01' } },
     },
   });
 

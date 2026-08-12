@@ -1,22 +1,22 @@
 {
   "expo": {
-    "name": "Venue Wrangler",
+    "name": "Stadium Wrangler",
     "slug": "venue-wrangler",
     "owner": "loungeabilityllc",
     "version": "1.10.11",
     "orientation": "portrait",
-    "icon": "./assets/app-icon.png",
+    "icon": "./assets/stadium-wrangler-logo-icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "icon": "./assets/app-icon.png",
-      "bundleIdentifier": "com.venuewrangler.app",
+      "icon": "./assets/stadium-wrangler-logo-icon.png",
+      "bundleIdentifier": "com.stadiumwrangler.app",
       "infoPlist": {
         "UIBackgroundModes": [],
-        "NSLocationWhenInUseUsageDescription": "Venue Wrangler uses your location to verify clock-ins and clock-outs at your venue.",
-        "NSPhotoLibraryUsageDescription": "Venue Wrangler lets managers upload stadium F&B inventory and production photos from the photo library.",
-        "NSPhotoLibraryAddUsageDescription": "Venue Wrangler saves F&B operations photos to your library for backup and sharing.",
-        "NSUserNotificationsUsageDescription": "Venue Wrangler sends schedule updates, shift changes, and important venue alerts.",
+        "NSLocationWhenInUseUsageDescription": "Stadium Wrangler uses your location to verify clock-ins and clock-outs at your venue.",
+        "NSPhotoLibraryUsageDescription": "Stadium Wrangler lets managers upload stadium F&B inventory and production photos from the photo library.",
+        "NSPhotoLibraryAddUsageDescription": "Stadium Wrangler saves F&B operations photos to your library for backup and sharing.",
+        "NSUserNotificationsUsageDescription": "Stadium Wrangler sends schedule updates, shift changes, and important venue alerts.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -39,10 +39,10 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "scheme": "venuewrangler",
-    "description": "Venue Wrangler stadium food and beverage operations management.",
+    "scheme": "stadiumwrangler",
+    "description": "Stadium food and beverage operations management for live events.",
     "extra": {
-      "EXPO_PUBLIC_API_URL": "https://venue-wrangler-api-c57mm72zpa-ue.a.run.app/api",
+      "EXPO_PUBLIC_API_URL": "https://stadium-wrangler-api-c57mm72zpa-ue.a.run.app/api",
       "router": {},
       "eas": {
         "projectId": "eb8d41ff-6e88-48cf-a75a-d4399e442c28"
@@ -54,7 +54,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/venue-wrangler-splash.png",
+        "image": "./assets/stadium-wrangler-logo.png",
           "resizeMode": "contain",
           "backgroundColor": "#F4FAFC"
         }
@@ -62,19 +62,19 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Venue Wrangler uses your location to verify clock-ins and clock-outs at your venue."
+          "locationWhenInUsePermission": "Stadium Wrangler uses your location to verify clock-ins and clock-outs at your venue."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Venue Wrangler lets managers upload stadium F&B inventory and production photos from the photo library."
+          "photosPermission": "Stadium Wrangler lets managers upload stadium F&B inventory and production photos from the photo library."
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "Venue Wrangler scans barcodes and QR codes to look up stadium F&B inventory items.",
+          "cameraPermission": "Stadium Wrangler scans barcodes and QR codes to look up stadium F&B inventory items.",
           "recordAudioAndroid": false
         }
       ],

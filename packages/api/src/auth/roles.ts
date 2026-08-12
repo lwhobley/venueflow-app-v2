@@ -2,12 +2,12 @@
  * Roles that may manage venue-level configuration.
  */
 export function isAdminRole(role?: string | null): boolean {
-  return role === 'admin' || role === 'owner' || role === 'manager';
+  return ['admin', 'owner', 'manager', 'platform_admin', 'organization_admin', 'fnb_director'].includes(role ?? '');
 }
 
 /** Venue-level manager access, including internal/support profiles. */
 export function canManageVenue(role?: string | null, allAccess = false): boolean {
-  return allAccess || isAdminRole(role);
+  return allAccess || isAdminRole(role) || ['event_manager', 'outlet_manager', 'executive_chef', 'warehouse_manager', 'premium_manager'].includes(role ?? '');
 }
 
 const ROLE_RANK: Record<string, number> = {

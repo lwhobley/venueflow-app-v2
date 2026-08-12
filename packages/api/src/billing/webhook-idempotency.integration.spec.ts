@@ -45,6 +45,7 @@ describe('billing webhook idempotency (integration)', () => {
         longitude: 0,
         geofenceRadiusM: 100,
         timezone: 'UTC',
+        organization: { create: { name: 'Idempotency Test Organization', code: `ORG-${randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase()}` } },
       },
     });
     venueId = venue.id;

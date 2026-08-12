@@ -367,6 +367,7 @@ export class AppController {
           staffRange: body.staffRange,
           subscriptionStatus: 'trialing',
           subscriptionPlatform: null,
+          organization: { create: { name: `${businessName} Organization`, code: `org_${venueCode}` } },
         },
       });
       await tx.subscription.create({
@@ -387,10 +388,11 @@ export class AppController {
           userId: user.sub,
           email: user.email ?? existingProfile?.email ?? `${user.sub}@venuewrangler.local`,
           fullName: body.ownerName?.trim() || existingProfile?.fullName || user.name || 'Owner',
-          role: 'admin',
-          jobTitle: 'Owner',
+          role: existingProfile?.allAccess ? 'platform_admin' : 'admin',
+          jobTitle: existingProfile?.allAccess ? 'Platform Administrator' : 'Owner',
           venueId: venue.id,
           trialEndsAt,
+          allAccess: existingProfile?.allAccess ?? false,
         },
       });
       await syncTeamMemberCount(tx, venue.id);

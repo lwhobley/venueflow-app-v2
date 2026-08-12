@@ -28,8 +28,8 @@ describe('tenant isolation extension (integration)', () => {
     // Two tenants, each with one bar inventory item. Seeded WITHOUT a tenant
     // context so the extension stays inert during setup.
     const [a, b] = await Promise.all([
-      base.venue.create({ data: { name: 'Venue A', code: 'VW-TENANTA001', latitude: 0, longitude: 0, geofenceRadiusM: 100, timezone: 'UTC' } }),
-      base.venue.create({ data: { name: 'Venue B', code: 'VW-TENANTB001', latitude: 0, longitude: 0, geofenceRadiusM: 100, timezone: 'UTC' } }),
+      base.venue.create({ data: { name: 'Venue A', code: 'VW-TENANTA001', latitude: 0, longitude: 0, geofenceRadiusM: 100, timezone: 'UTC', organization: { create: { name: 'Tenant Organization A', code: 'ORG-TENANTA001' } } } }),
+      base.venue.create({ data: { name: 'Venue B', code: 'VW-TENANTB001', latitude: 0, longitude: 0, geofenceRadiusM: 100, timezone: 'UTC', organization: { create: { name: 'Tenant Organization B', code: 'ORG-TENANTB001' } } } }),
     ]);
     venueA = a.id;
     venueB = b.id;

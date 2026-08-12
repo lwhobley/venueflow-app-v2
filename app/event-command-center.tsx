@@ -73,7 +73,7 @@ export default function EventCommandCenterScreen() {
 
   if (generationState === 'error' || workspaceQuery.error) {
     return (
-      <View style={{ flex: 1, backgroundColor: palette.background, padding: spacing.lg, justifyContent: 'center', gap: spacing.md }}>
+      <View style={{ flex: 1, backgroundColor: 'transparent', padding: spacing.lg, justifyContent: 'center', gap: spacing.md }}>
         <CommandText palette={palette} variant="title">Event workspace unavailable</CommandText>
         <CommandText palette={palette} variant="caption">{workspaceQuery.error instanceof Error ? workspaceQuery.error.message : 'The workspace could not be prepared.'}</CommandText>
         <Button mode="contained" buttonColor={palette.primary} textColor={colors.surface} onPress={() => void prepareWorkspace()}>Try again</Button>
@@ -83,7 +83,7 @@ export default function EventCommandCenterScreen() {
 
   if (!workspace || generationState === 'loading' || workspaceQuery.isLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: palette.background, padding: spacing.lg, justifyContent: 'center', gap: spacing.md }}>
+      <View style={{ flex: 1, backgroundColor: 'transparent', padding: spacing.lg, justifyContent: 'center', gap: spacing.md }}>
         <CommandText palette={palette} variant="title">Loading event workspace…</CommandText>
         <CommandText palette={palette} variant="caption">Pulling the live event brief, staffing, floor, and execution tasks.</CommandText>
       </View>
@@ -92,7 +92,7 @@ export default function EventCommandCenterScreen() {
 
   const { event, readiness } = workspace;
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: palette.background }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl }}>
+    <ScrollView style={{ flex: 1, backgroundColor: 'transparent' }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
         <CommandButton palette={palette} icon="arrow-left" onPress={() => router.back()}>Back</CommandButton>
         <View style={{ flex: 1 }}>

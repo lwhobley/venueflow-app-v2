@@ -50,6 +50,8 @@ const queryRoutes: Record<string, Route> = {
   'operations.getCommandCenter': { path: '/v1/operations/command-center' },
   'operations.getCommandCenterEvent': { path: (args) => `/v1/operations/command-center/events/${args.eventId ?? args.id}` },
   'stadium.getOverview': { path: '/v1/stadium/overview' },
+  'stadium.listEventIssues': { path: (args) => `/v1/stadium/events/${args.eventId}/issues` },
+  'stadium.listEventAudit': { path: (args) => `/v1/stadium/events/${args.eventId}/audit` },
   'operations.listLogbook': { path: (args) => `/v1/operations/logbook${args?.limit ? `?limit=${args.limit}` : ''}` },
   'operations.getChecklist': {
     path: (args) => `/v1/operations/checklist?kind=${encodeURIComponent(args.kind)}${args?.date ? `&date=${encodeURIComponent(args.date)}` : ''}`,
@@ -135,6 +137,30 @@ const mutationRoutes: Record<string, Route> = {
     body: ({ status }) => ({ status }),
     invalidate: [['stadium', 'getOverview'], ['operations', 'getCommandCenter']],
   },
+  'stadium.updateEventOperationalState': {
+    path: (args) => `/v1/stadium/events/${args.eventId}/state`,
+    method: 'PATCH',
+    body: ({ state, reason }) => ({ state, reason }),
+    invalidate: [['stadium', 'getOverview'], ['operations', 'getCommandCenter']],
+  },
+  'stadium.createEventIssue': {
+    path: (args) => `/v1/stadium/events/${args.eventId}/issues`,
+    method: 'POST',
+    body: ({ outletId, issueType, severity, title, description, ownerUserId }) => ({ outletId, issueType, severity, title, description, ownerUserId }),
+    invalidate: [['stadium', 'getOverview'], ['stadium', 'listEventIssues'], ['stadium', 'listEventAudit']],
+  },
+  'stadium.acknowledgeEventIssue': {
+    path: (args) => `/v1/stadium/issues/${args.issueId}/acknowledge`,
+    method: 'PATCH',
+    body: () => ({}),
+    invalidate: [['stadium', 'getOverview'], ['stadium', 'listEventIssues'], ['stadium', 'listEventAudit']],
+  },
+  'stadium.resolveEventIssue': {
+    path: (args) => `/v1/stadium/issues/${args.issueId}/resolve`,
+    method: 'PATCH',
+    body: ({ resolutionNotes }) => ({ resolutionNotes }),
+    invalidate: [['stadium', 'getOverview'], ['stadium', 'listEventIssues'], ['stadium', 'listEventAudit']],
+  },
   'stadium.updateZoneReadiness': {
     path: (args) => `/v1/stadium/events/${args.eventId}/zones/${args.zoneId}/readiness`,
     method: 'PATCH',
@@ -184,7 +210,7 @@ const mutationRoutes: Record<string, Route> = {
   'app.upsertVenueStaff': {
     path: '/v1/app/staff',
     method: 'POST',
-    body: ({ venueId, staffId, email, fullName, role, jobTitle, phone, altPhone, address, dateOfBirth, certifications }) => ({ venueId, staffId, email, fullName, role, jobTitle, phone, altPhone, address, dateOfBirth, certifications }),
+    body: ({ venueId, staffId, email, fullName, role, jobTitle, phone, altPhone, address, dateOfBirth, certifications, onboardingPin }) => ({ venueId, staffId, email, fullName, role, jobTitle, phone, altPhone, address, dateOfBirth, certifications, onboardingPin }),
     invalidate: [['app', 'listVenueStaff'], ['app', 'listStaffOnboarding'], ['app', 'listStaffAuditLog'], ['app', 'getDashboard']],
   },
   'app.deactivateVenueStaff': {

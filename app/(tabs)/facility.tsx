@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { router } from 'expo-router';
 import { ScrollView, View } from 'react-native';
 import { Button, Chip, TextInput } from 'react-native-paper';
 import { CommandSurface, CommandText, StatusPill } from '../../components/FutureUI';
@@ -16,7 +17,7 @@ type EventStatus = 'draft' | 'planning' | 'ready' | 'live' | 'completed' | 'canc
 type StadiumOverview = {
   venue: { name: string; stadiumCapacity: number | null; homeTeam: string | null };
   zones: Array<{ id: string; code: string; name: string; department: FnbDepartment; type: ZoneType; capacity: number | null; stadiumZone: string | null; level: string | null; status: ZoneStatus }>;
-  events: Array<{ id: string; title: string; eventType: string; status: EventStatus; startsAt: string; gatesOpenAt: string | null; expectedAttendance: number | null; ticketsScanned: number; opponentOrHeadliner: string | null; readinessPercent: number }>;
+  events: Array<{ id: string; title: string; eventType: string; status: EventStatus; operationalState?: string; startsAt: string; gatesOpenAt: string | null; expectedAttendance: number | null; ticketsScanned: number; opponentOrHeadliner: string | null; readinessPercent: number; openHighOrCriticalIssueCount?: number }>;
   partners: Array<{ id: string; name: string; type: string; status: string; contactName: string | null; complianceExpiresAt: string | null; revenueShareBps: number | null }>;
 };
 
@@ -105,7 +106,7 @@ export default function FacilityScreen() {
   };
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: palette.background }} contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.lg }}>
+    <ScrollView style={{ flex: 1, backgroundColor: 'transparent' }} contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.lg }}>
       <View style={{ gap: spacing.xs }}>
         <CommandText palette={palette} variant="label">Stadium food & beverage</CommandText>
         <CommandText palette={palette} variant="hero">Stadium / arena F&B map</CommandText>
@@ -126,6 +127,7 @@ export default function FacilityScreen() {
       <CommandSurface palette={palette} strong style={{ gap: spacing.md }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <CommandText palette={palette} variant="title">Upcoming events</CommandText>
+          <Button compact mode="text" textColor={palette.primary} onPress={() => router.push('/event-issues')}>Live issues</Button>
           {canManage ? <Button compact mode="text" textColor={palette.primary} onPress={() => setShowEventForm((value) => !value)}>Add event</Button> : null}
         </View>
         {showEventForm ? <View style={{ gap: spacing.sm }}>

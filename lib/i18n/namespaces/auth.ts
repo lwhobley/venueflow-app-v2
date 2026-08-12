@@ -7,7 +7,7 @@
 // the raw key string in es/fr/pseudo.
 export const en = {
   welcome: {
-    brand: 'Venue Wrangler',
+    brand: 'Stadium Wrangler',
     slides: {
       scheduling: {
         title: 'Event-day Staffing',
@@ -24,12 +24,12 @@ export const en = {
     },
     logIn: 'Log In',
     joinWithInvite: 'Join with Invite',
-    footerNote: 'Sign in with your Venue Wrangler team account',
+    footerNote: 'Sign in with your Stadium Wrangler team account',
   },
   signIn: {
     kickerSignUp: 'Get started',
     kickerSignIn: 'Welcome back',
-    brand: 'Venue Wrangler',
+    brand: 'Stadium Wrangler',
     subtitle: 'Event-day staffing, F&B operations, inventory, partner compliance, and team communication.',
     inviteBannerTitle: "You're invited to join",
     inviteInstructions: 'Create or sign in to your account and this invite will attach you to the venue.',
@@ -47,7 +47,7 @@ export const en = {
     and: 'and',
     privacyPolicy: 'Privacy Policy',
     haveInviteButton: 'I have an invite from my manager',
-    footerNote: 'Sign in with your Venue Wrangler team account',
+    footerNote: 'Sign in with your Stadium Wrangler team account',
     invalidDetailsTitle: 'Check your details',
     invalidDetailsMessage: 'Enter a valid email and a password with at least {count} characters.',
     nameRequiredTitle: 'Your name',
@@ -230,7 +230,7 @@ export type AuthDictionary = typeof en;
 
 export const es: AuthDictionary = {
   welcome: {
-    brand: 'Venue Wrangler',
+    brand: 'Stadium Wrangler',
     slides: {
       scheduling: {
         title: 'Programación más rápida',
@@ -247,12 +247,12 @@ export const es: AuthDictionary = {
     },
     logIn: 'Iniciar sesión',
     joinWithInvite: 'Unirme con invitación',
-    footerNote: 'Inicia sesión con la cuenta de tu equipo de Venue Wrangler',
+    footerNote: 'Inicia sesión con la cuenta de tu equipo de Stadium Wrangler',
   },
   signIn: {
     kickerSignUp: 'Comencemos',
     kickerSignIn: 'Bienvenido de nuevo',
-    brand: 'Venue Wrangler',
+    brand: 'Stadium Wrangler',
     subtitle: 'Control de horario, programación, reservas y chat de equipo para equipos que ya usan Venue Wrangler.',
     inviteBannerTitle: 'Estás invitado a unirte a',
     inviteInstructions: 'Crea o inicia sesión en tu cuenta y esta invitación te vinculará al establecimiento.',
@@ -270,7 +270,7 @@ export const es: AuthDictionary = {
     and: 'y',
     privacyPolicy: 'Política de privacidad',
     haveInviteButton: 'Tengo una invitación de mi gerente',
-    footerNote: 'Inicia sesión con la cuenta de tu equipo de Venue Wrangler',
+    footerNote: 'Inicia sesión con la cuenta de tu equipo de Stadium Wrangler',
     invalidDetailsTitle: 'Revisa tus datos',
     invalidDetailsMessage: 'Ingresa un correo válido y una contraseña de al menos {count} caracteres.',
     nameRequiredTitle: 'Tu nombre',
@@ -451,7 +451,7 @@ export const es: AuthDictionary = {
 
 export const fr: AuthDictionary = {
   welcome: {
-    brand: 'Venue Wrangler',
+    brand: 'Stadium Wrangler',
     slides: {
       scheduling: {
         title: 'Planification plus rapide',
@@ -468,12 +468,12 @@ export const fr: AuthDictionary = {
     },
     logIn: 'Connexion',
     joinWithInvite: 'Rejoindre avec une invitation',
-    footerNote: 'Connectez-vous avec le compte de votre équipe Venue Wrangler',
+    footerNote: 'Connectez-vous avec le compte de votre équipe Stadium Wrangler',
   },
   signIn: {
     kickerSignUp: 'Commençons',
     kickerSignIn: 'Content de vous revoir',
-    brand: 'Venue Wrangler',
+    brand: 'Stadium Wrangler',
     subtitle: 'Pointage, planification, réservations et messagerie d\'équipe pour les équipes qui utilisent déjà Venue Wrangler.',
     inviteBannerTitle: 'Vous êtes invité(e) à rejoindre',
     inviteInstructions: 'Créez ou connectez-vous à votre compte et cette invitation vous rattachera à l\'établissement.',
@@ -491,7 +491,7 @@ export const fr: AuthDictionary = {
     and: 'et',
     privacyPolicy: 'Politique de confidentialité',
     haveInviteButton: 'J\'ai une invitation de mon responsable',
-    footerNote: 'Connectez-vous avec le compte de votre équipe Venue Wrangler',
+    footerNote: 'Connectez-vous avec le compte de votre équipe Stadium Wrangler',
     invalidDetailsTitle: 'Vérifiez vos informations',
     invalidDetailsMessage: 'Saisissez un e-mail valide et un mot de passe d\'au moins {count} caractères.',
     nameRequiredTitle: 'Votre nom',
