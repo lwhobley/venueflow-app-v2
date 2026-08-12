@@ -56,7 +56,7 @@ export default function StaffGateKioskScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>STADIUM STAFF GATE • HIGH-SPEED KIOSK</Text>
+        <Text style={styles.headerTitle}>VENUE WRANGLER ENTERPRISE • STAFF GATE KIOSK</Text>
         <Text style={styles.headerSub}>500 WORKERS / 30 MIN THROUGHPUT • RAPID PIN & QR SCANNER</Text>
       </View>
 
