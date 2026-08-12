@@ -1,0 +1,115 @@
+erDiagram
+    ORGANIZATION ||--o{ FACILITY : owns
+    ORGANIZATION ||--o{ ORGANIZATION_MEMBERSHIP : has
+    USER ||--o{ ORGANIZATION_MEMBERSHIP : receives
+    ORGANIZATION_MEMBERSHIP ||--o{ SCOPE_ASSIGNMENT : grants
+    FACILITY ||--o{ FACILITY_ZONE : contains
+    FACILITY ||--o{ SCOPE_ASSIGNMENT : scopes
+    FACILITY_ZONE ||--o{ SCOPE_ASSIGNMENT : optionally_scopes
+    FACILITY_ZONE ||--o{ SUB_VENUE : contains
+    FACILITY_ZONE ||--o{ OUTLET : contains
+    SUB_VENUE ||--o{ OUTLET : optionally_groups
+    OUTLET ||--o{ TERMINAL : operates
+    FACILITY ||--o{ VENUE_EVENT : hosts
+    OUTLET ||--o{ EVENT_ISSUE : reports
+
+    ORGANIZATION {
+      text id PK
+      text name
+      text code UK
+    }
+    FACILITY {
+      text id PK
+      text organization_id FK
+      text code
+      text name
+      text timezone
+      int capacity
+      boolean active
+    }
+
+    FACILITY_ZONE {
+      text id PK
+      text organization_id FK
+      text facility_id FK
+      text code
+      text name
+      text zone_type
+      int sort_order
+      boolean active
+    }
+
+    SUB_VENUE {
+      text id PK
+      text organization_id FK
+      text facility_id FK
+      text zone_id FK
+      text code
+      text name
+      text sub_venue_type
+      boolean active
+    }
+
+    OUTLET {
+      text id PK
+      text organization_id FK
+      text facility_id FK
+      text zone_id FK
+      text sub_venue_id FK_NULLABLE
+      text code
+      text name
+      text outlet_type
+      text status
+    }
+
+    TERMINAL {
+      text id PK
+      text organization_id FK
+      text facility_id FK
+      text zone_id FK
+      text outlet_id FK
+      text code
+      text name
+      text terminal_type
+      text external_ref
+      boolean active
+    }
+
+    USER {
+      text id PK
+      text email UK
+    }
+
+    ORGANIZATION_MEMBERSHIP {
+      text id PK
+      text organization_id FK
+      text user_id FK
+      text role
+      text status
+    }
+
+    SCOPE_ASSIGNMENT {
+      text id PK
+      text organization_id FK
+      text membership_id FK
+      text facility_id FK_NULLABLE
+      text zone_id FK_NULLABLE
+      boolean active
+    }
+
+    VENUE_EVENT {
+      text id PK
+      text organization_id FK
+      text facility_id FK
+      text operational_state
+      timestamp starts_at
+    }
+
+    EVENT_ISSUE {
+      text id PK
+      text organization_id FK
+      text facility_id FK
+      text zone_id FK_NULLABLE
+      text outlet_id FK_NULLABLE
+      text event_id FK
+    }

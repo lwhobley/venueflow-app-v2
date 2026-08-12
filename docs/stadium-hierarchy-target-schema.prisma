@@ -1,0 +1,198 @@
+// DESIGN ARTIFACT — target hierarchy for review. This file is not loaded by
+// Prisma and is not an executable migration. IDs remain String/CUID-compatible
+// with the existing database so legacy Venue and FnbOperationUnit IDs can be
+// preserved during backfill.
+
+enum FacilityZoneType {
+  concourse
+  premium
+  service
+  back_of_house
+  exterior
+  other
+}
+
+enum SubVenueType {
+  club
+  suite_group
+  loge
+  field_level
+  floor_level
+  commissary
+  banquet_space
+  other
+}
+
+enum TerminalType {
+  pos
+  self_service
+  mobile_pickup
+  handheld
+  kitchen_display
+  other
+}
+
+model Facility {
+  id              String   @id @default(cuid())
+  organizationId  String
+  code            String
+  name            String
+  timezone        String?
+  address         String?
+  latitude        Float?
+  longitude       Float?
+  capacity        Int?
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  zones           FacilityZone[]
+  subVenues       SubVenue[]
+  outlets         Outlet[]
+  terminals       Terminal[]
+  scopeAssignments ScopeAssignment[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, active])
+}
+
+model FacilityZone {
+  id              String           @id @default(cuid())
+  organizationId  String
+  facilityId      String
+  code            String
+  name            String
+  zoneType        FacilityZoneType @default(concourse)
+  level           String?
+  sortOrder       Int              @default(0)
+  active          Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility        Facility     @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  subVenues       SubVenue[]
+  outlets         Outlet[]
+  terminals       Terminal[]
+  scopeAssignments ScopeAssignment[]
+
+  @@unique([organizationId, facilityId, id])
+  @@unique([organizationId, facilityId, code])
+  @@index([organizationId, facilityId, active, sortOrder])
+}
+
+model SubVenue {
+  id              String       @id @default(cuid())
+  organizationId  String
+  facilityId      String
+  zoneId          String
+  code            String
+  name            String
+  subVenueType    SubVenueType
+  capacity        Int?
+  active          Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility        Facility     @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  zone            FacilityZone @relation(fields: [organizationId, facilityId, zoneId], references: [organizationId, facilityId, id], onDelete: Cascade)
+  outlets         Outlet[]
+
+  @@unique([organizationId, facilityId, zoneId, id])
+  @@unique([organizationId, facilityId, code])
+  @@index([organizationId, facilityId, zoneId, active])
+}
+
+model Outlet {
+  id              String           @id @default(cuid())
+  organizationId  String
+  facilityId      String
+  zoneId          String
+  subVenueId      String?
+  code            String
+  name            String
+  department      FnbDepartment
+  outletType      FnbOperationType
+  status          FnbUnitStatus    @default(open)
+  capacity        Int?
+  notes           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility        Facility     @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  zone            FacilityZone @relation(fields: [organizationId, facilityId, zoneId], references: [organizationId, facilityId, id], onDelete: Restrict)
+  subVenue        SubVenue?    @relation(fields: [organizationId, facilityId, zoneId, subVenueId], references: [organizationId, facilityId, zoneId, id], onDelete: Restrict)
+  terminals       Terminal[]
+
+  @@unique([organizationId, facilityId, zoneId, id])
+  @@unique([organizationId, facilityId, code])
+  @@index([organizationId, facilityId, zoneId, status])
+  @@index([subVenueId])
+}
+
+model Terminal {
+  id              String       @id @default(cuid())
+  organizationId  String
+  facilityId      String
+  zoneId          String
+  outletId        String
+  code            String
+  name            String
+  terminalType    TerminalType @default(pos)
+  externalRef     String?
+  active          Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility        Facility     @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  zone            FacilityZone @relation(fields: [organizationId, facilityId, zoneId], references: [organizationId, facilityId, id], onDelete: Restrict)
+  outlet          Outlet       @relation(fields: [organizationId, facilityId, zoneId, outletId], references: [organizationId, facilityId, zoneId, id], onDelete: Cascade)
+
+  @@unique([organizationId, facilityId, outletId, code])
+  @@index([organizationId, facilityId, zoneId, active])
+  @@index([outletId])
+}
+
+model OrganizationMembership {
+  id              String           @id @default(cuid())
+  organizationId  String
+  userId          String
+  role            Role
+  status          MembershipStatus @default(active)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scopes          ScopeAssignment[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, userId])
+  @@index([userId, status])
+}
+
+model ScopeAssignment {
+  id              String   @id @default(cuid())
+  organizationId  String
+  membershipId    String
+  facilityId      String?
+  zoneId          String?
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization    Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  membership      OrganizationMembership @relation(fields: [organizationId, membershipId], references: [organizationId, id], onDelete: Cascade)
+  facility        Facility?             @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  zone            FacilityZone?         @relation(fields: [organizationId, facilityId, zoneId], references: [organizationId, facilityId, id], onDelete: Cascade)
+
+  // facilityId NULL = organization-wide; zoneId NULL = all zones in facility.
+  // SQL migration adds CHECK (zoneId IS NULL OR facilityId IS NOT NULL).
+  @@unique([membershipId, facilityId, zoneId])
+  @@index([organizationId, facilityId, zoneId, active])
+}

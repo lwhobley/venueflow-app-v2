@@ -295,6 +295,35 @@ enum FnbUnitStatus {
   incident
 }
 
+enum FacilityZoneType {
+  concourse
+  premium
+  service
+  back_of_house
+  exterior
+  other
+}
+
+enum SubVenueType {
+  club
+  suite_group
+  loge
+  field_level
+  floor_level
+  commissary
+  banquet_space
+  other
+}
+
+enum TerminalType {
+  pos
+  self_service
+  mobile_pickup
+  handheld
+  kitchen_display
+  other
+}
+
 enum EventFnbReadinessStatus {
   not_started
   in_progress
@@ -358,6 +387,7 @@ model User {
   joinRequests              WorkplaceJoinRequest[]      @relation("WorkplaceJoinRequestUser")
   decidedJoinRequests       WorkplaceJoinRequest[]      @relation("WorkplaceJoinRequestDecider")
   joinRequestEvents         WorkplaceJoinRequestEvent[]
+  organizationMemberships   OrganizationMembership[]
 }
 
 model Session {
@@ -395,14 +425,179 @@ model PasswordCredential {
 }
 
 model Organization {
-  id              String          @id @default(cuid())
-  name            String
-  code            String          @unique
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  venues          Venue[]
-  eventIssues     EventIssue[]
-  eventAuditLogs  EventAuditLog[]
+  id               String                   @id @default(cuid())
+  name             String
+  code             String                   @unique
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  venues           Venue[]
+  eventIssues      EventIssue[]
+  eventAuditLogs   EventAuditLog[]
+  facilities       Facility[]
+  facilityZones    FacilityZone[]
+  subVenues        SubVenue[]
+  outlets          Outlet[]
+  terminals        Terminal[]
+  memberships      OrganizationMembership[]
+  scopeAssignments ScopeAssignment[]
+}
+
+model Facility {
+  id               String            @id @default(cuid())
+  organizationId   String
+  code             String
+  name             String
+  timezone         String?
+  address          String?
+  latitude         Float?
+  longitude        Float?
+  capacity         Int?
+  active           Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  zones            FacilityZone[]
+  subVenues        SubVenue[]
+  outlets          Outlet[]
+  terminals        Terminal[]
+  scopeAssignments ScopeAssignment[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, active])
+}
+
+model FacilityZone {
+  id               String            @id @default(cuid())
+  organizationId   String
+  facilityId       String
+  code             String
+  name             String
+  zoneType         FacilityZoneType  @default(concourse)
+  level            String?
+  sortOrder        Int               @default(0)
+  active           Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility         Facility          @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  subVenues        SubVenue[]
+  outlets          Outlet[]
+  terminals        Terminal[]
+  scopeAssignments ScopeAssignment[]
+
+  @@unique([organizationId, facilityId, id])
+  @@unique([organizationId, facilityId, code])
+  @@index([organizationId, facilityId, active, sortOrder])
+}
+
+model SubVenue {
+  id             String       @id @default(cuid())
+  organizationId String
+  facilityId     String
+  zoneId         String
+  code           String
+  name           String
+  subVenueType   SubVenueType
+  capacity       Int?
+  active         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility       Facility     @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  zone           FacilityZone @relation(fields: [organizationId, facilityId, zoneId], references: [organizationId, facilityId, id], onDelete: Cascade)
+  outlets        Outlet[]
+
+  @@unique([organizationId, facilityId, zoneId, id])
+  @@unique([organizationId, facilityId, code])
+  @@index([organizationId, facilityId, zoneId, active])
+}
+
+model Outlet {
+  id             String           @id @default(cuid())
+  organizationId String
+  facilityId     String
+  zoneId         String
+  subVenueId     String?
+  code           String
+  name           String
+  department     FnbDepartment
+  outletType     FnbOperationType
+  status         FnbUnitStatus    @default(open)
+  capacity       Int?
+  notes          String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility       Facility         @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  zone           FacilityZone     @relation(fields: [organizationId, facilityId, zoneId], references: [organizationId, facilityId, id], onDelete: Restrict)
+  subVenue       SubVenue?        @relation(fields: [organizationId, facilityId, zoneId, subVenueId], references: [organizationId, facilityId, zoneId, id], onDelete: Restrict)
+  terminals      Terminal[]
+
+  @@unique([organizationId, facilityId, zoneId, id])
+  @@unique([organizationId, facilityId, code])
+  @@index([organizationId, facilityId, zoneId, status])
+  @@index([subVenueId])
+}
+
+model Terminal {
+  id             String       @id @default(cuid())
+  organizationId String
+  facilityId     String
+  zoneId         String
+  outletId       String
+  code           String
+  name           String
+  terminalType   TerminalType @default(pos)
+  externalRef    String?
+  active         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility       Facility     @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  zone           FacilityZone @relation(fields: [organizationId, facilityId, zoneId], references: [organizationId, facilityId, id], onDelete: Restrict)
+  outlet         Outlet       @relation(fields: [organizationId, facilityId, zoneId, outletId], references: [organizationId, facilityId, zoneId, id], onDelete: Cascade)
+
+  @@unique([organizationId, facilityId, outletId, code])
+  @@index([organizationId, facilityId, zoneId, active])
+  @@index([outletId])
+}
+
+model OrganizationMembership {
+  id             String            @id @default(cuid())
+  organizationId String
+  userId         String
+  role           Role
+  status         MembershipStatus  @default(active)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scopes         ScopeAssignment[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, userId])
+  @@index([userId, status])
+}
+
+model ScopeAssignment {
+  id             String                 @id @default(cuid())
+  organizationId String
+  membershipId   String
+  facilityId     String?
+  zoneId         String?
+  active         Boolean                @default(true)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  membership     OrganizationMembership @relation(fields: [organizationId, membershipId], references: [organizationId, id], onDelete: Cascade)
+  facility       Facility?              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  zone           FacilityZone?          @relation(fields: [organizationId, facilityId, zoneId], references: [organizationId, facilityId, id], onDelete: Cascade)
+
+  // SQL migration adds CHECK (zoneId IS NULL OR facilityId IS NOT NULL) and
+  // partial unique indexes because PostgreSQL treats NULLs as distinct.
+  @@index([membershipId])
+  @@index([organizationId, facilityId, zoneId, active])
 }
 
 model Venue {
@@ -499,7 +694,7 @@ model Venue {
   fnbOperationUnits             FnbOperationUnit[]
   eventFnbReadiness             EventFnbReadiness[]
   fnbPartners                   FnbPartner[]
-  organization                  Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  organization                  Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   eventIssues                   EventIssue[]
   eventAuditLogs                EventAuditLog[]
 
@@ -1526,29 +1721,29 @@ model ReservationSyncEvent {
 }
 
 model BarInventoryItem {
-  id            String                 @id @default(cuid())
-  venueId       String
-  name          String
+  id             String                 @id @default(cuid())
+  venueId        String
+  name           String
   normalizedName String
-  category      BarStockCategory
-  area          String?
-  unit          String
-  parLevel      Float
-  onHand        Float
-  unitCostCents Int?
-  supplier      String?
-  sku           String?
-  notes         String?
-  lastCountedAt DateTime?
-  createdAt     DateTime               @default(now())
-  updatedAt     DateTime               @updatedAt
-  venue         Venue                  @relation(fields: [venueId], references: [id], onDelete: Cascade)
-  movements     BarInventoryMovement[]
+  category       BarStockCategory
+  area           String?
+  unit           String
+  parLevel       Float
+  onHand         Float
+  unitCostCents  Int?
+  supplier       String?
+  sku            String?
+  notes          String?
+  lastCountedAt  DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  venue          Venue                  @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  movements      BarInventoryMovement[]
 
+  @@unique([venueId, normalizedName])
   @@index([venueId])
   @@index([venueId, category])
   @@index([venueId, name])
-  @@unique([venueId, normalizedName])
 }
 
 model BarInventoryMovement {
@@ -1703,29 +1898,29 @@ model ManagerGoal {
 }
 
 model VenueEvent {
-  id                  String              @id @default(cuid())
+  id                  String                @id @default(cuid())
   venueId             String
   title               String
   eventCode           String?
-  eventType           StadiumEventType    @default(other)
-  status              StadiumEventStatus  @default(planning)
+  eventType           StadiumEventType      @default(other)
+  status              StadiumEventStatus    @default(planning)
   operationalState    EventOperationalState @default(draft)
-  stateChangedAt      DateTime             @default(now())
+  stateChangedAt      DateTime              @default(now())
   approvedAt          DateTime?
   approvedBy          String?
   startsAt            DateTime
   gatesOpenAt         DateTime?
   endsAt              DateTime?
   expectedGuests      Int?
-  ticketsScanned      Int                 @default(0)
+  ticketsScanned      Int                   @default(0)
   opponentOrHeadliner String?
   notes               String?
   reservationId       String?
-  reservation         Reservation?        @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  reservation         Reservation?          @relation(fields: [reservationId], references: [id], onDelete: SetNull)
   createdBy           String
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
-  venue               Venue               @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  venue               Venue                 @relation(fields: [venueId], references: [id], onDelete: Cascade)
   fnbReadiness        EventFnbReadiness[]
   issues              EventIssue[]
   auditLogs           EventAuditLog[]
@@ -1762,28 +1957,28 @@ model FnbOperationUnit {
 }
 
 model EventIssue {
-  id                  String             @id @default(cuid())
-  organizationId      String
-  venueId             String
-  eventId             String
-  outletId            String?
-  issueType           String
-  severity            EventIssueSeverity
-  status              EventIssueStatus   @default(open)
-  title               String
-  description         String
-  reportedByUserId    String
-  ownerUserId         String?
-  openedAt            DateTime           @default(now())
-  acknowledgedAt      DateTime?
-  resolvedAt          DateTime?
-  resolutionNotes     String?
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
-  organization        Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  venue               Venue              @relation(fields: [venueId], references: [id], onDelete: Cascade)
-  event               VenueEvent         @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  outlet              FnbOperationUnit?  @relation(fields: [outletId], references: [id], onDelete: SetNull)
+  id               String             @id @default(cuid())
+  organizationId   String
+  venueId          String
+  eventId          String
+  outletId         String?
+  issueType        String
+  severity         EventIssueSeverity
+  status           EventIssueStatus   @default(open)
+  title            String
+  description      String
+  reportedByUserId String
+  ownerUserId      String?
+  openedAt         DateTime           @default(now())
+  acknowledgedAt   DateTime?
+  resolvedAt       DateTime?
+  resolutionNotes  String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  organization     Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  venue            Venue              @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  event            VenueEvent         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  outlet           FnbOperationUnit?  @relation(fields: [outletId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, venueId, eventId, status])
   @@index([venueId, eventId, severity, status])
@@ -1791,21 +1986,21 @@ model EventIssue {
 }
 
 model EventAuditLog {
-  id              String       @id @default(cuid())
-  organizationId  String
-  venueId         String
-  eventId         String
-  issueId         String?
-  entityType      String
-  entityId        String
-  action          String
-  actorProfileId  String?
-  reason          String?
-  metadata        Json?
-  createdAt       DateTime     @default(now())
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  venue           Venue        @relation(fields: [venueId], references: [id], onDelete: Cascade)
-  event           VenueEvent   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  id             String       @id @default(cuid())
+  organizationId String
+  venueId        String
+  eventId        String
+  issueId        String?
+  entityType     String
+  entityId       String
+  action         String
+  actorProfileId String?
+  reason         String?
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  venue          Venue        @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  event          VenueEvent   @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, venueId, eventId, createdAt])
   @@index([eventId, entityType, entityId, createdAt])
