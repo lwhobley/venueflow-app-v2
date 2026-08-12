@@ -397,7 +397,7 @@ export class BarInventoryController {
     const venueId = profile.venueId!;
     // Counts are reconciliation records and remain synchronous. Negative movements
     // are the halftime hot path and are persisted by the consumer in order.
-    if (this.asyncWrites.isEnabled() && body.movementType !== 'count' && body.quantity < 0) {
+    if (this.asyncWrites?.isEnabled?.() && body.movementType !== 'count' && body.quantity < 0) {
       return this.asyncWrites.enqueue('inventory_decrement', idempotencyKey ?? '', {
         itemId, venueId, movementType: body.movementType, quantity: body.quantity,
         notes: cleanText(body.notes), createdBy: profile.id,

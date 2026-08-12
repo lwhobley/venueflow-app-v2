@@ -61,6 +61,8 @@ keys/
 .codex/
 .agents/
 .vs/
+.expo-web-check/
+.superdesign/
 
 # Supabase CLI link metadata
 supabase/.temp/

@@ -243,7 +243,7 @@ export class TimeClockController {
       }
     }
 
-    if (this.asyncWrites.isEnabled()) {
+    if (this.asyncWrites?.isEnabled?.()) {
       return this.asyncWrites.enqueue('clock_in', idempotencyKey ?? '', {
         profileId: scope.profileId, venueId: venue.id, lat: body.lat, lng: body.lng,
         accuracy: body.accuracy, mocked: body.mocked, clockInAt: new Date().toISOString(),
