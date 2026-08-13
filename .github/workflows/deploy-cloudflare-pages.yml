@@ -3,7 +3,6 @@ name: Deploy Cloudflare Pages
 on:
   push:
     branches:
-      - main
       - desktop-web
   workflow_dispatch:
 
@@ -12,29 +11,8 @@ permissions:
   deployments: write
 
 jobs:
-  deploy-landing:
-    name: Deploy Landing Site (main)
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      # The site/ directory is a static marketing landing page (no build step).
-      - name: Deploy landing site to Cloudflare Pages
-        run: npx wrangler@3.114.17 pages deploy site --project-name venue-wrangler --branch main --commit-dirty=true
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-  deploy-desktop-app:
-    name: Deploy Desktop Web App (desktop-web)
-    if: github.ref == 'refs/heads/desktop-web'
+  deploy-desktop-web:
+    name: Deploy Desktop Web App (Cloudflare Pages)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -56,7 +34,7 @@ jobs:
         run: npx expo export --platform web
 
       - name: Deploy Expo Web App to Cloudflare Pages
-        run: npx wrangler@3.114.17 pages deploy dist --project-name venue-wrangler --branch desktop-web --commit-dirty=true
+        run: npx wrangler@3.114.17 pages deploy dist --project-name venue-wrangler --commit-dirty=true
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
