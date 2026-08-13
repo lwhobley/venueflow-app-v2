@@ -705,14 +705,18 @@ export class PosController {
     const varianceCents = Math.abs(body.posAmountCents - body.stripeAmountCents);
     const isMatched = varianceCents === 0;
 
-    await this.prisma.eventAuditLog.create({
+    await this.prisma.auditLog.create({
       data: {
-        organizationId: scope.organizationId,
         venueId: scope.venueId,
         actorProfileId: scope.profileId,
+        actorName: scope.fullName,
+        actorRole: scope.role,
         entityType: 'pos_stripe_reconciliation',
         entityId: check.id,
         action: isMatched ? 'stripe_payment_reconciled' : 'stripe_payment_variance_flagged',
+        summary: isMatched
+          ? `Reconciled POS check ${body.externalCheckId} with Stripe payment ${body.paymentIntentId}`
+          : `Variance of ${varianceCents} cents flagged for check ${body.externalCheckId} against Stripe payment ${body.paymentIntentId}`,
         metadata: {
           externalCheckId: body.externalCheckId,
           paymentIntentId: body.paymentIntentId,

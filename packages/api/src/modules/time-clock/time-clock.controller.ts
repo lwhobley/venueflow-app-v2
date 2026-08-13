@@ -386,15 +386,16 @@ export class TimeClockController {
     });
     if (!entry) throw new BadRequestException('Time entry not found.');
 
-    await this.prisma.eventAuditLog.create({
+    await this.prisma.auditLog.create({
       data: {
-        organizationId: scope.organizationId,
         venueId: scope.venueId,
         actorProfileId: scope.profileId,
+        actorName: scope.fullName,
+        actorRole: scope.role,
         entityType: 'time_clock_punch',
         entityId: entry.id,
         action: 'time_clock_punch_approved',
-        reason: body.managerNotes?.trim() || 'Manager punch approval',
+        summary: body.managerNotes?.trim() || `Approved punch ${entry.id}`,
         metadata: { profileId: entry.profileId, clockInAt: entry.clockInAt.getTime(), clockOutAt: entry.clockOutAt?.getTime() ?? null },
       },
     });
@@ -432,15 +433,16 @@ export class TimeClockController {
       },
     });
 
-    await this.prisma.eventAuditLog.create({
+    await this.prisma.auditLog.create({
       data: {
-        organizationId: scope.organizationId,
         venueId: scope.venueId,
         actorProfileId: scope.profileId,
+        actorName: scope.fullName,
+        actorRole: scope.role,
         entityType: 'time_clock_punch',
         entityId: entry.id,
         action: 'time_clock_punch_adjusted',
-        reason: body.adjustmentReason.trim(),
+        summary: body.adjustmentReason.trim(),
         metadata: {
           originalClockInAt: entry.clockInAt.getTime(),
           originalClockOutAt: entry.clockOutAt?.getTime() ?? null,

@@ -176,9 +176,15 @@ export class AuthGuard implements CanActivate {
   }
 
   private getBearerToken(request: Request): string | null {
-    const header = request.headers.authorization;
-    if (!header) return null;
-    const [scheme, token] = header.split(' ');
-    return scheme?.toLowerCase() === 'bearer' && token ? token : null;
+    const header = request.headers?.authorization;
+    if (header) {
+      const [scheme, token] = header.split(' ');
+      if (scheme?.toLowerCase() === 'bearer' && token) return token;
+    }
+    const queryToken = request.query?.token;
+    if (typeof queryToken === 'string' && queryToken.trim()) {
+      return queryToken.trim();
+    }
+    return null;
   }
 }
