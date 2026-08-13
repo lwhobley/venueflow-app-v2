@@ -6,8 +6,12 @@ export type TimeBreak = {
 
 /** Parse the JSON break column without trusting its persisted shape. */
 export function parseTimeBreaks(value: unknown): TimeBreak[] {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((candidate): TimeBreak[] => {
+  const list = Array.isArray(value)
+    ? value
+    : typeof value === 'object' && value !== null && Array.isArray((value as Record<string, unknown>).intervals)
+      ? ((value as Record<string, unknown>).intervals as unknown[])
+      : [];
+  return list.flatMap((candidate): TimeBreak[] => {
     if (!candidate || typeof candidate !== 'object') return [];
     const row = candidate as Record<string, unknown>;
     const startAt = typeof row.startAt === 'number' ? row.startAt : Number(row.startAt);

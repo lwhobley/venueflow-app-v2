@@ -1,6 +1,7 @@
-import { Controller, ForbiddenException, MessageEvent, Param, Post, Query, Sse } from '@nestjs/common';
+import { Controller, ForbiddenException, MessageEvent, Param, Post, Query, Sse, UnauthorizedException } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { SuiteHospitalityGateway } from './suite-hospitality.gateway';
+import { Public } from '../../auth/public.decorator';
 import { RequireSubscription } from '../../billing/require-subscription.decorator';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
@@ -14,18 +15,19 @@ export class StadiumRealtimeController {
   constructor(private readonly gateway: SuiteHospitalityGateway) {}
 
   @Post('facilities/:facilityId/ticket')
-  createStreamTicket(
+  async createStreamTicket(
     @VenueScope() scope: Scope,
     @Param('facilityId') facilityId: string,
     @Query('zoneId') zoneId?: string,
   ) {
+    if (!scope) throw new UnauthorizedException('Authentication required to generate stream ticket.');
     if (scope.venueId !== facilityId && !canViewPilotHealth(scope.role, scope.allAccess)) {
       throw new ForbiddenException('Realtime stream is restricted to assigned facility scope.');
     }
     if (zoneId && !canManageAssignedScope(scope.role) && !canViewPilotHealth(scope.role, scope.allAccess)) {
       throw new ForbiddenException('Zone-scoped realtime stream requires assigned scope authorization.');
     }
-    const ticket = this.gateway.createTicket({
+    const ticket = await this.gateway.createTicket({
       venueId: scope.venueId,
       role: scope.role,
       allAccess: scope.allAccess,
@@ -36,27 +38,30 @@ export class StadiumRealtimeController {
     return { ticket, expiresInSeconds: 60 };
   }
 
+  @Public()
   @Sse('facilities/:facilityId/live-stream')
-  streamFacilityEvents(
+  async streamFacilityEvents(
     @VenueScope() scope: Scope,
     @Param('facilityId') facilityId: string,
     @Query('zoneId') zoneId?: string,
     @Query('lastEventId') lastEventIdQuery?: string,
     @Query('ticket') ticket?: string,
-  ): Observable<MessageEvent> {
+  ): Promise<Observable<MessageEvent>> {
     let activeRole = scope?.role;
     let activeAllAccess = scope?.allAccess;
     let activeVenueId = scope?.venueId;
 
     // Support single-use stream ticket authentication if provided
     if (ticket) {
-      const ticketPayload = this.gateway.verifyAndConsumeTicket(ticket);
+      const ticketPayload = await this.gateway.verifyAndConsumeTicket(ticket);
       if (!ticketPayload || ticketPayload.facilityId !== facilityId) {
         throw new ForbiddenException('Invalid or expired streaming ticket.');
       }
       activeRole = ticketPayload.role;
       activeAllAccess = ticketPayload.allAccess;
       activeVenueId = ticketPayload.venueId;
+    } else if (!scope) {
+      throw new UnauthorizedException('A valid streaming ticket or authorization token is required.');
     }
 
     if (activeVenueId !== facilityId && !canViewPilotHealth(activeRole, activeAllAccess)) {
