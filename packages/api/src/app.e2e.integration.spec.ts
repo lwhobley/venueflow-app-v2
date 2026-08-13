@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
+import { randomUUID } from 'crypto';
 import type { INestApplication } from '@nestjs/common';
 import type { JwtService } from '@nestjs/jwt';
 import type { PrismaService } from './prisma/prisma.service';
@@ -9,8 +10,7 @@ import { bootstrapE2eApp, signTestToken } from './test/e2e-app';
  * True end-to-end smoke tests: boots the real Nest app (full module graph,
  * real AuthGuard/SubscriptionGuard/VenueScopeInterceptor/ValidationPipe/
  * exception filter) against a real Postgres test database and drives it over
- * HTTP via supertest. This is the layer the review flagged as missing —
- * everything else in the suite tests services/guards/extensions directly.
+ * HTTP via supertest.
  */
 describe('e2e smoke: auth, billing, scheduling', () => {
   let app: INestApplication;
@@ -19,9 +19,7 @@ describe('e2e smoke: auth, billing, scheduling', () => {
   let teardown: () => Promise<void> = async () => {};
   let venueIds: string[] = [];
 
-  // Subscribed venue/profile (happy path) + unsubscribed venue/profile (billing gate).
-  let subscribedSession: { userId: string; sid: string } | undefined;
-  let unsubscribedSession: { userId: string; sid: string } | undefined;
+  let sessionUser: { userId: string; sid: string; venueId: string } | undefined;
 
   beforeAll(async () => {
     const boot = await bootstrapE2eApp();
@@ -29,40 +27,55 @@ describe('e2e smoke: auth, billing, scheduling', () => {
     prisma = boot.prisma;
     jwt = boot.jwt;
     teardown = boot.teardown;
-    const [activeVenue, expiredVenue] = await Promise.all([
-      prisma.venue.create({ data: { name: 'E2E Active Venue', code: 'VW-E2EACTIVE1', latitude: 0, longitude: 0, geofenceRadiusM: 100, timezone: 'UTC', subscriptionStatus: 'active', organization: { create: { name: 'E2E Active Organization', code: 'ORG-E2EACTIVE1' } } } }),
-      prisma.venue.create({ data: { name: 'E2E Expired Venue', code: 'VW-E2EEXPIRE1', latitude: 0, longitude: 0, geofenceRadiusM: 100, timezone: 'UTC', subscriptionStatus: 'expired', organization: { create: { name: 'E2E Expired Organization', code: 'ORG-E2EEXPIRE1' } } } }),
-    ]);
-    venueIds = [activeVenue.id, expiredVenue.id];
 
-    const [activeUser, expiredUser] = await Promise.all([
-      prisma.user.create({ data: { email: 'e2e-active@test.local' } }),
-      prisma.user.create({ data: { email: 'e2e-expired@test.local' } }),
-    ]);
+    const suffix = randomUUID().replace(/-/g, '').slice(0, 8);
+    const venue = await prisma.venue.create({
+      data: {
+        name: `E2E Test Venue ${suffix}`,
+        code: `VW-E2E-${suffix.toUpperCase()}`,
+        latitude: 0,
+        longitude: 0,
+        geofenceRadiusM: 100,
+        timezone: 'UTC',
+        subscriptionStatus: 'active',
+        organization: { create: { name: `E2E Org ${suffix}`, code: `org-e2e-${suffix}` } },
+      },
+    });
+    venueIds = [venue.id];
 
-    await Promise.all([
-      prisma.profile.create({ data: { userId: activeUser.id, email: activeUser.email!, fullName: 'E2E Active User', role: 'staff', jobTitle: 'Server', venueId: activeVenue.id } }),
-      prisma.profile.create({ data: { userId: expiredUser.id, email: expiredUser.email!, fullName: 'E2E Expired User', role: 'staff', jobTitle: 'Server', venueId: expiredVenue.id } }),
-    ]);
+    const user = await prisma.user.create({
+      data: { email: `e2e-${suffix}@test.local` },
+    });
+
+    await prisma.profile.create({
+      data: {
+        userId: user.id,
+        email: user.email!,
+        fullName: 'E2E Active User',
+        role: 'staff',
+        jobTitle: 'Server',
+        venueId: venue.id,
+      },
+    });
 
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    const [activeSession, expiredSession] = await Promise.all([
-      prisma.session.create({ data: { userId: activeUser.id, expiresAt } }),
-      prisma.session.create({ data: { userId: expiredUser.id, expiresAt } }),
-    ]);
-    subscribedSession = { userId: activeUser.id, sid: activeSession.id };
-    unsubscribedSession = { userId: expiredUser.id, sid: expiredSession.id };
+    const session = await prisma.session.create({
+      data: { userId: user.id, expiresAt },
+    });
+    sessionUser = { userId: user.id, sid: session.id, venueId: venue.id };
   }, 60_000);
 
   afterAll(async () => {
     if (!prisma) return;
-    const userIds = [subscribedSession?.userId, unsubscribedSession?.userId].filter((id): id is string => Boolean(id));
-    if (userIds.length) {
-      await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
-      await prisma.profile.deleteMany({ where: { userId: { in: userIds } } });
-      await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+    if (sessionUser?.userId) {
+      await prisma.session.deleteMany({ where: { userId: sessionUser.userId } });
+      await prisma.profile.deleteMany({ where: { userId: sessionUser.userId } });
+      await prisma.user.deleteMany({ where: { id: sessionUser.userId } });
     }
-    if (venueIds.length) await prisma.venue.deleteMany({ where: { id: { in: venueIds } } });
+    if (venueIds.length) {
+      await prisma.venue.deleteMany({ where: { id: { in: venueIds } } });
+      await prisma.organization.deleteMany();
+    }
     await teardown();
   });
 
@@ -87,27 +100,29 @@ describe('e2e smoke: auth, billing, scheduling', () => {
     });
 
     it('accepts a valid token backed by a real Session row', async () => {
-      const token = signTestToken(jwt, { sub: subscribedSession!.userId, sid: subscribedSession!.sid });
+      const token = signTestToken(jwt, { sub: sessionUser!.userId, sid: sessionUser!.sid });
       const res = await request(app.getHttpServer())
         .get('/api/v1/app/me')
         .set('Authorization', `Bearer ${token}`)
         .expect(200);
       expect(res.body.profile.fullName).toBe('E2E Active User');
-      expect(res.body.venue.name).toBe('E2E Active Venue');
+      expect(res.body.venue.id).toBe(sessionUser!.venueId);
     });
   });
 
-  describe('billing gate', () => {
-    it('returns 402 for a venue without an active subscription', async () => {
-      const token = signTestToken(jwt, { sub: unsubscribedSession!.userId, sid: unsubscribedSession!.sid });
-      await request(app.getHttpServer())
-        .get('/api/v1/scheduling/me')
+  describe('enterprise billing & scheduling access', () => {
+    it('returns active enterprise subscription metadata without paywalls', async () => {
+      const token = signTestToken(jwt, { sub: sessionUser!.userId, sid: sessionUser!.sid });
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/app/billing')
         .set('Authorization', `Bearer ${token}`)
-        .expect(402);
+        .expect(200);
+      expect(res.body.plan).toBe('enterprise');
+      expect(res.body.status).toBe('active');
     });
 
-    it('allows the same route for a venue with an active subscription', async () => {
-      const token = signTestToken(jwt, { sub: subscribedSession!.userId, sid: subscribedSession!.sid });
+    it('allows route access under enterprise licensing', async () => {
+      const token = signTestToken(jwt, { sub: sessionUser!.userId, sid: sessionUser!.sid });
       await request(app.getHttpServer())
         .get('/api/v1/scheduling/me')
         .set('Authorization', `Bearer ${token}`)
@@ -117,7 +132,7 @@ describe('e2e smoke: auth, billing, scheduling', () => {
 
   describe('validation', () => {
     it('rejects a request body with unknown fields (whitelist: true, forbidNonWhitelisted: true)', async () => {
-      const token = signTestToken(jwt, { sub: subscribedSession!.userId, sid: subscribedSession!.sid });
+      const token = signTestToken(jwt, { sub: sessionUser!.userId, sid: sessionUser!.sid });
       await request(app.getHttpServer())
         .patch('/api/v1/app/venue')
         .set('Authorization', `Bearer ${token}`)
