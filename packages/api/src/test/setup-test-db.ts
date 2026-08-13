@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { execSync } from 'child_process';
+import { randomUUID } from 'crypto';
 
 let containerCleanup: (() => Promise<void>) | null = null;
 
@@ -62,22 +63,23 @@ async function startContainer(): Promise<{ url: string; stop: () => Promise<void
  * Returns stable IDs for the venue, two profiles, and a pre-created open shift.
  */
 export async function seedSchedulingFixtures(prisma: PrismaClient) {
+  const suffix = randomUUID().replace(/-/g, '').slice(0, 8);
   const venue = await prisma.venue.create({
     data: {
-      name: 'Test Venue',
-      code: 'VW-SCHEDULE01',
+      name: `Test Venue ${suffix}`,
+      code: `VW-SCHED-${suffix.toUpperCase()}`,
       latitude: 40.7,
       longitude: -74.0,
       geofenceRadiusM: 100,
       timezone: 'America/New_York',
-      organization: { create: { name: 'Test Organization', code: 'org-vw-schedule01' } },
+      organization: { create: { name: `Test Organization ${suffix}`, code: `org-vw-${suffix}` } },
     },
   });
 
   const [profileA, profileB] = await Promise.all([
     prisma.profile.create({
       data: {
-        email: 'alice@test.local',
+        email: `alice-${suffix}@test.local`,
         fullName: 'Alice Test',
         role: 'staff',
         jobTitle: 'Server',
@@ -86,7 +88,7 @@ export async function seedSchedulingFixtures(prisma: PrismaClient) {
     }),
     prisma.profile.create({
       data: {
-        email: 'bob@test.local',
+        email: `bob-${suffix}@test.local`,
         fullName: 'Bob Test',
         role: 'staff',
         jobTitle: 'Server',
@@ -119,4 +121,5 @@ export async function cleanSchedulingData(prisma: PrismaClient) {
   await prisma.scheduleShift.deleteMany();
   await prisma.profile.deleteMany();
   await prisma.venue.deleteMany();
+  await prisma.organization.deleteMany();
 }
