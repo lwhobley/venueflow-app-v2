@@ -6,7 +6,7 @@ import { Prisma } from '@prisma/client';
 import { AppModule } from '../app.module';
 import { PrismaService } from '../prisma/prisma.service';
 import { AsyncWriteMessage, AsyncWriteService } from './async-write.service';
-import { HIGH_VOLUME_WRITE_QUEUE, HIGH_VOLUME_WRITE_QUEUE_OPTIONS } from './queue-topology';
+import { assertQueueTopology, HIGH_VOLUME_WRITE_QUEUE } from './queue-topology';
 
 function payloadHash(payload: Record<string, unknown>) {
   return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
@@ -109,8 +109,9 @@ async function bootstrap() {
   let ready = false;
   const connection = await connect(process.env.RABBITMQ_URL.replace(/^\uFEFF/, '').trim());
   const channel = await connection.createChannel();
-  await channel.assertQueue(HIGH_VOLUME_WRITE_QUEUE, HIGH_VOLUME_WRITE_QUEUE_OPTIONS);
+  await assertQueueTopology(channel);
   await channel.prefetch(Math.max(1, Number(process.env.QUEUE_PREFETCH ?? 10)));
+
   await channel.consume(HIGH_VOLUME_WRITE_QUEUE, async (delivery) => {
     if (!delivery) return;
     let message: AsyncWriteMessage | null = null;

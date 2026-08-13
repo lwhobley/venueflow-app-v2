@@ -211,18 +211,23 @@ export function offlineQueueConflicts() {
 export async function enqueueOfflineMutation(input: EnqueueInput) {
   await ensureLoaded();
   const owner = scope();
+  const idempotencyKey = (input.idempotencyKey && input.idempotencyKey.trim().length >= 16)
+    ? input.idempotencyKey.trim()
+    : createIdempotencyKey();
   const row: OfflineMutation = {
     ...input,
     id: createIdempotencyKey(),
     ...owner,
+    idempotencyKey,
     body: input.body ?? undefined,
-    headers: { ...(input.headers ?? {}), 'Idempotency-Key': input.idempotencyKey },
+    headers: { ...(input.headers ?? {}), 'Idempotency-Key': idempotencyKey },
     createdAt: Date.now(),
     attempts: 0,
     nextAttemptAt: Date.now(),
     status: 'queued',
   };
   await writeRow(row);
+
   queue = [...queue, row];
   notify();
   return { queued: true as const, queueSize: offlineQueueSize(), idempotencyKey: row.idempotencyKey };
