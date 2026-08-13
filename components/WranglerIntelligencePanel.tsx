@@ -146,9 +146,9 @@ export function WranglerIntelligencePanel({
 
       <View style={{ gap: spacing.sm, borderTopWidth: 1, borderColor: palette.divider, paddingTop: spacing.lg }}>
         <CommandText palette={palette} variant="title">Wrangler Operator</CommandText>
-        <CommandText palette={palette} variant="caption">Tell Wrangler what to find or change. Operational commands run and perform tasks immediately. Sensitive roster and timecard actions are previewed before execution.</CommandText>
+        <CommandText palette={palette} variant="caption">Tell Wrangler what to find or change. Concession stand replenishment, BEO lookups, and operational commands run immediately. Sensitive roster and timecard actions are previewed before execution.</CommandText>
         <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' }}>
-          {['Clear table 3', 'Add Jose to schedule Monday Aug 3 3pm - 12 am', '86 Tuna Tartare', 'Who is working tonight?'].map((preset) => (
+          {['86 Jumbo Hot Dog Buns at Stand 104', 'Add Jose to North Concourse Saturday 3pm - 11pm', 'Check Stand 112 mustard dispenser', 'Who is working Concourse East?'].map((preset) => (
             <Pressable key={preset} onPress={() => void runOperator(preset)} style={{ borderWidth: 1, borderColor: palette.border, paddingHorizontal: spacing.sm, paddingVertical: 7 }}>
               <CommandText palette={palette} variant="caption">{preset}</CommandText>
             </Pressable>
@@ -158,7 +158,7 @@ export function WranglerIntelligencePanel({
           <TextInput
             value={command}
             onChangeText={setCommand}
-            placeholder="Clear table 3, 86 tuna tartare, add Jose to schedule…"
+            placeholder="86 hot dog buns at stand 104, check union break alerts, add Jose to roster…"
             placeholderTextColor={palette.muted}
             style={{ flex: 1, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.surface, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, color: palette.muted }}
             onSubmitEditing={() => void runOperator()}
@@ -172,16 +172,16 @@ export function WranglerIntelligencePanel({
 
       <View style={{ gap: spacing.sm }}>
         <CommandText palette={palette} variant="title">Ask Wrangler</CommandText>
-        <CommandText palette={palette} variant="caption">Ask for analysis of the live operating picture across all 9 venue domains.</CommandText>
+        <CommandText palette={palette} variant="caption">Ask for analysis of the live stadium operating picture across all concession zones, luxury suites, and kitchens.</CommandText>
         <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' }}>
-          {['What needs attention?', 'How is staffing?', 'How are sales today?'].map((preset) => (
+          {['What stands need attention?', 'How is Union break compliance?', 'What are gross concession sales today?'].map((preset) => (
             <Pressable key={preset} onPress={() => void submit(preset)} style={{ borderWidth: 1, borderColor: palette.border, paddingHorizontal: spacing.sm, paddingVertical: 7 }}>
               <CommandText palette={palette} variant="caption">{preset}</CommandText>
             </Pressable>
           ))}
         </View>
         <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-          <TextInput value={question} onChangeText={setQuestion} placeholder="Ask about tonight's service…" placeholderTextColor={palette.muted} style={{ flex: 1, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.surface, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, color: palette.muted }} onSubmitEditing={() => void submit()} />
+          <TextInput value={question} onChangeText={setQuestion} placeholder="Ask about event-day F&B operations…" placeholderTextColor={palette.muted} style={{ flex: 1, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.surface, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, color: palette.muted }} onSubmitEditing={() => void submit()} />
           <Pressable onPress={() => void submit()} style={{ backgroundColor: '#7A5A35', justifyContent: 'center', paddingHorizontal: spacing.md }}>
             <CommandText palette={palette} variant="label" style={{ color: '#FFFFFF' }}>{ask.isPending ? 'ASKING…' : 'ASK'}</CommandText>
           </Pressable>
