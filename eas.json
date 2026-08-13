@@ -8,20 +8,14 @@
       "distribution": "internal",
       "channel": "preview",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://stadium-wrangler-api-c57mm72zpa-ue.a.run.app/api",
-        "EXPO_PUBLIC_BILLING_ENABLED": "true",
-        "EXPO_PUBLIC_REVENUECAT_ENTITLEMENT": "pro",
-        "EXPO_PUBLIC_REVENUECAT_IOS_KEY": "appl_zWzTInPrAkVZmynlSnvxtbjHEpe"
+        "EXPO_PUBLIC_API_URL": "https://stadium-wrangler-api-c57mm72zpa-ue.a.run.app/api"
       }
     },
     "production": {
       "autoIncrement": true,
       "channel": "production",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://stadium-wrangler-api-c57mm72zpa-ue.a.run.app/api",
-        "EXPO_PUBLIC_BILLING_ENABLED": "true",
-        "EXPO_PUBLIC_REVENUECAT_ENTITLEMENT": "pro",
-        "EXPO_PUBLIC_REVENUECAT_IOS_KEY": "appl_zWzTInPrAkVZmynlSnvxtbjHEpe"
+        "EXPO_PUBLIC_API_URL": "https://stadium-wrangler-api-c57mm72zpa-ue.a.run.app/api"
       },
       "ios": {
         "simulator": false,

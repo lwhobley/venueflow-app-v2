@@ -1,6 +1,5 @@
-// Web / default implementation — no-op. In-app purchases are iOS/Android only;
-// the real implementation lives in purchases.native.ts (Metro picks it on
-// native). Keeping this stub means the web build never imports the native SDK.
+// Enterprise implementation: All features are unlocked and managed by enterprise administrators.
+// In-app consumer paywalls and purchases are disabled.
 
 export const PURCHASES_SUPPORTED = false;
 
@@ -12,15 +11,15 @@ export type PurchasePackage = {
 };
 
 export async function configurePurchases(_appUserId?: string): Promise<void> {
-  /* no-op on web */
+  // no-op
 }
 
 export async function logoutPurchases(): Promise<void> {
-  /* no-op on web */
+  // no-op
 }
 
 export async function isPremiumActive(): Promise<boolean> {
-  return false;
+  return true;
 }
 
 export async function getOfferingPackages(): Promise<PurchasePackage[]> {
@@ -28,9 +27,9 @@ export async function getOfferingPackages(): Promise<PurchasePackage[]> {
 }
 
 export async function purchasePackageById(_id: string, _productId?: string): Promise<boolean> {
-  throw new Error('In-app purchases are only available in the mobile app.');
+  return true;
 }
 
 export async function restorePurchases(): Promise<boolean> {
-  return false;
+  return true;
 }
