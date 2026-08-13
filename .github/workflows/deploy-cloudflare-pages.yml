@@ -37,7 +37,7 @@ jobs:
         run: echo "/*    /index.html   200" > dist/_redirects
 
       - name: Deploy Expo Web App to Cloudflare Pages
-        run: npx wrangler@3 pages deploy dist --project-name venue-wrangler --branch desktop-web --commit-hash ${{ github.sha }} --commit-dirty=true
+        run: npx -y wrangler@3 pages deploy dist --project-name venue-wrangler --branch desktop-web --commit-hash ${{ github.sha }} --commit-dirty=true
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
