@@ -8,7 +8,7 @@ describe('WranglerOperatorController', () => {
     const controller = new WranglerOperatorController({} as never, operator as never);
 
     await expect(controller.plan({
-      profileId: 'staff-1', fullName: 'Staff Member', venueId: 'venue-1', venueName: 'Venue',
+      userId: 'user-staff-1', profileId: 'staff-1', fullName: 'Staff Member', venueId: 'venue-1', venueName: 'Venue',
       role: 'staff', allAccess: false, subscriptionStatus: 'active', trialEndsAt: null,
     }, { command: 'list all staff emails' })).rejects.toBeInstanceOf(ForbiddenException);
     expect(operator.plan).not.toHaveBeenCalled();
@@ -19,7 +19,7 @@ describe('WranglerOperatorController', () => {
     const controller = new WranglerOperatorController({} as never, operator as never);
 
     await expect(controller.execute({
-      profileId: 'staff-1', fullName: 'Staff Member', venueId: 'venue-1', venueName: 'Venue',
+      userId: 'user-staff-1', profileId: 'staff-1', fullName: 'Staff Member', venueId: 'venue-1', venueName: 'Venue',
       role: 'staff', allAccess: false, subscriptionStatus: 'active', trialEndsAt: null,
     }, { plan: { tool: 'CREATE_RESERVATION', args: {} } })).rejects.toBeInstanceOf(ForbiddenException);
     expect(operator.execute).not.toHaveBeenCalled();

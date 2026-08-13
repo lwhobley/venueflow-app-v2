@@ -15,7 +15,7 @@ describe('VenueScopeInterceptor', () => {
     const prisma = { profile: { findFirst: vi.fn() } } as any;
     const reflector = { getAllAndOverride: vi.fn().mockReturnValue(false) } as any;
     const interceptor = new VenueScopeInterceptor(prisma, reflector);
-    const request = { user: { sub: 'user-1' }, headers: { 'x-venue-id': 'venue-foreign' } };
+    const request: any = { user: { sub: 'user-1' }, headers: { 'x-venue-id': 'venue-foreign' } };
     const next = { handle: vi.fn(() => of('ok')) };
 
     const observable = await interceptor.intercept(contextFor(request), next);

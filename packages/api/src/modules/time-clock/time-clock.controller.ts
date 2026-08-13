@@ -428,7 +428,6 @@ export class TimeClockController {
       data: {
         clockInAt: newClockInAt,
         clockOutAt: newClockOutAt,
-        durationMinutes,
         isOpen: newClockOutAt === null,
       },
     });

@@ -52,8 +52,9 @@ function makeController() {
     },
     scheduleShift: { findFirst: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]) },
   } as any;
-  const controller = new TimeClockController(prisma);
-  return { controller, prisma };
+  const asyncWrites = { isEnabled: vi.fn().mockReturnValue(false), enqueue: vi.fn(), markResult: vi.fn() };
+  const controller = new TimeClockController(prisma, asyncWrites as any);
+  return { controller, prisma, asyncWrites };
 }
 
 const scope = { venueId: 'venue-1', profileId: 'staff-1', role: 'staff', allAccess: false } as any;

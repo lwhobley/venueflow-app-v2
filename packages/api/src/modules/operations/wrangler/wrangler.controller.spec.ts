@@ -7,7 +7,7 @@ describe('WranglerController', () => {
     const controller = new WranglerController({} as never, {} as never, {} as never, {} as never);
 
     await expect(controller.getWrangler({
-      profileId: 'staff-1', fullName: 'Staff Member', venueId: 'venue-1', venueName: 'Venue',
+      userId: 'user-staff-1', profileId: 'staff-1', fullName: 'Staff Member', venueId: 'venue-1', venueName: 'Venue',
       role: 'staff', allAccess: false, subscriptionStatus: 'active', trialEndsAt: null,
     })).rejects.toBeInstanceOf(ForbiddenException);
   });

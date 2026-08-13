@@ -105,9 +105,9 @@ function makeController() {
     purchaseOrderCsv: vi.fn().mockResolvedValue('csv'),
     agingReport: vi.fn().mockResolvedValue({ ok: 'aging' }),
   };
-
-  const controller = new BarInventoryController(prisma, notifications as any, email as any, parser as any, reports as any);
-  return { controller, prisma, notifications, email, parser, reports };
+  const asyncWrites = { isEnabled: vi.fn().mockReturnValue(false), enqueue: vi.fn(), markResult: vi.fn() };
+  const controller = new BarInventoryController(prisma, notifications as any, email as any, parser as any, reports as any, asyncWrites as any);
+  return { controller, prisma, notifications, email, parser, reports, asyncWrites };
 }
 
 const managerUser = { sub: 'user-1' } as any;

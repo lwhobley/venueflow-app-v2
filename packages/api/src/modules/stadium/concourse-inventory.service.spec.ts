@@ -147,10 +147,10 @@ describe('ConcourseInventoryService', () => {
       status: 'active',
     });
 
-    prisma.hawkerVendorSession.update.mockImplementation(async ({ data }) => ({ id: 'hawker_1', ...data }));
+    prisma.hawkerVendorSession.update.mockImplementation(async ({ data }: any) => ({ id: 'hawker_1', ...data }));
 
     const settled = await service.settleHawkerSession('facility-1', 'hawker_1', {
-      itemsCheckedIn: [{ code: 'BEER-IPA', quantity: 10 }], // 40 sold
+      itemsCheckedIn: [{ code: 'BEER-IPA', name: 'IPA Pint', quantity: 10 }], // 40 sold
       cashCollectedCents: 25000,
       cardCollectedCents: 15000,
     });
@@ -175,7 +175,7 @@ describe('ConcourseInventoryService', () => {
   });
 
   it('enforces Family Event Mode (alcoholDisabled) and Concert Mode (+15% surcharge) dynamic pricing', async () => {
-    prisma.eventMenuOverlay.create.mockImplementation(async ({ data }) => ({ id: 'overlay_1', ...data }));
+    prisma.eventMenuOverlay.create.mockImplementation(async ({ data }: any) => ({ id: 'overlay_1', ...data }));
 
     const familyOverlay = await eventMenuService.createMenuOverlay({
       organizationId: 'org-1',

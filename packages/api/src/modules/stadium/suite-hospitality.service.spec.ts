@@ -120,7 +120,7 @@ describe('SuiteHospitalityService', () => {
       Array.from({ length: 10 }, (_, i) => ({ id: `sub_${i + 1}`, name: `VIP Suite ${101 + i}` }))
     );
     prisma.suiteBeoOrder.findFirst.mockResolvedValue(null);
-    prisma.suiteBeoOrder.create.mockImplementation(({ data }) => Promise.resolve({ id: `beo_${data.beoNumber}`, ...data }));
+    prisma.suiteBeoOrder.create.mockImplementation(({ data }: any) => Promise.resolve({ id: `beo_${data.beoNumber}`, ...data }));
 
     const orders = await service.seed10VipSuites('facility-1', 'org-1', 'zone-1');
 
