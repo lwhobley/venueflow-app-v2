@@ -316,7 +316,19 @@ export class StadiumController {
     });
     const organizationId = await this.organizationIdFor(scope.venueId);
     return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.venueEvent.update({ where: { id }, data: { operationalState: target, stateChangedAt: new Date(), status: legacyStatusForState(target), ...(target === 'approved' ? { approvedAt: new Date(), approvedBy: scope.profileId } : {}) } });
+      const cas = await tx.venueEvent.updateMany({
+        where: { id, venueId: scope.venueId, operationalState: event.operationalState },
+        data: {
+          operationalState: target,
+          stateChangedAt: new Date(),
+          status: legacyStatusForState(target),
+          ...(target === 'approved' ? { approvedAt: new Date(), approvedBy: scope.profileId } : {}),
+        },
+      });
+      if (cas.count !== 1) {
+        throw new ConflictException('Event operational state was modified concurrently. Please refresh and try again.');
+      }
+      const updated = await tx.venueEvent.findUniqueOrThrow({ where: { id } });
       await tx.eventAuditLog.create({ data: { organizationId, venueId: scope.venueId, eventId: id, actorProfileId: scope.profileId, entityType: 'event', entityId: id, action: 'event_state_changed', reason: reason?.trim() || null, metadata: { from: event.operationalState, to: target } } });
       return updated;
     });

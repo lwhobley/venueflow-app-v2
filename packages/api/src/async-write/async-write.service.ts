@@ -2,11 +2,8 @@ import { Injectable, Logger, OnModuleDestroy, ServiceUnavailableException } from
 import { connect, type ChannelModel, type ConfirmChannel } from 'amqplib';
 import Redis from 'ioredis';
 import {
-  HIGH_VOLUME_WRITE_DLX,
-  HIGH_VOLUME_WRITE_DLQ,
+  assertQueueTopology,
   HIGH_VOLUME_WRITE_EXCHANGE,
-  HIGH_VOLUME_WRITE_QUEUE,
-  HIGH_VOLUME_WRITE_QUEUE_OPTIONS,
 } from './queue-topology';
 
 export type AsyncWriteKind = 'inventory_decrement' | 'clock_in';
@@ -61,15 +58,11 @@ export class AsyncWriteService implements OnModuleDestroy {
         const channel = await connection.createConfirmChannel();
         channel.on('error', (error) => this.resetChannel(`AMQP channel error: ${error.message}`));
         channel.on('close', () => this.resetChannel('AMQP channel closed'));
-        await channel.assertExchange(HIGH_VOLUME_WRITE_EXCHANGE, 'direct', { durable: true });
-        await channel.assertExchange(HIGH_VOLUME_WRITE_DLX, 'direct', { durable: true });
-        await channel.assertQueue(HIGH_VOLUME_WRITE_QUEUE, HIGH_VOLUME_WRITE_QUEUE_OPTIONS);
-        await channel.assertQueue(HIGH_VOLUME_WRITE_DLQ, { durable: true });
-        await channel.bindQueue(HIGH_VOLUME_WRITE_QUEUE, HIGH_VOLUME_WRITE_EXCHANGE, 'write');
-        await channel.bindQueue(HIGH_VOLUME_WRITE_DLQ, HIGH_VOLUME_WRITE_DLX, 'failed');
+        await assertQueueTopology(channel);
         this.connection = connection;
         this.channel = channel;
         return { redis: this.redis!, channel };
+
       })().catch((error) => {
         this.resetChannel('initial connection failed');
         throw error;

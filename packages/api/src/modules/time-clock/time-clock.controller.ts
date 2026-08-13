@@ -244,7 +244,8 @@ export class TimeClockController {
     }
 
     if (this.asyncWrites?.isEnabled?.()) {
-      return this.asyncWrites.enqueue('clock_in', idempotencyKey ?? '', {
+      const key = (idempotencyKey ?? '').trim() || crypto.randomUUID();
+      return this.asyncWrites.enqueue('clock_in', key, {
         profileId: scope.profileId, venueId: venue.id, lat: body.lat, lng: body.lng,
         accuracy: body.accuracy, mocked: body.mocked, clockInAt: new Date().toISOString(),
       });
