@@ -11,6 +11,10 @@ config.resolver.blockList = [
   new RegExp(`${apiPath}/.*`),
 ];
 
+if (!config.resolver.assetExts.includes('wasm')) {
+  config.resolver.assetExts.push('wasm');
+}
+
 // zustand's ESM build (resolved via package "exports" on web in SDK 54) uses
 // `import.meta.env`, which ships a literal `import.meta` into the web bundle and
 // throws "Cannot use 'import.meta' outside a module" when the browser loads it
