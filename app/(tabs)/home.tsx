@@ -8,6 +8,7 @@ import { api } from '../../lib/railway-api';
 import type { Id } from '../../lib/ids';
 import { CommandButton, CommandText } from '../../components/FutureUI';
 import { HomeWranglerSurface } from '../../components/HomeWranglerSurface';
+import { StadiumVenueMap } from '../../components/StadiumVenueMap';
 import { Skeleton } from '../../components/Skeleton';
 import { useAuthStore } from '../../lib/auth-store';
 import { usePushNotifications } from '../../lib/usePushNotifications';
@@ -37,8 +38,9 @@ export default function HomeScreen() {
   const upsertManagerGoal = useMutation(api.operations.upsertManagerGoal);
   const [showNotifications, setShowNotifications] = useState(false);
   const [goalTitle, setGoalTitle] = useState('');
+  const [showStadiumMap, setShowStadiumMap] = useState(true);
 
-  const venueName = dashboard?.venue.name ?? venue?.name ?? 'Venue Wrangler';
+  const venueName = dashboard?.venue.name ?? venue?.name ?? 'Stadium F&B Operations';
   const canManage = Boolean(dashboard && canManageVenue(dashboard.profile.role, dashboard.profile.allAccess));
   const managerDashboard = useQuery(api.operations.getManagerDashboard, isReady && canManage && venue?.id ? { venueId: venue.id } : 'skip') as any;
   const dailyBrief = useQuery(api.operations.getDailyBrief, isReady && canManage && venue?.id ? { venueId: venue.id } : 'skip') as any;
@@ -54,10 +56,10 @@ export default function HomeScreen() {
   const readinessRows = useMemo(() => {
     const values = readiness?.categories ?? {};
     return [
-      ['Staffing', values.staffing ?? values['staffing'] ?? 0],
-      ['Culinary / production', values.setup ?? values['setup'] ?? 0],
-      ['Concessions', values.floor ?? values['floor'] ?? 0],
-      ['Premium hospitality', values.approvals ?? values['approvals'] ?? 0],
+      ['Concessions & Stands', values.floor ?? values['floor'] ?? 0],
+      ['Luxury Suite BEOs', values.approvals ?? values['approvals'] ?? 0],
+      ['Commissary & Kitchens', values.setup ?? values['setup'] ?? 0],
+      ['Staffing & Union Roster', values.staffing ?? values['staffing'] ?? 0],
     ] as const;
   }, [readiness?.categories]);
 
@@ -82,7 +84,7 @@ export default function HomeScreen() {
               <CommandText palette={palette} variant="label" style={{ color: '#B6D6BE' }}>{venueName}</CommandText>
               {venues.length > 1 ? <MaterialCommunityIcons name="swap-horizontal" size={16} color="#B6D6BE" /> : null}
             </Pressable>
-            <CommandText palette={palette} variant="hero" style={{ color: '#FFFFFF' }}>Stadium F&B command</CommandText>
+            <CommandText palette={palette} variant="hero" style={{ color: '#FFFFFF' }}>Stadium F&B Command</CommandText>
           </View>
           <Pressable onPress={() => setShowNotifications((value) => !value)} accessibilityRole="button" accessibilityLabel="Open notifications" style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1, padding: 8 })}>
             <View>
@@ -103,7 +105,84 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      {/* Stadium Operations Quick Action Grid */}
+      <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.md }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+          <Pressable
+            onPress={() => router.push('/stadium-map')}
+            style={({ pressed }) => [styles.quickActionTile, { backgroundColor: '#074426', opacity: pressed ? 0.8 : 1 }]}
+          >
+            <MaterialCommunityIcons name="stadium" size={22} color="#FFFFFF" />
+            <CommandText palette={palette} variant="body" style={{ color: '#FFFFFF', fontWeight: '800' }}>
+              Stadium Map
+            </CommandText>
+            <CommandText palette={palette} variant="caption" style={{ color: '#B6D6BE' }}>
+              Zones, Suites, Stands
+            </CommandText>
+          </Pressable>
+
+          <Pressable
+            onPress={() => router.push('/event-command-center')}
+            style={({ pressed }) => [styles.quickActionTile, { backgroundColor: palette.surface, borderColor: palette.border, borderWidth: 1, opacity: pressed ? 0.8 : 1 }]}
+          >
+            <MaterialCommunityIcons name="shield-star-outline" size={22} color="#074426" />
+            <CommandText palette={palette} variant="body" style={{ fontWeight: '800' }}>
+              Command Center
+            </CommandText>
+            <CommandText palette={palette} variant="caption" style={{ color: palette.muted }}>
+              Event Status & Gates
+            </CommandText>
+          </Pressable>
+
+          <Pressable
+            onPress={() => router.push('/stadium/stand-sheet')}
+            style={({ pressed }) => [styles.quickActionTile, { backgroundColor: palette.surface, borderColor: palette.border, borderWidth: 1, opacity: pressed ? 0.8 : 1 }]}
+          >
+            <MaterialCommunityIcons name="clipboard-list-outline" size={22} color="#7A5A35" />
+            <CommandText palette={palette} variant="body" style={{ fontWeight: '800' }}>
+              Stand Sheets
+            </CommandText>
+            <CommandText palette={palette} variant="caption" style={{ color: palette.muted }}>
+              Concession Cash & Par
+            </CommandText>
+          </Pressable>
+
+          <Pressable
+            onPress={() => router.push('/stadium/suite-attendant')}
+            style={({ pressed }) => [styles.quickActionTile, { backgroundColor: palette.surface, borderColor: palette.border, borderWidth: 1, opacity: pressed ? 0.8 : 1 }]}
+          >
+            <MaterialCommunityIcons name="room-service-outline" size={22} color="#7A5A35" />
+            <CommandText palette={palette} variant="body" style={{ fontWeight: '800' }}>
+              Suite BEOs
+            </CommandText>
+            <CommandText palette={palette} variant="caption" style={{ color: palette.muted }}>
+              VIP Luxury Hospitality
+            </CommandText>
+          </Pressable>
+        </View>
+      </View>
+
       <HomeWranglerSurface enabled={isReady && canManage && Boolean(venue?.id)} />
+
+      {/* Embedded Interactive Stadium Map Card */}
+      <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.lg }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <MaterialCommunityIcons name="map-marker-radius" size={20} color="#074426" />
+            <CommandText palette={palette} variant="title">Stadium Layout & Zone Status</CommandText>
+          </View>
+          <Pressable
+            onPress={() => router.push('/stadium-map')}
+            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, flexDirection: 'row', alignItems: 'center', gap: 2 })}
+          >
+            <CommandText palette={palette} variant="caption" style={{ color: '#074426', fontWeight: '700' }}>
+              Full Screen Map
+            </CommandText>
+            <MaterialCommunityIcons name="chevron-right" size={16} color="#074426" />
+          </Pressable>
+        </View>
+        <StadiumVenueMap />
+      </View>
 
       <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.xl, gap: spacing.xl }}>
         {showNotifications ? (
@@ -138,10 +217,10 @@ export default function HomeScreen() {
               const state = value >= 100 ? 'Clear' : value > 0 ? `${value}% watch` : 'Pending';
               const color = value >= 100 ? palette.success : value > 0 ? palette.warning : palette.muted;
               return (
-                <Pressable key={label} onPress={() => router.push(label === 'Staffing' ? '/staff' : label === 'Concessions' ? '/facility' : '/checklist')} style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1, flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: palette.divider })}>
+                <Pressable key={label} onPress={() => router.push(label === 'Staffing & Union Roster' ? '/staff' : label === 'Concessions & Stands' ? '/facility' : '/checklist')} style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1, flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: palette.divider })}>
                   <CommandText palette={palette} variant="body" style={{ flex: 1 }}>{label}</CommandText>
                   <View style={{ width: 88, flexDirection: 'row', alignItems: 'center', gap: 6 }}><View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: color }} /><CommandText palette={palette} variant="caption" style={{ color, fontWeight: '700' }}>{state}</CommandText></View>
-                  <CommandText palette={palette} variant="caption" style={{ width: 80, textAlign: 'right' }}>{label === 'Staffing' ? 'Manager' : 'Team'}</CommandText>
+                  <CommandText palette={palette} variant="caption" style={{ width: 80, textAlign: 'right' }}>{label === 'Staffing & Union Roster' ? 'Manager' : 'Team'}</CommandText>
                 </Pressable>
               );
             })}
@@ -203,5 +282,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#B8711B',
+  },
+  quickActionTile: {
+    flex: 1,
+    minWidth: 150,
+    borderRadius: 8,
+    padding: spacing.md,
+    gap: 3,
   },
 });

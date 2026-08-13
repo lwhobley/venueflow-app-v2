@@ -287,8 +287,8 @@ export function HomeWranglerSurface({ enabled }: Props) {
 
         <View style={{ flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap' }}>
           {(mode === 'ask'
-            ? ['What needs attention?', 'How is staffing?', 'Clear table 3']
-            : ['Clear table 3', 'Add Jose to schedule Monday Aug 3 3pm - 12 am', '86 Tuna Tartare']
+            ? ['What stands need attention?', 'Check Union break compliance', 'How is East Concourse stock?']
+            : ['86 Jumbo Hot Dog Buns at Stand 104', 'Add Jose to North Concourse Saturday 3pm - 11pm', 'Check Stand 112 mustard dispenser']
           ).map((preset) => (
             <Pressable
               key={preset}
@@ -316,7 +316,7 @@ export function HomeWranglerSurface({ enabled }: Props) {
           <TextInput
             value={prompt}
             onChangeText={setPrompt}
-            placeholder={mode === 'ask' ? 'Ask or command Gemini (e.g. Clear table 3)…' : 'Give command to Gemini (e.g. Clear table 3)…'}
+            placeholder={mode === 'ask' ? 'Ask or command Gemini (e.g. Check Stand 104 par)…' : 'Give command to Gemini (e.g. 86 Hot Dog Buns)…'}
             placeholderTextColor={palette.muted}
             style={{
               flex: 1,
@@ -394,9 +394,9 @@ export function HomeWranglerSurface({ enabled }: Props) {
       </View>
 
       <View style={{ flexDirection: 'row', gap: spacing.lg, paddingTop: 2 }}>
-        <CommandText palette={palette} variant="caption">{snapshot.summary.covers} covers</CommandText>
-        <CommandText palette={palette} variant="caption">{snapshot.summary.vipArrivals} VIPs</CommandText>
-        <CommandText palette={palette} variant="caption">{snapshot.summary.seatedTables} seated</CommandText>
+        <CommandText palette={palette} variant="caption">{snapshot.summary.lowStockItems ? `${snapshot.summary.lowStockItems} Low-Stock Par` : 'Inventory Par OK'}</CommandText>
+        <CommandText palette={palette} variant="caption">{snapshot.summary.vipArrivals ? `${snapshot.summary.vipArrivals} Suite BEOs` : 'Suites Ready'}</CommandText>
+        <CommandText palette={palette} variant="caption">{snapshot.summary.openShifts ? `${snapshot.summary.openShifts} Open Staff Shifts` : 'Roster Full'}</CommandText>
       </View>
     </View>
   );

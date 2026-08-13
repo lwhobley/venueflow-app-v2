@@ -56,22 +56,22 @@ export default function TabsLayout() {
     >
       <Tabs.Screen
         name="home"
-        options={{ title: t("nav.home"), tabBarIcon: icon("view-dashboard") }}
+        options={{ title: "Command", tabBarIcon: icon("view-dashboard") }}
+      />
+      <Tabs.Screen
+        name="facility"
+        options={{ title: "Stadium F&B", tabBarIcon: icon("stadium") }}
       />
       <Tabs.Screen
         name="clock"
-        options={{ title: t("nav.clock"), tabBarIcon: icon("clock-outline") }}
+        options={{ title: "Time Clock", tabBarIcon: icon("clock-outline") }}
       />
       <Tabs.Screen
         name="schedule"
         options={{
-          title: t("nav.schedule"),
+          title: "Rosters",
           tabBarIcon: icon("calendar-week"),
         }}
-      />
-      <Tabs.Screen
-        name="facility"
-        options={{ title: "F&B Ops", tabBarIcon: icon("food-variant") }}
       />
       <Tabs.Screen
         name="floor"
@@ -92,7 +92,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="guests"
         options={{
-          title: "CRM",
+          title: "VIP Guests",
           href: canManage ? "/guests" : null,
           tabBarIcon: icon("account-heart-outline"),
         }}
@@ -100,7 +100,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="integrations"
         options={{
-          title: t("nav.integrations"),
+          title: "POS & Hardware",
           href: canManage ? "/integrations" : null,
           tabBarIcon: icon("connection"),
         }}
@@ -108,19 +108,19 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="sales"
         options={{
-          title: t("nav.sales"),
+          title: "Concessions POS",
           href: canManage ? "/sales" : null,
-          tabBarIcon: icon("chart-line"),
+          tabBarIcon: icon("cash-register"),
         }}
       />
       <Tabs.Screen
         name="chat"
-        options={{ title: t("nav.chat"), tabBarIcon: icon("chat-outline") }}
+        options={{ title: "Event Radio", tabBarIcon: icon("chat-outline") }}
       />
       <Tabs.Screen
         name="bar-stock"
         options={{
-          title: t("nav.inventory"),
+          title: "Inventory",
           href: "/bar-stock",
           tabBarIcon: icon("clipboard-text-outline"),
         }}
@@ -128,7 +128,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="documents"
         options={{
-          title: t("nav.documents"),
+          title: "BEOs & Docs",
           href: "/documents",
           tabBarIcon: icon("file-document-multiple-outline"),
         }}
@@ -136,7 +136,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="reports"
         options={{
-          title: t("nav.reports"),
+          title: "Reports & Recon",
           href: canManage ? "/reports" : null,
           tabBarIcon: icon("chart-box-outline"),
         }}
@@ -144,7 +144,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="staff"
         options={{
-          title: t("nav.staff"),
+          title: "Staff & Union",
           href: canManage ? "/staff" : null,
           tabBarIcon: icon("account-group"),
         }}
