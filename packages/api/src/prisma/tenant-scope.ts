@@ -22,7 +22,7 @@ export const VENUE_SCOPED_MODELS: ReadonlySet<string> = new Set([
   'SubscriptionEvent', 'TableAssignment', 'TableState', 'TableStateHistory', 'Team',
   'TimeEntry', 'VenueDocument', 'VenueEvent', 'VenueRole', 'Waitlist', 'WorkplaceJoinRequest',
   'EventExecutionWorkspace', 'EventExecutionTask', 'EventExecutionTimelineItem', 'EventExecutionVendor', 'EventExecutionIncident',
-  'EventIssue', 'EventAuditLog', 'EventCloseout', 'EventPlanSnapshot',
+  'EventIssue', 'EventAuditLog', 'EventCloseout', 'EventCloseoutRevision', 'EventPlanSnapshot',
   'AsyncWriteReceipt',
 ]);
 

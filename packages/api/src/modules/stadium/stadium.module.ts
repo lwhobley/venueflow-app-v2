@@ -13,11 +13,13 @@ import { TempStaffingController } from './temp-staffing.controller';
 import { TempStaffingService } from './temp-staffing.service';
 import { UnionComplianceController } from './union-compliance.controller';
 import { UnionComplianceService } from './union-compliance.service';
+import { StadiumRealtimeController } from './stadium-realtime.controller';
 
 @Module({
   imports: [PrismaModule],
   controllers: [
     StadiumController,
+    StadiumRealtimeController,
     SuiteHospitalityController,
     ConcourseInventoryController,
     EventMenuController,

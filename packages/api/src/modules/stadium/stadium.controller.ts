@@ -1,4 +1,6 @@
 import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { createHash } from 'crypto';
+import { PartialType } from '@nestjs/mapped-types';
 import { IsBoolean, IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 import { canFinalizeCloseout, canManageAssignedScope, canManageVenue, canOverrideEventState, canViewPilotHealth } from '../../auth/roles';
 import { RequireSubscription } from '../../billing/require-subscription.decorator';
@@ -7,6 +9,7 @@ import { Prisma } from '@prisma/client';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 import { assertEventTransition, EVENT_OPERATIONAL_STATES, legacyStatusForState, type EventOperationalState } from './event-state';
+
 
 type Scope = NonNullable<VenueScopedRequest['venueScope']>;
 
@@ -112,6 +115,16 @@ class UpsertEventCloseoutDto {
   @IsOptional() @IsString() notes?: string;
   @IsOptional() @IsString() adjustmentReason?: string;
 }
+
+class SubmitCloseoutRevisionDto extends PartialType(UpsertEventCloseoutDto) {
+  @IsString() adjustmentReason!: string;
+}
+
+function computeRevisionHash(parentHash: string | null, version: number, payload: Record<string, unknown>): string {
+  const content = JSON.stringify({ parentHash, version, payload });
+  return createHash('sha256').update(content).digest('hex');
+}
+
 
 class UpsertPartnerDto {
   @IsOptional() @IsString() partnerId?: string;
@@ -544,4 +557,213 @@ export class StadiumController {
     if (!partner) throw new NotFoundException('F&B partner not found.');
     return this.prisma.fnbPartner.update({ where: { id: partner.id }, data });
   }
+
+  @Get('events/:id/closeout')
+  async getEventCloseout(@VenueScope() scope: Scope, @Param('id') eventId: string) {
+    const event = await this.prisma.venueEvent.findFirst({ where: { id: eventId, venueId: scope.venueId }, select: { id: true } });
+    if (!event) throw new NotFoundException('Stadium event not found.');
+    return this.prisma.eventCloseout.findUnique({
+      where: { eventId },
+      include: { revisions: { orderBy: { version: 'desc' } } },
+    });
+  }
+
+  @Post('events/:id/closeout')
+  async upsertEventCloseout(@VenueScope() scope: Scope, @Param('id') eventId: string, @Body() body: UpsertEventCloseoutDto) {
+    const isFinalizing = body.status === 'finalized';
+    if (isFinalizing && !canFinalizeCloseout(scope.role, scope.allAccess)) {
+      throw new ForbiddenException('Closeout finalization requires financial director or administrative authority.');
+    }
+    const event = await this.prisma.venueEvent.findFirst({ where: { id: eventId, venueId: scope.venueId }, select: { id: true } });
+    if (!event) throw new NotFoundException('Stadium event not found.');
+    const organizationId = await this.organizationIdFor(scope.venueId);
+
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.eventCloseout.findUnique({ where: { eventId } });
+      if (existing && existing.status !== 'draft' && !isFinalizing) {
+        throw new ConflictException('Finalized or adjusted closeouts must be modified via immutable revisions.');
+      }
+
+      const status = isFinalizing ? ('finalized' as const) : (existing?.status ?? ('draft' as const));
+      const closeout = await tx.eventCloseout.upsert({
+        where: { eventId },
+        create: {
+          organizationId,
+          venueId: scope.venueId,
+          eventId,
+          status,
+          currentVersion: 1,
+          actualAttendance: body.actualAttendance ?? null,
+          actualSalesCents: body.actualSalesCents ?? null,
+          forecastSalesCents: body.forecastSalesCents ?? null,
+          laborHours: body.laborHours ?? null,
+          laborCostCents: body.laborCostCents ?? null,
+          inventoryVarianceCents: body.inventoryVarianceCents ?? null,
+          notes: body.notes?.trim() || null,
+          finalizedAt: isFinalizing ? new Date() : null,
+          finalizedBy: isFinalizing ? scope.profileId : null,
+        },
+        update: {
+          status,
+          actualAttendance: body.actualAttendance ?? undefined,
+          actualSalesCents: body.actualSalesCents ?? undefined,
+          forecastSalesCents: body.forecastSalesCents ?? undefined,
+          laborHours: body.laborHours ?? undefined,
+          laborCostCents: body.laborCostCents ?? undefined,
+          inventoryVarianceCents: body.inventoryVarianceCents ?? undefined,
+          notes: body.notes?.trim() || undefined,
+          ...(isFinalizing ? { finalizedAt: new Date(), finalizedBy: scope.profileId } : {}),
+        },
+      });
+
+      const payload = {
+        actualAttendance: closeout.actualAttendance,
+        actualSalesCents: closeout.actualSalesCents,
+        forecastSalesCents: closeout.forecastSalesCents,
+        laborHours: closeout.laborHours,
+        laborCostCents: closeout.laborCostCents,
+        inventoryVarianceCents: closeout.inventoryVarianceCents,
+      };
+      const revisionHash = computeRevisionHash(null, 1, payload);
+
+      await tx.eventCloseoutRevision.upsert({
+        where: { closeoutId_version: { closeoutId: closeout.id, version: 1 } },
+        create: {
+          organizationId,
+          venueId: scope.venueId,
+          closeoutId: closeout.id,
+          version: 1,
+          revisionHash,
+          actualAttendance: closeout.actualAttendance,
+          actualSalesCents: closeout.actualSalesCents,
+          forecastSalesCents: closeout.forecastSalesCents,
+          laborHours: closeout.laborHours,
+          laborCostCents: closeout.laborCostCents,
+          inventoryVarianceCents: closeout.inventoryVarianceCents,
+          createdBy: scope.profileId,
+          approvedBy: isFinalizing ? scope.profileId : null,
+          approvedAt: isFinalizing ? new Date() : null,
+        },
+        update: {
+          revisionHash,
+          actualAttendance: closeout.actualAttendance,
+          actualSalesCents: closeout.actualSalesCents,
+          forecastSalesCents: closeout.forecastSalesCents,
+          laborHours: closeout.laborHours,
+          laborCostCents: closeout.laborCostCents,
+          inventoryVarianceCents: closeout.inventoryVarianceCents,
+          approvedBy: isFinalizing ? scope.profileId : undefined,
+          approvedAt: isFinalizing ? new Date() : undefined,
+        },
+      });
+
+      await tx.eventAuditLog.create({
+        data: {
+          organizationId,
+          venueId: scope.venueId,
+          eventId,
+          actorProfileId: scope.profileId,
+          entityType: 'event_closeout',
+          entityId: closeout.id,
+          action: isFinalizing ? 'closeout_finalized' : 'closeout_saved',
+          metadata: { version: 1, status },
+        },
+      });
+
+      return tx.eventCloseout.findUniqueOrThrow({
+        where: { id: closeout.id },
+        include: { revisions: { orderBy: { version: 'desc' } } },
+      });
+    });
+  }
+
+  @Post('events/:id/closeout/revisions')
+  async submitCloseoutRevision(@VenueScope() scope: Scope, @Param('id') eventId: string, @Body() body: SubmitCloseoutRevisionDto) {
+    if (!canFinalizeCloseout(scope.role, scope.allAccess)) {
+      throw new ForbiddenException('Submitting closeout revisions requires financial director or administrative authority.');
+    }
+    if (!body.adjustmentReason?.trim()) {
+      throw new BadRequestException('A reason is required to submit a closeout revision.');
+    }
+
+    const closeout = await this.prisma.eventCloseout.findUnique({
+      where: { eventId },
+      include: { revisions: { orderBy: { version: 'desc' }, take: 1 } },
+    });
+    if (!closeout) throw new NotFoundException('Event closeout not found.');
+
+    const organizationId = await this.organizationIdFor(scope.venueId);
+    const nextVersion = closeout.currentVersion + 1;
+    const latestRevision = closeout.revisions[0];
+    const parentHash = latestRevision?.revisionHash ?? null;
+
+    return this.prisma.$transaction(async (tx) => {
+      const payload = {
+        actualAttendance: body.actualAttendance ?? closeout.actualAttendance,
+        actualSalesCents: body.actualSalesCents ?? closeout.actualSalesCents,
+        forecastSalesCents: body.forecastSalesCents ?? closeout.forecastSalesCents,
+        laborHours: body.laborHours ?? closeout.laborHours,
+        laborCostCents: body.laborCostCents ?? closeout.laborCostCents,
+        inventoryVarianceCents: body.inventoryVarianceCents ?? closeout.inventoryVarianceCents,
+        adjustmentReason: body.adjustmentReason.trim(),
+      };
+      const revisionHash = computeRevisionHash(parentHash, nextVersion, payload);
+
+      const revision = await tx.eventCloseoutRevision.create({
+        data: {
+          organizationId,
+          venueId: scope.venueId,
+          closeoutId: closeout.id,
+          version: nextVersion,
+          parentRevisionId: latestRevision?.id ?? null,
+          revisionHash,
+          actualAttendance: payload.actualAttendance,
+          actualSalesCents: payload.actualSalesCents,
+          forecastSalesCents: payload.forecastSalesCents,
+          laborHours: payload.laborHours,
+          laborCostCents: payload.laborCostCents,
+          inventoryVarianceCents: payload.inventoryVarianceCents,
+          adjustmentReason: payload.adjustmentReason,
+          createdBy: scope.profileId,
+          approvedBy: scope.profileId,
+          approvedAt: new Date(),
+        },
+      });
+
+      await tx.eventCloseout.update({
+        where: { id: closeout.id },
+        data: {
+          status: 'adjusted',
+          currentVersion: nextVersion,
+          actualAttendance: payload.actualAttendance,
+          actualSalesCents: payload.actualSalesCents,
+          forecastSalesCents: payload.forecastSalesCents,
+          laborHours: payload.laborHours,
+          laborCostCents: payload.laborCostCents,
+          inventoryVarianceCents: payload.inventoryVarianceCents,
+          adjustmentReason: payload.adjustmentReason,
+        },
+      });
+
+      await tx.eventAuditLog.create({
+        data: {
+          organizationId,
+          venueId: scope.venueId,
+          eventId,
+          actorProfileId: scope.profileId,
+          entityType: 'event_closeout_revision',
+          entityId: revision.id,
+          action: 'closeout_revision_added',
+          reason: body.adjustmentReason.trim(),
+          metadata: { version: nextVersion, parentHash, revisionHash },
+        },
+      });
+
+      return tx.eventCloseout.findUniqueOrThrow({
+        where: { id: closeout.id },
+        include: { revisions: { orderBy: { version: 'desc' } } },
+      });
+    });
+  }
 }
+

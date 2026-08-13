@@ -1,13 +1,60 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { EventEmitter } from 'events';
+import { randomUUID } from 'crypto';
+import Redis from 'ioredis';
+
+const REDIS_CHANNEL = 'stadium:realtime:events';
 
 @Injectable()
-export class SuiteHospitalityGateway {
+export class SuiteHospitalityGateway implements OnModuleDestroy {
   private readonly logger = new Logger(SuiteHospitalityGateway.name);
   private readonly emitter = new EventEmitter();
+  private readonly instanceId = randomUUID();
+  private pubClient?: Redis;
+  private subClient?: Redis;
 
   constructor() {
     this.emitter.setMaxListeners(100);
+    this.initRedis();
+  }
+
+  private initRedis() {
+    const redisUrl = process.env.REDIS_URL?.replace(/^\uFEFF/, '').trim();
+    if (!redisUrl) return;
+    try {
+      this.pubClient = new Redis(redisUrl, { maxRetriesPerRequest: 1, enableOfflineQueue: false });
+      this.subClient = new Redis(redisUrl, { maxRetriesPerRequest: 1, enableOfflineQueue: false });
+      this.pubClient.on('error', (err) => this.logger.warn(`Redis pub client error: ${err.message}`));
+      this.subClient.on('error', (err) => this.logger.warn(`Redis sub client error: ${err.message}`));
+      this.subClient.subscribe(REDIS_CHANNEL, (err) => {
+        if (err) this.logger.warn(`Redis subscribe error: ${err.message}`);
+      });
+      this.subClient.on('message', (_channel, message) => {
+        try {
+          const parsed = JSON.parse(message) as { instanceId: string; facilityId: string; zoneId: string; payload: Record<string, unknown> };
+          if (parsed.instanceId === this.instanceId) return; // Already emitted locally
+          this.emitLocal(parsed.facilityId, parsed.zoneId, parsed.payload);
+        } catch {
+          // ignore malformed pub/sub message
+        }
+      });
+    } catch (error) {
+      this.logger.warn(`Redis pub/sub initialization skipped: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  private emitLocal(facilityId: string, zoneId: string, payload: Record<string, unknown>) {
+    this.emitter.emit(`zone:${zoneId}`, payload);
+    this.emitter.emit(`facility:${facilityId}`, payload);
+    this.emitter.emit('global', payload);
+  }
+
+  private publishCrossReplica(facilityId: string, zoneId: string, payload: Record<string, unknown>) {
+    this.emitLocal(facilityId, zoneId, payload);
+    if (this.pubClient) {
+      const message = JSON.stringify({ instanceId: this.instanceId, facilityId, zoneId, payload });
+      this.pubClient.publish(REDIS_CHANNEL, message).catch(() => undefined);
+    }
   }
 
   on(event: string, listener: (...args: any[]) => void) {
@@ -20,17 +67,18 @@ export class SuiteHospitalityGateway {
 
   broadcastBeoUpdate(facilityId: string, zoneId: string, beoOrder: Record<string, unknown>) {
     const payload = { event: 'suite_beo_updated', data: beoOrder, timestamp: new Date().toISOString() };
-    this.emitter.emit(`zone:${zoneId}`, payload);
-    this.emitter.emit(`facility:${facilityId}`, payload);
-    this.emitter.emit('global', payload);
+    this.publishCrossReplica(facilityId, zoneId, payload);
     this.logger.log(`Broadcasted suite_beo_updated for BEO ${(beoOrder as any).beoNumber} to zone:${zoneId}`);
   }
 
   broadcastReplenishment(facilityId: string, zoneId: string, replenishment: Record<string, unknown>) {
     const payload = { event: 'replenishment_requested', data: replenishment, timestamp: new Date().toISOString() };
-    this.emitter.emit(`zone:${zoneId}`, payload);
-    this.emitter.emit(`facility:${facilityId}`, payload);
-    this.emitter.emit('global', payload);
+    this.publishCrossReplica(facilityId, zoneId, payload);
     this.logger.log(`Broadcasted replenishment_requested to zone:${zoneId}`);
   }
+
+  async onModuleDestroy() {
+    await Promise.allSettled([this.pubClient?.quit(), this.subClient?.quit()]);
+  }
 }
+
