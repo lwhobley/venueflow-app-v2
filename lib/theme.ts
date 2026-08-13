@@ -77,16 +77,16 @@ export const useDesignTheme = () => {
 export const colors = designPalettes.light;
 
 export const authColors = {
-  background: colors.background,
-  surface: colors.surface,
-  primary: colors.primary,
-  text: "#1F241E",
-  muted: "#6F766B",
-  border: "#E8E2D8",
-  danger: colors.danger,
-  success: colors.success,
-  buttonText: "#FFFFFF",
-  highlight: "#F0F7F2",
+  background: "transparent",
+  surface: "transparent",
+  primary: designPalettes.dark.primary,
+  text: designPalettes.dark.charcoal,
+  muted: designPalettes.dark.muted,
+  border: designPalettes.dark.muted,
+  danger: designPalettes.dark.danger,
+  success: designPalettes.dark.success,
+  buttonText: designPalettes.dark.buttonText,
+  highlight: "transparent",
 };
 
 export const authInputProps = {
@@ -180,18 +180,16 @@ export const shadow = {
 } as const;
 
 export const authCardStyle = {
-  backgroundColor: authColors.surface,
-  borderRadius: radius.soft,
-  borderWidth: 1,
-  borderColor: authColors.border,
+  backgroundColor: "transparent",
+  borderRadius: 0,
+  borderWidth: 0,
+  borderColor: "transparent",
 } as const;
 
 export const glass = {
-  backgroundColor: designPalettes.light.glass,
-  borderWidth: 1,
-  borderColor: designPalettes.light.border,
-  backdropFilter: "blur(20px)",
-  WebkitBackdropFilter: "blur(20px)",
+  backgroundColor: "transparent",
+  borderWidth: 0,
+  borderColor: "transparent",
 } as const;
 
 export const makePaperTheme = (mode: ThemeMode) => {

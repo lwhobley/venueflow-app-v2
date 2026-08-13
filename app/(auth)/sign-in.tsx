@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   Alert,
   Image,
+  ImageBackground,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -10,13 +11,14 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
-import { Button, Card, Text, TextInput } from "react-native-paper";
+import { Button, Text, TextInput } from "react-native-paper";
 import { appApi } from "../../lib/api-client";
-import { authCardStyle, authColors, spacing, type } from "../../lib/theme";
+import { authColors, spacing, type } from "../../lib/theme";
 import { Kicker } from "../../components/AppCard";
 import { useAuthStore, type AuthState } from "../../lib/auth-store";
 
 const logoSource = require("../../assets/stadium-wrangler-logo.png");
+const turfSource = require("../../assets/stadium-turf-texture.png");
 
 export default function SignInScreen() {
   const setSession = useAuthStore((state: AuthState) => state.setSession);
@@ -82,26 +84,34 @@ export default function SignInScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: authColors.background }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
+    <ImageBackground source={turfSource} resizeMode="cover" style={{ flex: 1, width: "100%" }}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <View style={styles.branding}>
-          <Image source={logoSource} style={styles.logo} />
-          <Kicker>Stadium F&B operations</Kicker>
-          <Text style={styles.title}>Administrator Access</Text>
-          <Text variant="bodyMedium" style={styles.subtitle}>
-            Administrator access only. Sign in with your assigned email and
-            six-digit PIN.
-          </Text>
-        </View>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.branding}>
+            <Image source={logoSource} style={styles.logo} />
+            <Kicker>Stadium F&B operations</Kicker>
+            <Text
+              style={{
+                ...type.title,
+                color: authColors.text,
+                textAlign: "center",
+              }}
+            >
+              Administrator Access
+            </Text>
+            <Text variant="bodyMedium" style={styles.subtitle}>
+              Administrator access only. Sign in with your assigned email and
+              six-digit PIN.
+            </Text>
+          </View>
 
-        <Card style={styles.authCard}>
-          <Card.Content style={styles.form}>
+          <View style={styles.form}>
             {formError ? (
               <Text selectable style={styles.error}>
                 {formError}
@@ -145,14 +155,14 @@ export default function SignInScreen() {
             >
               Enter Venue Wrangler Enterprise
             </Button>
-          </Card.Content>
-        </Card>
+          </View>
 
-        <Text selectable style={styles.help}>
-          Need administrator access or a new PIN? Contact the venue owner.
-        </Text>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          <Text selectable style={styles.help}>
+            Need administrator access or a new PIN? Contact the venue owner.
+          </Text>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </ImageBackground>
   );
 }
 
@@ -170,16 +180,9 @@ const styles = StyleSheet.create({
     height: 186,
     resizeMode: "contain",
   },
-  title: { ...type.title, color: authColors.text, textAlign: "center" },
   subtitle: { color: authColors.muted, textAlign: "center", maxWidth: 360 },
-  authCard: {
-    ...authCardStyle,
-    width: "100%",
-    maxWidth: 520,
-    alignSelf: "center",
-  },
   form: { gap: spacing.md },
-  input: { backgroundColor: authColors.surface },
+  input: { backgroundColor: "transparent" },
   error: { color: authColors.danger, textAlign: "center" },
   help: { color: authColors.muted, fontSize: 13, textAlign: "center" },
 });

@@ -13,10 +13,10 @@
       "bundleIdentifier": "com.stadiumwrangler.app",
       "infoPlist": {
         "UIBackgroundModes": [],
-        "NSLocationWhenInUseUsageDescription": "Stadium Wrangler uses your location to verify clock-ins and clock-outs at your venue.",
-        "NSPhotoLibraryUsageDescription": "Stadium Wrangler lets managers upload stadium F&B inventory and production photos from the photo library.",
-        "NSPhotoLibraryAddUsageDescription": "Stadium Wrangler saves F&B operations photos to your library for backup and sharing.",
-        "NSUserNotificationsUsageDescription": "Stadium Wrangler sends schedule updates, shift changes, and important venue alerts.",
+        "NSLocationWhenInUseUsageDescription": "Venue Wrangler Enterprise uses your location to verify clock-ins and clock-outs at your venue.",
+        "NSPhotoLibraryUsageDescription": "Venue Wrangler Enterprise lets managers upload venue F&B inventory and production photos from the photo library.",
+        "NSPhotoLibraryAddUsageDescription": "Venue Wrangler Enterprise saves F&B operations photos to your library for backup and sharing.",
+        "NSUserNotificationsUsageDescription": "Venue Wrangler Enterprise sends schedule updates, shift changes, and important venue alerts.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -62,19 +62,19 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Stadium Wrangler uses your location to verify clock-ins and clock-outs at your venue."
+          "locationWhenInUsePermission": "Venue Wrangler Enterprise uses your location to verify clock-ins and clock-outs at your venue."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Stadium Wrangler lets managers upload stadium F&B inventory and production photos from the photo library."
+          "photosPermission": "Venue Wrangler Enterprise lets managers upload venue F&B inventory and production photos from the photo library."
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "Stadium Wrangler scans barcodes and QR codes to look up stadium F&B inventory items.",
+          "cameraPermission": "Venue Wrangler Enterprise scans barcodes and QR codes to look up venue F&B inventory items.",
           "recordAudioAndroid": false
         }
       ],
