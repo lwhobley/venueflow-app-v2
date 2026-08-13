@@ -1,6 +1,7 @@
 import { Controller, ForbiddenException, MessageEvent, Param, Query, Sse } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { SuiteHospitalityGateway } from './suite-hospitality.gateway';
+import { RequireSubscription } from '../../billing/require-subscription.decorator';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 import { canManageAssignedScope, canViewPilotHealth } from '../../auth/roles';
@@ -8,6 +9,7 @@ import { canManageAssignedScope, canViewPilotHealth } from '../../auth/roles';
 type Scope = NonNullable<VenueScopedRequest['venueScope']>;
 
 @Controller('v1/stadium')
+@RequireSubscription()
 export class StadiumRealtimeController {
   constructor(private readonly gateway: SuiteHospitalityGateway) {}
 
