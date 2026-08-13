@@ -395,54 +395,6 @@ export class StadiumController {
     if (!canManageVenue(scope.role, scope.allAccess) && !canManageAssignedScope(scope.role)) throw new ForbiddenException('Operational stadium access is required.');
   }
 
-  @Get('events/:id/closeout')
-  async getEventCloseout(@VenueScope() scope: Scope, @Param('id') id: string) {
-    const event = await this.prisma.venueEvent.findFirst({ where: { id, venueId: scope.venueId }, select: { id: true } });
-    if (!event) throw new NotFoundException('Stadium event not found.');
-    return this.prisma.eventCloseout.findUnique({ where: { eventId: id } });
-  }
-
-  @Post('events/:id/closeout')
-  async upsertEventCloseout(@VenueScope() scope: Scope, @Param('id') id: string, @Body() body: UpsertEventCloseoutDto) {
-    if (!canFinalizeCloseout(scope.role, scope.allAccess)) {
-      throw new ForbiddenException('Only F&B leadership may finalize or adjust event closeout.');
-    }
-    const event = await this.prisma.venueEvent.findFirst({ where: { id, venueId: scope.venueId }, select: { id: true, organizationId: true, operationalState: true } });
-    if (!event) throw new NotFoundException('Stadium event not found.');
-    const existing = await this.prisma.eventCloseout.findUnique({ where: { eventId: id } });
-    const isFinalization = body.status === 'finalized';
-    const isAdjustment = body.status === 'adjusted' || Boolean(body.adjustmentReason?.trim());
-    if (existing && existing.status !== 'draft' && !body.adjustmentReason?.trim()) {
-      throw new ForbiddenException('Finalized closeout data is locked. Provide an authorized adjustment reason for every change.');
-    }
-    if (isFinalization && event.operationalState !== 'closed') {
-      throw new BadRequestException('An event must be closed before closeout is finalized.');
-    }
-    if (isFinalization && [body.actualAttendance, body.actualSalesCents, body.laborHours, body.laborCostCents, body.inventoryVarianceCents].some((value) => value === undefined || value === null)) {
-      throw new BadRequestException('Attendance, sales, labor hours/cost, and inventory variance are required to finalize closeout.');
-    }
-    if (body.status === 'draft' && existing && existing.status !== 'draft') {
-      throw new BadRequestException('A finalized closeout cannot be returned to draft. Create an authorized adjustment instead.');
-    }
-    if (isAdjustment && !existing) {
-      throw new BadRequestException('Create a draft or finalized closeout before recording an adjustment.');
-    }
-    const status = isAdjustment ? 'adjusted' : (body.status ?? existing?.status ?? 'draft');
-    const data = {
-      organizationId: event.organizationId, venueId: scope.venueId, eventId: id, status,
-      actualAttendance: body.actualAttendance, actualSalesCents: body.actualSalesCents, forecastSalesCents: body.forecastSalesCents,
-      laborHours: body.laborHours, laborCostCents: body.laborCostCents, inventoryVarianceCents: body.inventoryVarianceCents,
-      outletResults: body.outletResults as Prisma.InputJsonValue | undefined, inventoryResults: body.inventoryResults as Prisma.InputJsonValue | undefined, laborResults: body.laborResults as Prisma.InputJsonValue | undefined,
-      notes: body.notes?.trim() || null, finalizedAt: isFinalization ? new Date() : existing?.finalizedAt ?? null,
-      finalizedBy: isFinalization ? scope.profileId : (existing?.finalizedBy ?? null), adjustmentReason: isAdjustment ? body.adjustmentReason!.trim() : (existing?.adjustmentReason ?? null),
-    };
-    return this.prisma.$transaction(async (tx) => {
-      const closeout = await tx.eventCloseout.upsert({ where: { eventId: id }, create: data, update: data });
-      await tx.eventAuditLog.create({ data: { organizationId: event.organizationId, venueId: scope.venueId, eventId: id, actorProfileId: scope.profileId, entityType: 'event_closeout', entityId: closeout.id, action: isFinalization ? 'closeout_completed' : 'closeout_started', reason: body.adjustmentReason?.trim() || null, metadata: { status, actualSalesCents: body.actualSalesCents, inventoryVarianceCents: body.inventoryVarianceCents } } });
-      return closeout;
-    });
-  }
-
   @Patch('issues/:id/acknowledge')
   async acknowledgeEventIssue(@VenueScope() scope: Scope, @Param('id') id: string) {
     this.assertOperational(scope);
@@ -725,8 +677,8 @@ export class StadiumController {
           inventoryVarianceCents: payload.inventoryVarianceCents,
           adjustmentReason: payload.adjustmentReason,
           createdBy: scope.profileId,
-          approvedBy: scope.profileId,
-          approvedAt: new Date(),
+          approvedBy: scope.allAccess ? scope.profileId : null,
+          approvedAt: scope.allAccess ? new Date() : null,
         },
       });
 
