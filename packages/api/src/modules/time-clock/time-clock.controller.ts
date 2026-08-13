@@ -386,21 +386,43 @@ export class TimeClockController {
     });
     if (!entry) throw new BadRequestException('Time entry not found.');
 
-    await this.prisma.auditLog.create({
-      data: {
-        venueId: scope.venueId,
-        actorProfileId: scope.profileId,
-        actorName: scope.fullName,
-        actorRole: scope.role,
-        entityType: 'time_clock_punch',
-        entityId: entry.id,
-        action: 'time_clock_punch_approved',
-        summary: body.managerNotes?.trim() || `Approved punch ${entry.id}`,
-        metadata: { profileId: entry.profileId, clockInAt: entry.clockInAt.getTime(), clockOutAt: entry.clockOutAt?.getTime() ?? null },
-      },
+    const existingBreaks = Array.isArray(entry.breaks) ? entry.breaks : [];
+    const approval = {
+      approvedBy: scope.profileId,
+      approvedAt: new Date().toISOString(),
+      managerNotes: body.managerNotes?.trim() || null,
+      status: 'approved',
+    };
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.timeEntry.update({
+        where: { id: entry.id },
+        data: {
+          breaks: existingBreaks,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          venueId: scope.venueId,
+          actorProfileId: scope.profileId,
+          actorName: scope.fullName,
+          actorRole: scope.role,
+          entityType: 'time_clock_punch',
+          entityId: entry.id,
+          action: 'time_clock_punch_approved',
+          summary: body.managerNotes?.trim() || `Approved punch ${entry.id}`,
+          metadata: {
+            profileId: entry.profileId,
+            clockInAt: entry.clockInAt.getTime(),
+            clockOutAt: entry.clockOutAt?.getTime() ?? null,
+            approval,
+          },
+        },
+      });
     });
 
-    return { status: 'approved', punchId: entry.id, approvedBy: scope.profileId, approvedAt: new Date().toISOString() };
+    return { status: 'approved', punchId: entry.id, approvedBy: scope.profileId, approvedAt: approval.approvedAt };
   }
 
   @RequireSubscription()

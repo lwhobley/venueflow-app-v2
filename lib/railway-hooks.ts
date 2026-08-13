@@ -812,13 +812,30 @@ export function useStadiumLiveStream(facilityId: string | null | undefined, zone
     let eventSource: EventSource | null = null;
     let retryDelay = 1000;
 
-    function connect() {
+    async function connect() {
       if (!active || !facilityId || !token) return;
       const fId = String(facilityId);
       const tok = String(token);
       const baseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+
+      // Prefer short-lived single-use stream ticket over long-lived JWT in query param
+      let authParam = `token=${encodeURIComponent(tok)}`;
+      try {
+        const ticketRes = await apiRequest<{ ticket: string }>(
+          `/v1/stadium/facilities/${encodeURIComponent(fId)}/ticket${zoneId ? `?zoneId=${encodeURIComponent(zoneId)}` : ''}`,
+          { method: 'POST' }
+        );
+        if (ticketRes?.ticket) {
+          authParam = `ticket=${encodeURIComponent(ticketRes.ticket)}`;
+        }
+      } catch {
+        // Fallback to token if ticket endpoint is unreachable
+      }
+
+      if (!active) return;
+
       let url = `${baseUrl}/v1/stadium/facilities/${encodeURIComponent(fId)}/live-stream`;
-      const queryParams: string[] = [`token=${encodeURIComponent(tok)}`];
+      const queryParams: string[] = [authParam];
       if (zoneId) queryParams.push(`zoneId=${encodeURIComponent(zoneId)}`);
       const lastId = lastEventIdRef.current;
       if (lastId) queryParams.push(`lastEventId=${encodeURIComponent(lastId)}`);

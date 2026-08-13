@@ -5,6 +5,24 @@ import Redis from 'ioredis';
 
 const REDIS_CHANNEL = 'stadium:realtime:events';
 
+export interface BufferedStadiumEvent {
+  seq: number;
+  facilityId: string;
+  zoneId: string;
+  event: string;
+  data: Record<string, unknown>;
+  timestamp: string;
+}
+
+export interface StreamTicketPayload {
+  venueId: string;
+  role: string;
+  allAccess: boolean;
+  facilityId: string;
+  zoneId?: string;
+  expiresAt: number;
+}
+
 @Injectable()
 export class SuiteHospitalityGateway implements OnModuleDestroy {
   private readonly logger = new Logger(SuiteHospitalityGateway.name);
@@ -12,6 +30,10 @@ export class SuiteHospitalityGateway implements OnModuleDestroy {
   private readonly instanceId = randomUUID();
   private pubClient?: Redis;
   private subClient?: Redis;
+  private sequence = 0;
+  private readonly eventBuffer: BufferedStadiumEvent[] = [];
+  private readonly MAX_BUFFER = 1000;
+  private readonly tickets = new Map<string, StreamTicketPayload>();
 
   constructor() {
     this.emitter.setMaxListeners(100);
@@ -43,6 +65,29 @@ export class SuiteHospitalityGateway implements OnModuleDestroy {
     }
   }
 
+  createTicket(payload: StreamTicketPayload): string {
+    const ticketId = randomUUID();
+    this.tickets.set(ticketId, payload);
+    return ticketId;
+  }
+
+  verifyAndConsumeTicket(ticketId: string): StreamTicketPayload | null {
+    const payload = this.tickets.get(ticketId);
+    if (!payload) return null;
+    this.tickets.delete(ticketId); // Single-use consumption
+    if (payload.expiresAt < Date.now()) return null;
+    return payload;
+  }
+
+  getEventsSince(facilityId: string, lastSeq: number, zoneId?: string): BufferedStadiumEvent[] {
+    return this.eventBuffer.filter((item) => {
+      if (item.seq <= lastSeq) return false;
+      if (item.facilityId !== facilityId) return false;
+      if (zoneId && item.zoneId !== zoneId) return false;
+      return true;
+    });
+  }
+
   private emitLocal(facilityId: string, zoneId: string, payload: Record<string, unknown>) {
     this.emitter.emit(`zone:${zoneId}`, payload);
     this.emitter.emit(`facility:${facilityId}`, payload);
@@ -66,15 +111,43 @@ export class SuiteHospitalityGateway implements OnModuleDestroy {
   }
 
   broadcastBeoUpdate(facilityId: string, zoneId: string, beoOrder: Record<string, unknown>) {
-    const payload = { event: 'suite_beo_updated', data: beoOrder, timestamp: new Date().toISOString() };
+    this.sequence += 1;
+    const timestamp = new Date().toISOString();
+    const item: BufferedStadiumEvent = {
+      seq: this.sequence,
+      facilityId,
+      zoneId,
+      event: 'suite_beo_updated',
+      data: beoOrder,
+      timestamp,
+    };
+    this.eventBuffer.push(item);
+    if (this.eventBuffer.length > this.MAX_BUFFER) {
+      this.eventBuffer.shift();
+    }
+    const payload = { event: 'suite_beo_updated', data: beoOrder, seq: this.sequence, timestamp };
     this.publishCrossReplica(facilityId, zoneId, payload);
-    this.logger.log(`Broadcasted suite_beo_updated for BEO ${(beoOrder as any).beoNumber} to zone:${zoneId}`);
+    this.logger.log(`Broadcasted suite_beo_updated for BEO ${(beoOrder as any).beoNumber} (seq: ${this.sequence}) to zone:${zoneId}`);
   }
 
   broadcastReplenishment(facilityId: string, zoneId: string, replenishment: Record<string, unknown>) {
-    const payload = { event: 'replenishment_requested', data: replenishment, timestamp: new Date().toISOString() };
+    this.sequence += 1;
+    const timestamp = new Date().toISOString();
+    const item: BufferedStadiumEvent = {
+      seq: this.sequence,
+      facilityId,
+      zoneId,
+      event: 'replenishment_requested',
+      data: replenishment,
+      timestamp,
+    };
+    this.eventBuffer.push(item);
+    if (this.eventBuffer.length > this.MAX_BUFFER) {
+      this.eventBuffer.shift();
+    }
+    const payload = { event: 'replenishment_requested', data: replenishment, seq: this.sequence, timestamp };
     this.publishCrossReplica(facilityId, zoneId, payload);
-    this.logger.log(`Broadcasted replenishment_requested to zone:${zoneId}`);
+    this.logger.log(`Broadcasted replenishment_requested (seq: ${this.sequence}) to zone:${zoneId}`);
   }
 
   async onModuleDestroy() {
