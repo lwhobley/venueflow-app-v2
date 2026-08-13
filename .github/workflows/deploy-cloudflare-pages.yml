@@ -14,7 +14,7 @@ permissions:
 jobs:
   deploy-landing:
     name: Deploy Landing Site (main)
-    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -27,14 +27,14 @@ jobs:
 
       # The site/ directory is a static marketing landing page (no build step).
       - name: Deploy landing site to Cloudflare Pages
-        run: npx wrangler@3.114.17 pages deploy site --project-name venue-wrangler --branch main
+        run: npx wrangler@3.114.17 pages deploy site --project-name venue-wrangler --branch main --commit-dirty=true
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
   deploy-desktop-app:
     name: Deploy Desktop Web App (desktop-web)
-    if: github.ref == 'refs/heads/desktop-web' || github.event_name == 'workflow_dispatch'
+    if: github.ref == 'refs/heads/desktop-web'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -49,11 +49,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate Prisma client
+        run: npm run api:prisma:generate
+
       - name: Build Expo Web Bundle
         run: npx expo export --platform web
 
       - name: Deploy Expo Web App to Cloudflare Pages
-        run: npx wrangler@3.114.17 pages deploy dist --project-name venue-wrangler --branch desktop-web
+        run: npx wrangler@3.114.17 pages deploy dist --project-name venue-wrangler --branch desktop-web --commit-dirty=true
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
