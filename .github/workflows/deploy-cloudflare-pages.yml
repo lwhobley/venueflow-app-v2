@@ -34,7 +34,7 @@ jobs:
         run: npx expo export --platform web
 
       - name: Deploy Expo Web App to Cloudflare Pages
-        run: npx wrangler@3.114.17 pages deploy dist --project-name venue-wrangler --commit-dirty=true
+        run: npx wrangler@3.114.17 pages deploy dist --project-name venue-wrangler --branch desktop-web --commit-dirty=true
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
