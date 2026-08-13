@@ -19,6 +19,31 @@ export function canManageAssignedScope(role?: string | null): boolean {
   return ['concourse_supervisor', 'suite_manager'].includes(role ?? '');
 }
 
+/** Enterprise identity-provider configuration is not a general venue-manager action. */
+export function canManageEnterpriseSso(role?: string | null): boolean {
+  return ['platform_admin', 'organization_admin', 'owner', 'admin'].includes(role ?? '');
+}
+
+export function canAssignEnterpriseRole(actorRole: string | null | undefined, targetRole: string): boolean {
+  if (actorRole === 'platform_admin') return true;
+  if (!canManageEnterpriseSso(actorRole)) return false;
+  return !['platform_admin', 'organization_admin'].includes(targetRole);
+}
+
+export function canViewPilotHealth(role?: string | null, allAccess = false): boolean {
+  return allAccess || ['platform_admin', 'organization_admin', 'owner', 'admin', 'fnb_director', 'event_manager', 'finance_viewer', 'auditor'].includes(role ?? '');
+}
+
+/** Only leadership may use a reason-required recovery transition after approval. */
+export function canOverrideEventState(role?: string | null, allAccess = false): boolean {
+  return allAccess || ['platform_admin', 'organization_admin', 'owner', 'admin', 'fnb_director', 'event_manager'].includes(role ?? '');
+}
+
+/** Finance viewers may read closeout; finalization and adjustment require leadership. */
+export function canFinalizeCloseout(role?: string | null, allAccess = false): boolean {
+  return allAccess || ['platform_admin', 'organization_admin', 'owner', 'admin', 'fnb_director'].includes(role ?? '');
+}
+
 const ROLE_RANK: Record<string, number> = {
   staff: 0,
   server: 1,

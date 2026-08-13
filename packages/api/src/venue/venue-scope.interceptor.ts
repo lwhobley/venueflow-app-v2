@@ -1,4 +1,4 @@
-import { CallHandler, ExecutionContext, ForbiddenException, Injectable, NestInterceptor } from '@nestjs/common';
+import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Observable } from 'rxjs';
 import type { AuthenticatedRequest } from '../auth/auth.guard';
@@ -38,37 +38,19 @@ export class VenueScopeInterceptor implements NestInterceptor {
     }
 
     const user = request.user;
-    if (!user?.sub) return next.handle();
-    const rawVenueHeader = request.headers['x-venue-id'];
-    const requestedVenueId = typeof rawVenueHeader === 'string' && rawVenueHeader.trim()
-      ? rawVenueHeader.trim()
-      : undefined;
-
-    let profile;
-    if (requestedVenueId) {
-      profile = await this.prisma.profile.findFirst({
-        where: {
-          userId: user.sub,
-          venueId: requestedVenueId,
-          OR: [{ membershipStatus: null }, { membershipStatus: 'active' }],
-        },
-        include: { venue: { select: { id: true, name: true, subscriptionStatus: true } } },
-      });
-      if (!profile) {
-        throw new ForbiddenException('You do not have an active membership at the requested venue.');
-      }
-    }
-    if (!requestedVenueId) {
-      profile = await this.prisma.profile.findFirst({
-        where: {
-          userId: user.sub,
-          venueId: { not: null },
-          OR: [{ membershipStatus: null }, { membershipStatus: 'active' }],
-        },
-        include: { venue: { select: { id: true, name: true, subscriptionStatus: true } } },
-        orderBy: { createdAt: 'asc' },
-      });
-    }
+    if (!user?.sub || !user.profileId || !user.venueId) return next.handle();
+    // AuthGuard already resolved this profile from the verified active
+    // membership. Never select a second venue here; doing so can authorize one
+    // venue while Prisma is scoped to another.
+    const profile = await this.prisma.profile.findFirst({
+      where: {
+        id: user.profileId,
+        userId: user.sub,
+        venueId: user.venueId,
+        OR: [{ membershipStatus: null }, { membershipStatus: 'active' }],
+      },
+      include: { venue: { select: { id: true, name: true, subscriptionStatus: true } } },
+    });
     if (!profile?.venueId || !profile.venue) return next.handle();
 
     const subscriptionStatus = await resolveVenueSubscriptionStatus(this.prisma, { venueId: profile.venueId, venueStatus: profile.venue.subscriptionStatus, trialEndsAt: profile.trialEndsAt });

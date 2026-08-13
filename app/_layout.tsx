@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react';
-import { ImageBackground, Platform, View } from 'react-native';
+import { AppState, ImageBackground, Platform, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { PaperProvider } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import NetInfo from '@react-native-community/netinfo';
 import { useFonts } from 'expo-font';
 import {
   Fraunces_500Medium,
@@ -19,6 +20,7 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 import { useAuthStore, type AuthState } from '../lib/auth-store';
 import { configurePurchases, logoutPurchases } from '../lib/purchases';
 import { queryClient } from '../lib/query-client';
+import { flushOfflineQueue } from '../lib/offline-queue';
 
 const shouldIgnoreWebError = (message: string) =>
   message.includes('ResizeObserver loop completed with undelivered notifications') ||
@@ -63,6 +65,21 @@ export default function RootLayout() {
       return;
     }
     void configurePurchases(venueId ?? undefined);
+  }, [token, venueId]);
+
+  useEffect(() => {
+    if (!token) return undefined;
+    void flushOfflineQueue();
+    const networkSubscription = NetInfo.addEventListener((state) => {
+      if (state.isConnected && state.isInternetReachable !== false) void flushOfflineQueue();
+    });
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void flushOfflineQueue();
+    });
+    return () => {
+      subscription.remove();
+      networkSubscription();
+    };
   }, [token, venueId]);
   const debug = Boolean((globalThis as typeof globalThis & { __DEV__?: boolean }).__DEV__);
 

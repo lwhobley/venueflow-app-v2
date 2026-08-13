@@ -28,12 +28,12 @@ model AiUsageEvent {
 // request. It serializes the monthly spend check across Cloud Run instances
 // without holding a database transaction open for the provider round trip.
 model AiBudgetReservation {
-  id                  String   @id
-  venueId             String
-  reservedCostMicros  Int
-  expiresAt           DateTime
-  createdAt           DateTime @default(now())
-  venue               Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  id                 String   @id
+  venueId            String
+  reservedCostMicros Int
+  expiresAt          DateTime
+  createdAt          DateTime @default(now())
+  venue              Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
 
   @@index([venueId, expiresAt])
 }

@@ -445,66 +445,70 @@ model PasswordCredential {
 }
 
 model Organization {
-  id               String                          @id @default(cuid())
-  name             String
-  code             String                          @unique
-  createdAt        DateTime                        @default(now())
-  updatedAt        DateTime                        @updatedAt
-  venues           Venue[]
-  eventIssues      EventIssue[]
-  eventAuditLogs   EventAuditLog[]
-  facilities       Facility[]
-  facilityZones    FacilityZone[]
-  subVenues        SubVenue[]
-  outlets          Outlet[]
-  terminals        Terminal[]
-  memberships      OrganizationMembership[]
-  scopeAssignments ScopeAssignment[]
-  ssoProviders     EnterpriseSsoProvider[]
-  ssoGroupMappings EnterpriseSsoGroupRoleMapping[]
-  suiteBeoOrders   SuiteBeoOrder[]
-  standSheets      StandSheet[]
+  id                 String                          @id @default(cuid())
+  name               String
+  code               String                          @unique
+  createdAt          DateTime                        @default(now())
+  updatedAt          DateTime                        @updatedAt
+  venues             Venue[]
+  eventIssues        EventIssue[]
+  eventAuditLogs     EventAuditLog[]
+  eventReadiness     EventFnbReadiness[]
+  facilities         Facility[]
+  facilityZones      FacilityZone[]
+  subVenues          SubVenue[]
+  outlets            Outlet[]
+  terminals          Terminal[]
+  memberships        OrganizationMembership[]
+  scopeAssignments   ScopeAssignment[]
+  ssoProviders       EnterpriseSsoProvider[]
+  ssoGroupMappings   EnterpriseSsoGroupRoleMapping[]
+  suiteBeoOrders     SuiteBeoOrder[]
+  standSheets        StandSheet[]
   inventoryTransfers InventoryTransferRequest[]
-  hawkerSessions   HawkerVendorSession[]
-  eventMenuOverlays EventMenuOverlay[]
-  tempAgencies     TempAgency[]
-  workerProfiles   WorkerProfile[]
-  shiftPunches     ShiftPunch[]
-  unionRuleConfigs UnionRuleConfig[]
-  unionViolations  UnionComplianceViolation[]
+  hawkerSessions     HawkerVendorSession[]
+  eventMenuOverlays  EventMenuOverlay[]
+  tempAgencies       TempAgency[]
+  workerProfiles     WorkerProfile[]
+  shiftPunches       ShiftPunch[]
+  unionRuleConfigs   UnionRuleConfig[]
+  unionViolations    UnionComplianceViolation[]
+  venueEvents        VenueEvent[]
+  eventCloseouts     EventCloseout[]
+  eventPlanSnapshots EventPlanSnapshot[]
 }
 
 model Facility {
-  id               String                          @id @default(cuid())
-  organizationId   String
-  code             String
-  name             String
-  timezone         String?
-  address          String?
-  latitude         Float?
-  longitude        Float?
-  capacity         Int?
-  active           Boolean                         @default(true)
-  createdAt        DateTime                        @default(now())
-  updatedAt        DateTime                        @updatedAt
-  organization     Organization                    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  zones            FacilityZone[]
-  subVenues        SubVenue[]
-  outlets          Outlet[]
-  terminals        Terminal[]
-  scopeAssignments ScopeAssignment[]
-  ssoProviders     EnterpriseSsoProvider[]         @relation("SsoProviderDefaultFacility")
-  ssoGroupMappings EnterpriseSsoGroupRoleMapping[]
-  suiteBeoOrders   SuiteBeoOrder[]
-  standSheets      StandSheet[]
+  id                 String                          @id @default(cuid())
+  organizationId     String
+  code               String
+  name               String
+  timezone           String?
+  address            String?
+  latitude           Float?
+  longitude          Float?
+  capacity           Int?
+  active             Boolean                         @default(true)
+  createdAt          DateTime                        @default(now())
+  updatedAt          DateTime                        @updatedAt
+  organization       Organization                    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  zones              FacilityZone[]
+  subVenues          SubVenue[]
+  outlets            Outlet[]
+  terminals          Terminal[]
+  scopeAssignments   ScopeAssignment[]
+  ssoProviders       EnterpriseSsoProvider[]         @relation("SsoProviderDefaultFacility")
+  ssoGroupMappings   EnterpriseSsoGroupRoleMapping[]
+  suiteBeoOrders     SuiteBeoOrder[]
+  standSheets        StandSheet[]
   inventoryTransfers InventoryTransferRequest[]
-  hawkerSessions   HawkerVendorSession[]
-  eventMenuOverlays EventMenuOverlay[]
-  tempAgencies     TempAgency[]
-  workerProfiles   WorkerProfile[]
-  shiftPunches     ShiftPunch[]
-  unionRuleConfigs UnionRuleConfig[]
-  unionViolations  UnionComplianceViolation[]
+  hawkerSessions     HawkerVendorSession[]
+  eventMenuOverlays  EventMenuOverlay[]
+  tempAgencies       TempAgency[]
+  workerProfiles     WorkerProfile[]
+  shiftPunches       ShiftPunch[]
+  unionRuleConfigs   UnionRuleConfig[]
+  unionViolations    UnionComplianceViolation[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -539,7 +543,7 @@ model FacilityZone {
 }
 
 model SubVenue {
-  id             String       @id @default(cuid())
+  id             String          @id @default(cuid())
   organizationId String
   facilityId     String
   zoneId         String
@@ -547,12 +551,12 @@ model SubVenue {
   name           String
   subVenueType   SubVenueType
   capacity       Int?
-  active         Boolean      @default(true)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility       Facility     @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
-  zone           FacilityZone @relation(fields: [organizationId, facilityId, zoneId], references: [organizationId, facilityId, id], onDelete: Cascade)
+  active         Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility       Facility        @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  zone           FacilityZone    @relation(fields: [organizationId, facilityId, zoneId], references: [organizationId, facilityId, id], onDelete: Cascade)
   outlets        Outlet[]
   suiteBeoOrders SuiteBeoOrder[]
 
@@ -846,6 +850,9 @@ model Venue {
   documents                     VenueDocument[]
   fnbOperationUnits             FnbOperationUnit[]
   eventFnbReadiness             EventFnbReadiness[]
+  eventCloseouts                EventCloseout[]
+  eventPlanSnapshots            EventPlanSnapshot[]
+  asyncWriteReceipts            AsyncWriteReceipt[]
   fnbPartners                   FnbPartner[]
   organization                  Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   eventIssues                   EventIssue[]
@@ -1905,6 +1912,8 @@ model BarInventoryMovement {
   itemId         String
   movementType   BarStockMovementType
   quantity       Float
+  requestedQuantity Float?
+  appliedQuantity   Float?
   previousOnHand Float
   nextOnHand     Float
   notes          String?
@@ -1915,6 +1924,27 @@ model BarInventoryMovement {
 
   @@index([venueId, createdAt])
   @@index([itemId, createdAt])
+}
+
+/**
+ * Durable idempotency ledger for RabbitMQ-backed event-day writes. Redis may
+ * cache a result, but this table is the source of truth after a broker
+ * redelivery or an ambiguous publisher/HTTP response.
+ */
+model AsyncWriteReceipt {
+  id             String   @id @default(cuid())
+  venueId        String
+  kind           String
+  idempotencyKey String
+  payloadHash    String
+  status         String   @default("processing")
+  result         Json?
+  createdAt      DateTime @default(now())
+  completedAt    DateTime?
+  venue          Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@unique([venueId, kind, idempotencyKey])
+  @@index([venueId, status, createdAt])
 }
 
 model PrepBoardItem {
@@ -2052,6 +2082,7 @@ model ManagerGoal {
 
 model VenueEvent {
   id                  String                @id @default(cuid())
+  organizationId      String
   venueId             String
   title               String
   eventCode           String?
@@ -2074,14 +2105,18 @@ model VenueEvent {
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @updatedAt
   venue               Venue                 @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  organization        Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   fnbReadiness        EventFnbReadiness[]
   issues              EventIssue[]
   auditLogs           EventAuditLog[]
+  closeout            EventCloseout?
+  planSnapshot        EventPlanSnapshot?
 
   @@unique([venueId, eventCode])
   @@index([venueId, startsAt])
   @@index([venueId, status, startsAt])
   @@index([venueId, operationalState, startsAt])
+  @@index([organizationId, venueId, operationalState, startsAt])
   @@index([reservationId])
 }
 
@@ -2126,6 +2161,7 @@ model EventIssue {
   acknowledgedAt   DateTime?
   resolvedAt       DateTime?
   resolutionNotes  String?
+  clientMutationId String?
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
   organization     Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
@@ -2133,6 +2169,7 @@ model EventIssue {
   event            VenueEvent         @relation(fields: [eventId], references: [id], onDelete: Cascade)
   outlet           FnbOperationUnit?  @relation(fields: [outletId], references: [id], onDelete: SetNull)
 
+  @@unique([organizationId, clientMutationId])
   @@index([organizationId, venueId, eventId, status])
   @@index([venueId, eventId, severity, status])
   @@index([outletId])
@@ -2160,23 +2197,78 @@ model EventAuditLog {
 }
 
 model EventFnbReadiness {
-  id        String                  @id @default(cuid())
-  venueId   String
-  eventId   String
-  zoneId    String
-  status    EventFnbReadinessStatus @default(not_started)
-  notes     String?
-  checkedBy String?
-  checkedAt DateTime?
-  createdAt DateTime                @default(now())
-  updatedAt DateTime                @updatedAt
-  venue     Venue                   @relation(fields: [venueId], references: [id], onDelete: Cascade)
-  event     VenueEvent              @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  zone      FnbOperationUnit        @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  id             String                  @id @default(cuid())
+  organizationId String
+  venueId        String
+  eventId        String
+  zoneId         String
+  status         EventFnbReadinessStatus @default(not_started)
+  notes          String?
+  checkedBy      String?
+  checkedAt      DateTime?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  venue          Venue                   @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  organization   Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  event          VenueEvent              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  zone           FnbOperationUnit        @relation(fields: [zoneId], references: [id], onDelete: Cascade)
 
   @@unique([eventId, zoneId])
   @@index([venueId, eventId, status])
   @@index([zoneId, status])
+}
+
+enum EventCloseoutStatus {
+  draft
+  finalized
+  adjusted
+}
+
+model EventCloseout {
+  id                     String              @id @default(cuid())
+  organizationId         String
+  venueId                String
+  eventId                String              @unique
+  status                 EventCloseoutStatus @default(draft)
+  actualAttendance       Int?
+  actualSalesCents       Int?
+  forecastSalesCents     Int?
+  laborHours             Float?
+  laborCostCents         Int?
+  inventoryVarianceCents Int?
+  outletResults          Json?
+  inventoryResults       Json?
+  laborResults           Json?
+  notes                  String?
+  finalizedAt            DateTime?
+  finalizedBy            String?
+  adjustmentReason       String?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  organization           Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  venue                  Venue               @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  event                  VenueEvent          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, venueId, status])
+  @@index([venueId, updatedAt])
+}
+
+model EventPlanSnapshot {
+  id                  String       @id @default(cuid())
+  organizationId      String
+  venueId             String
+  eventId             String       @unique
+  generatedBy         String
+  generatedAt         DateTime     @default(now())
+  attendance          Int?
+  estimatedSalesCents Int?
+  plan                Json
+  dataGaps            String[]     @default([])
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  venue               Venue        @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  event               VenueEvent   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, venueId, generatedAt])
 }
 
 model FnbPartner {
@@ -2433,54 +2525,54 @@ model RateLimitBucket {
 }
 
 model SuiteBeoOrder {
-  id                      String                        @id @default(cuid())
-  organizationId          String
-  facilityId              String
-  zoneId                  String
-  subVenueId              String
-  eventId                 String?
-  beoNumber               String
-  hostName                String
-  hostPhone               String?
-  hostEmail               String?
-  guestCount              Int?
-  deliveryWindowStart     DateTime
-  deliveryWindowEnd       DateTime
-  specialInstructions     String?
-  cateringLineItems       Json
+  id                       String                         @id @default(cuid())
+  organizationId           String
+  facilityId               String
+  zoneId                   String
+  subVenueId               String
+  eventId                  String?
+  beoNumber                String
+  hostName                 String
+  hostPhone                String?
+  hostEmail                String?
+  guestCount               Int?
+  deliveryWindowStart      DateTime
+  deliveryWindowEnd        DateTime
+  specialInstructions      String?
+  cateringLineItems        Json
   parReplenishmentTriggers Json?
-  status                  SuiteBeoStatus                @default(draft)
-  totalCents              Int                           @default(0)
-  deliveredAt             DateTime?
-  deliveredBy             String?
-  deliverySignatureUrl    String?
-  deliveryPhotoUrl        String?
-  createdAt               DateTime                      @default(now())
-  updatedAt               DateTime                      @updatedAt
-  organization            Organization                  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility                Facility                      @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
-  zone                    FacilityZone                  @relation(fields: [organizationId, facilityId, zoneId], references: [organizationId, facilityId, id], onDelete: Restrict)
-  subVenue                SubVenue                      @relation(fields: [organizationId, facilityId, zoneId, subVenueId], references: [organizationId, facilityId, zoneId, id], onDelete: Restrict)
-  statusLogs              SuiteBeoStatusLog[]
-  replenishments          SuiteBeoReplenishmentRequest[]
+  status                   SuiteBeoStatus                 @default(draft)
+  totalCents               Int                            @default(0)
+  deliveredAt              DateTime?
+  deliveredBy              String?
+  deliverySignatureUrl     String?
+  deliveryPhotoUrl         String?
+  createdAt                DateTime                       @default(now())
+  updatedAt                DateTime                       @updatedAt
+  organization             Organization                   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility                 Facility                       @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  zone                     FacilityZone                   @relation(fields: [organizationId, facilityId, zoneId], references: [organizationId, facilityId, id], onDelete: Restrict)
+  subVenue                 SubVenue                       @relation(fields: [organizationId, facilityId, zoneId, subVenueId], references: [organizationId, facilityId, zoneId, id], onDelete: Restrict)
+  statusLogs               SuiteBeoStatusLog[]
+  replenishments           SuiteBeoReplenishmentRequest[]
 
-  @@index([organizationId, facilityId, zoneId, status])
   @@unique([organizationId, facilityId, beoNumber])
+  @@index([organizationId, facilityId, zoneId, status])
   @@index([subVenueId, deliveryWindowStart])
   @@index([eventId, status])
   @@index([deliveryWindowStart, deliveryWindowEnd])
 }
 
 model SuiteBeoStatusLog {
-  id         String         @id @default(cuid())
+  id         String          @id @default(cuid())
   beoOrderId String
   fromStatus SuiteBeoStatus?
   toStatus   SuiteBeoStatus
   actorId    String?
   actorName  String?
   notes      String?
-  timestamp  DateTime       @default(now())
-  beoOrder   SuiteBeoOrder  @relation(fields: [beoOrderId], references: [id], onDelete: Cascade)
+  timestamp  DateTime        @default(now())
+  beoOrder   SuiteBeoOrder   @relation(fields: [beoOrderId], references: [id], onDelete: Cascade)
 
   @@index([beoOrderId, timestamp])
 }
@@ -2594,25 +2686,25 @@ model InventoryTransferRequest {
 }
 
 model HawkerVendorSession {
-  id                     String              @id @default(cuid())
-  organizationId         String
-  facilityId             String
-  hawkerId               String
-  hawkerName             String
-  eventId                String?
-  itemsCheckedOut        Json
-  itemsCheckedIn         Json?
-  itemsSold              Json?
-  cashCollectedCents     Int                 @default(0)
-  cardCollectedCents     Int                 @default(0)
-  grossSalesCents        Int                 @default(0)
-  commissionRateBps      Int                 @default(1500)
-  commissionPayoutCents  Int                 @default(0)
-  status                 HawkerSessionStatus @default(active)
-  createdAt              DateTime            @default(now())
-  settledAt              DateTime?
-  organization           Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility               Facility            @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  id                    String              @id @default(cuid())
+  organizationId        String
+  facilityId            String
+  hawkerId              String
+  hawkerName            String
+  eventId               String?
+  itemsCheckedOut       Json
+  itemsCheckedIn        Json?
+  itemsSold             Json?
+  cashCollectedCents    Int                 @default(0)
+  cardCollectedCents    Int                 @default(0)
+  grossSalesCents       Int                 @default(0)
+  commissionRateBps     Int                 @default(1500)
+  commissionPayoutCents Int                 @default(0)
+  status                HawkerSessionStatus @default(active)
+  createdAt             DateTime            @default(now())
+  settledAt             DateTime?
+  organization          Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility              Facility            @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
 
   @@index([organizationId, facilityId, status])
   @@index([hawkerId, createdAt])
@@ -2679,70 +2771,76 @@ model TempAgency {
 }
 
 model WorkerProfile {
-  id                 String                     @id @default(cuid())
-  organizationId     String
-  facilityId         String
-  agencyId           String?
-  unionMemberId      String?
-  firstName          String
-  lastName           String
-  pinCode            String
-  qrCodeIdentifier   String                     @unique
-  certFoodSafety     Boolean                    @default(true)
-  certAlcohol        Boolean                    @default(true)
-  certAlcoholExpiry  DateTime?
-  active             Boolean                    @default(true)
-  createdAt          DateTime                   @default(now())
-  updatedAt          DateTime                   @updatedAt
-  organization       Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility           Facility                   @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
-  agency             TempAgency?                @relation(fields: [agencyId], references: [id], onDelete: SetNull)
-  shiftPunches       ShiftPunch[]
-  violations         UnionComplianceViolation[]
+  id                String                     @id @default(cuid())
+  organizationId    String
+  facilityId        String
+  agencyId          String?
+  unionMemberId     String?
+  firstName         String
+  lastName          String
+  pinLookupTag      String?                    @unique
+  pinSalt           String?
+  pinHash           String?
+  qrLookupTag       String?                    @unique
+  qrSalt            String?
+  qrHash            String?
+  credentialsIssuedAt DateTime?
+  certFoodSafety    Boolean                    @default(false)
+  certAlcohol       Boolean                    @default(false)
+  certAlcoholExpiry DateTime?
+  active            Boolean                    @default(true)
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  organization      Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility          Facility                   @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  agency            TempAgency?                @relation(fields: [agencyId], references: [id], onDelete: SetNull)
+  shiftPunches      ShiftPunch[]
+  violations        UnionComplianceViolation[]
 
-  @@unique([organizationId, facilityId, pinCode])
   @@index([organizationId, facilityId, active])
   @@index([agencyId])
 }
 
 model ShiftPunch {
-  id                String                     @id @default(cuid())
-  organizationId    String
-  facilityId        String
-  zoneId            String?
-  outletId          String?
-  workerId          String
-  punchType         PunchType
-  timestamp         DateTime                   @default(now())
-  verifiedVia       PunchVerification          @default(pin_entry)
-  overrideReason    String?
-  createdAt         DateTime                   @default(now())
-  organization      Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility          Facility                   @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
-  worker            WorkerProfile              @relation(fields: [workerId], references: [id], onDelete: Cascade)
-  violations        UnionComplianceViolation[]
+  id             String                     @id @default(cuid())
+  organizationId String
+  facilityId     String
+  zoneId         String?
+  outletId       String?
+  workerId       String
+  punchType      PunchType
+  timestamp      DateTime                   @default(now())
+  verifiedVia    PunchVerification          @default(pin_entry)
+  idempotencyKey String?
+  overrideReason String?
+  createdAt      DateTime                   @default(now())
+  organization   Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility       Facility                   @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  worker         WorkerProfile              @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  violations     UnionComplianceViolation[]
 
   @@index([organizationId, facilityId, workerId, timestamp])
   @@index([workerId, punchType])
+  @@unique([facilityId, workerId, idempotencyKey])
 }
 
 model UnionRuleConfig {
-  id                          String       @id @default(cuid())
-  organizationId              String
-  facilityId                  String
-  name                        String       @default("Standard Culinary Union Local 226")
-  maxContinuousWorkHours      Float        @default(5.0)
-  mandatoryMealBreakMinutes   Int          @default(30)
-  mealBreakWindowHours        Float        @default(5.0)
-  overtimeThresholdHours      Float        @default(8.0)
-  dailyDoubleTimeThreshold    Float        @default(12.0)
-  premiumPayMultiplier        Float        @default(1.5)
-  mealPenaltyPayCents         Int          @default(2500)
-  active                      Boolean      @default(true)
-  createdAt                   DateTime     @default(now())
-  updatedAt                   DateTime     @updatedAt
-  organization                Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility                    Facility     @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  id                        String       @id @default(cuid())
+  organizationId            String
+  facilityId                String
+  name                      String       @default("Standard Culinary Union Local 226")
+  maxContinuousWorkHours    Float        @default(5.0)
+  mandatoryMealBreakMinutes Int          @default(30)
+  mealBreakWindowHours      Float        @default(5.0)
+  overtimeThresholdHours    Float        @default(8.0)
+  dailyDoubleTimeThreshold  Float        @default(12.0)
+  premiumPayMultiplier      Float        @default(1.5)
+  mealPenaltyPayCents       Int          @default(2500)
+  active                    Boolean      @default(true)
+  createdAt                 DateTime     @default(now())
+  updatedAt                 DateTime     @updatedAt
+  organization              Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility                  Facility     @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
 
   @@index([organizationId, facilityId, active])
 }
@@ -2767,6 +2865,3 @@ model UnionComplianceViolation {
   @@index([organizationId, facilityId, workerId])
   @@index([violationType, resolved])
 }
-
-
-

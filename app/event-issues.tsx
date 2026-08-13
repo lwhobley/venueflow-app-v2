@@ -8,6 +8,7 @@ import { api } from '../lib/railway-api';
 import { useMutation, useQuery } from '../lib/railway-hooks';
 import { spacing, useDesignTheme } from '../lib/theme';
 import { useVenueAuth } from '../lib/useVenueAuth';
+import { SyncStatus } from '../lib/sync-status';
 
 type EventSummary = { id: string; title: string; startsAt: string; operationalState?: string };
 type Issue = { id: string; issueType: string; severity: 'low' | 'medium' | 'high' | 'critical'; status: 'open' | 'acknowledged' | 'resolved'; title: string; description: string; openedAt: string; resolutionNotes: string | null };
@@ -57,7 +58,7 @@ export default function EventIssuesScreen() {
   };
 
   return <ScrollView style={{ flex: 1, backgroundColor: 'transparent' }} contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.lg }}>
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}><View><CommandText palette={palette} variant="label">Event command center</CommandText><CommandText palette={palette} variant="hero">Live issues</CommandText></View><Button mode="text" textColor={palette.primary} onPress={() => router.back()}>Back</Button></View>
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}><View><CommandText palette={palette} variant="label">Event command center</CommandText><CommandText palette={palette} variant="hero">Live issues</CommandText></View><View style={{ alignItems: 'flex-end' }}><SyncStatus /><Button mode="text" textColor={palette.primary} onPress={() => router.back()}>Back</Button></View></View>
     {message ? <CommandSurface palette={palette}><CommandText palette={palette} variant="body">{message}</CommandText></CommandSurface> : null}
     <CommandSurface palette={palette} strong style={{ gap: spacing.sm }}><CommandText palette={palette} variant="title">Event in scope</CommandText><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>{overview?.events.map((event) => <Chip key={event.id} selected={event.id === eventId} onPress={() => setEventId(event.id)}>{event.title}</Chip>)}</View>{activeEvent ? <CommandText palette={palette} variant="caption">{new Date(activeEvent.startsAt).toLocaleString()} · {label(activeEvent.operationalState ?? 'draft')}</CommandText> : <CommandText palette={palette} variant="caption">Create or select an event before reporting issues.</CommandText>}</CommandSurface>
     <CommandSurface palette={palette} style={{ gap: spacing.sm }}><CommandText palette={palette} variant="title">Report an issue</CommandText><TextInput mode="outlined" label="Issue type" value={issueType} onChangeText={setIssueType} placeholder="e.g. stockout, equipment, safety" /><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>{severities.map((value) => <Chip key={value} selected={severity === value} onPress={() => setSeverity(value)}>{label(value)}</Chip>)}</View><TextInput mode="outlined" label="Short title" value={title} onChangeText={setTitle} /><TextInput mode="outlined" label="What happened?" value={description} onChangeText={setDescription} multiline /><Button mode="contained" buttonColor={palette.primary} disabled={!eventId || !title.trim() || !description.trim()} onPress={() => void report()}>Report issue</Button></CommandSurface>

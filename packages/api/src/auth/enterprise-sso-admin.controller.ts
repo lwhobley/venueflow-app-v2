@@ -7,6 +7,7 @@ import { CurrentUser } from './current-user.decorator';
 import type { AuthUser } from './auth.guard';
 import { EnterpriseSsoService } from './enterprise-sso.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { canAssignEnterpriseRole } from './roles';
 
 const PROVIDER_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const SECRET_ENV_KEY = /^SSO_[A-Z0-9_]+$/;
@@ -132,6 +133,7 @@ export class EnterpriseSsoAdminController {
   @Post('providers')
   async createProvider(@CurrentUser() user: AuthUser, @Body() body: ProviderDto) {
     await this.sso.assertOrganizationAdministrator(user.sub, body.organizationId);
+    this.assertSafeRedirect(body.postLoginRedirectUri);
     return this.prisma.enterpriseSsoProvider.create({
       data: {
         ...body,
@@ -148,6 +150,7 @@ export class EnterpriseSsoAdminController {
     const existing = await this.prisma.enterpriseSsoProvider.findUniqueOrThrow({ where: { id: providerId } });
     await this.sso.assertOrganizationAdministrator(user.sub, existing.organizationId);
     if (body.organizationId && body.organizationId !== existing.organizationId) throw new BadRequestException('An SSO provider cannot be moved between organizations.');
+    this.assertSafeRedirect(body.postLoginRedirectUri);
     return this.prisma.enterpriseSsoProvider.update({
       where: { id: providerId },
       data: {
@@ -164,6 +167,7 @@ export class EnterpriseSsoAdminController {
   async createGroupRoleMapping(@CurrentUser() user: AuthUser, @Param('providerId') providerId: string, @Body() body: GroupRoleMappingDto) {
     const provider = await this.prisma.enterpriseSsoProvider.findUniqueOrThrow({ where: { id: providerId } });
     await this.sso.assertOrganizationAdministrator(user.sub, provider.organizationId);
+    await this.assertRoleCeiling(user.sub, provider.organizationId, body.role);
     return this.prisma.enterpriseSsoGroupRoleMapping.create({
       data: {
         ...body,
@@ -194,6 +198,7 @@ export class EnterpriseSsoAdminController {
   async updateGroupRoleMapping(@CurrentUser() user: AuthUser, @Param('mappingId') mappingId: string, @Body() body: UpdateGroupRoleMappingDto) {
     const mapping = await this.prisma.enterpriseSsoGroupRoleMapping.findUniqueOrThrow({ where: { id: mappingId } });
     await this.sso.assertOrganizationAdministrator(user.sub, mapping.organizationId);
+    if (body.role) await this.assertRoleCeiling(user.sub, mapping.organizationId, body.role);
     return this.prisma.enterpriseSsoGroupRoleMapping.update({
       where: { id: mappingId },
       data: {
@@ -207,5 +212,23 @@ export class EnterpriseSsoAdminController {
     const normalized = domains.map((domain) => domain.trim().toLowerCase().replace(/^@/, '')).filter(Boolean);
     if (!normalized.length) throw new BadRequestException('At least one allowed email domain is required.');
     return Array.from(new Set(normalized));
+  }
+
+  private assertSafeRedirect(value?: string) {
+    if (!value) return;
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.username || url.password || url.port || /(^|\.)(localhost|local|internal)$/i.test(url.hostname)) {
+      throw new BadRequestException('SSO post-login redirects must use an approved public HTTPS origin.');
+    }
+  }
+
+  private async assertRoleCeiling(userId: string, organizationId: string, targetRole: Role) {
+    const membership = await this.prisma.organizationMembership.findUniqueOrThrow({
+      where: { organizationId_userId: { organizationId, userId } },
+      select: { role: true },
+    });
+    if (!canAssignEnterpriseRole(membership.role, targetRole)) {
+      throw new BadRequestException('This administrator may not map an enterprise group to that role.');
+    }
   }
 }

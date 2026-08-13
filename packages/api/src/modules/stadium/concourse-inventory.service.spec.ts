@@ -13,16 +13,20 @@ describe('ConcourseInventoryService', () => {
       standSheet: {
         findMany: vi.fn(),
         findUnique: vi.fn(),
+        findUniqueOrThrow: vi.fn(),
         findFirst: vi.fn(),
         create: vi.fn(),
         update: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       inventoryTransferRequest: {
         findMany: vi.fn(),
         findUnique: vi.fn(),
+        findUniqueOrThrow: vi.fn(),
         findFirst: vi.fn(),
         create: vi.fn(),
         update: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       hawkerVendorSession: {
         findUnique: vi.fn(),
@@ -65,7 +69,12 @@ describe('ConcourseInventoryService', () => {
     };
 
     prisma.standSheet.findFirst.mockResolvedValue(mockExistingSheet);
-    prisma.standSheet.update.mockImplementation(async ({ data }) => ({ id: 'sheet_1', ...data }));
+    prisma.standSheet.findUniqueOrThrow.mockImplementation(async () => ({
+      id: 'sheet_1',
+      expectedSalesRevenueCents: 205200,
+      actualPosRevenueCents: 205200,
+      varianceAmountCents: 0,
+    }));
 
     const result = await service.reconcileStandSheet('facility-1', 'sheet_1', {
       countOutItems: [
@@ -118,7 +127,7 @@ describe('ConcourseInventoryService', () => {
       status: 'in_transit',
     });
     prisma.standSheet.findFirst.mockResolvedValue({ id: 'sheet_101', restocks: [] });
-    prisma.inventoryTransferRequest.update.mockResolvedValue({ id: 't_101', status: 'completed' });
+    prisma.inventoryTransferRequest.findUniqueOrThrow.mockResolvedValue({ id: 't_101', status: 'completed' });
 
     const completed = await service.updateTransferStatus('facility-1', 't_101', 'completed');
     expect(completed.status).toBe('completed');

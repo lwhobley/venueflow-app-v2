@@ -207,6 +207,17 @@ export default function EventCommandCenterScreen() {
         <CommandText palette={palette} variant="body">Staffing: {workspace.staffing.covered}/{workspace.staffing.scheduled || '—'} covered{workspace.staffing.open ? ` · ${workspace.staffing.open} open` : ''}</CommandText>
         <CommandText palette={palette} variant="body">Floor assignment: {workspace.floor.assigned ? 'Ready' : 'Missing'}</CommandText>
       </CommandSurface>
+
+      <CommandSurface palette={palette} style={{ gap: spacing.sm }}>
+        <CommandText palette={palette} variant="title">Post-event</CommandText>
+        <CommandText palette={palette} variant="caption">Reconcile attendance, sales, labor, and inventory after the event.</CommandText>
+        <Button mode="contained" buttonColor={palette.primary} textColor={colors.surface} onPress={() => router.push({ pathname: '/event-closeout', params: { eventId } })}>Open closeout</Button>
+      </CommandSurface>
+
+      <CommandSurface palette={palette} style={{ gap: spacing.sm }}>
+        <CommandText palette={palette} variant="title">NFL game-day tools</CommandText>
+        <Button mode="outlined" textColor={palette.primary} onPress={() => router.push({ pathname: '/nfl-brief', params: { eventId } })}>Open NFL game-day brief</Button>
+      </CommandSurface>
     </ScrollView>
   );
 }

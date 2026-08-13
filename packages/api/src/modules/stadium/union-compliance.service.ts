@@ -1,6 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { SuiteHospitalityGateway } from './suite-hospitality.gateway';
 import { PunchType, PunchVerification } from '@prisma/client';
 
 export interface ShiftSummary {
@@ -16,10 +15,7 @@ export interface ShiftSummary {
 
 @Injectable()
 export class UnionComplianceService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly wsGateway: SuiteHospitalityGateway,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async getUnionRuleConfig(facilityId: string) {
     const config = await this.prisma.unionRuleConfig.findFirst({
@@ -161,51 +157,48 @@ export class UnionComplianceService {
     zoneId?: string,
     outletId?: string,
     overrideReason?: string,
+    idempotencyKey?: string,
   ) {
-    const worker = await this.prisma.workerProfile.findFirst({
-      where: { id: workerId, organizationId, facilityId, active: true },
-      select: { id: true },
-    });
-    if (!worker) throw new NotFoundException('Active worker profile not found in this facility.');
     if (verifiedVia === 'supervisor_override' && !overrideReason?.trim()) {
       throw new BadRequestException('Supervisor overrides require a reason.');
     }
-    const previous = await this.prisma.shiftPunch.findFirst({
-      where: { workerId, facilityId },
-      orderBy: { timestamp: 'desc' },
-      select: { punchType: true },
-    });
-    const allowed: Record<PunchType | 'NONE', PunchType[]> = {
-      NONE: ['IN'], IN: ['MEAL_START', 'OUT'], MEAL_START: ['MEAL_END'], MEAL_END: ['OUT'], OUT: ['IN'],
-    };
-    if (!allowed[previous?.punchType ?? 'NONE'].includes(punchType)) {
-      throw new BadRequestException(`Invalid punch transition from ${previous?.punchType ?? 'no punch'} to ${punchType}.`);
-    }
-    const punch = await this.prisma.shiftPunch.create({
-      data: {
-        organizationId,
-        facilityId,
-        workerId,
-        punchType,
-        verifiedVia,
-        zoneId: zoneId ?? null,
-        outletId: outletId ?? null,
-        overrideReason: overrideReason ?? null,
-      },
-    });
-
-    // Check if worker is approaching 5h meal threshold and broadcast 15-min warning
-    if (punchType === 'IN') {
-      const config = await this.getUnionRuleConfig(facilityId);
-      const warningMinutes = config.mealBreakWindowHours * 60 - 15; // 4h45m
-      this.wsGateway.broadcastBeoUpdate(facilityId, zoneId ?? 'global', {
-        type: 'union_break_warning',
-        workerId,
-        warningMinutes,
-        message: `Union worker approaching 5-hour mandatory meal break limit. Schedule break within 15 minutes.`,
+    return this.prisma.$transaction(async (tx) => {
+      // Serialize every worker's punch stream. A repeated QR/PIN scan either
+      // returns its original punch or is rejected as an invalid next state.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`shift-punch-${facilityId}-${workerId}`}))`;
+      if (idempotencyKey) {
+        const existing = await tx.shiftPunch.findFirst({ where: { facilityId, workerId, idempotencyKey } });
+        if (existing) return existing;
+      }
+      const worker = await tx.workerProfile.findFirst({
+        where: { id: workerId, organizationId, facilityId, active: true },
+        select: { id: true },
       });
-    }
-
-    return punch;
+      if (!worker) throw new NotFoundException('Active worker profile not found in this facility.');
+      const previous = await tx.shiftPunch.findFirst({
+        where: { workerId, facilityId },
+        orderBy: { timestamp: 'desc' },
+        select: { punchType: true },
+      });
+      const allowed: Record<PunchType | 'NONE', PunchType[]> = {
+        NONE: ['IN'], IN: ['MEAL_START', 'OUT'], MEAL_START: ['MEAL_END'], MEAL_END: ['OUT'], OUT: ['IN'],
+      };
+      if (!allowed[previous?.punchType ?? 'NONE'].includes(punchType)) {
+        throw new BadRequestException(`Invalid punch transition from ${previous?.punchType ?? 'no punch'} to ${punchType}.`);
+      }
+      return tx.shiftPunch.create({
+        data: {
+          organizationId,
+          facilityId,
+          workerId,
+          punchType,
+          verifiedVia,
+          idempotencyKey: idempotencyKey ?? null,
+          zoneId: zoneId ?? null,
+          outletId: outletId ?? null,
+          overrideReason: overrideReason ?? null,
+        },
+      });
+    }, { isolationLevel: 'Serializable' });
   }
 }
