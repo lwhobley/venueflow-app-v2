@@ -1,11 +1,9 @@
-import { Controller, ForbiddenException, MessageEvent, Param, Sse } from '@nestjs/common';
-import { EventEmitter } from 'events';
-import { Observable, fromEvent } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { Controller, ForbiddenException, MessageEvent, Param, Query, Sse } from '@nestjs/common';
+import { Observable } from 'rxjs';
 import { SuiteHospitalityGateway } from './suite-hospitality.gateway';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
-import { canViewPilotHealth } from '../../auth/roles';
+import { canManageAssignedScope, canViewPilotHealth } from '../../auth/roles';
 
 type Scope = NonNullable<VenueScopedRequest['venueScope']>;
 
@@ -14,21 +12,41 @@ export class StadiumRealtimeController {
   constructor(private readonly gateway: SuiteHospitalityGateway) {}
 
   @Sse('facilities/:facilityId/live-stream')
-  streamFacilityEvents(@VenueScope() scope: Scope, @Param('facilityId') facilityId: string): Observable<MessageEvent> {
+  streamFacilityEvents(
+    @VenueScope() scope: Scope,
+    @Param('facilityId') facilityId: string,
+    @Query('zoneId') zoneId?: string,
+  ): Observable<MessageEvent> {
     if (scope.venueId !== facilityId && !canViewPilotHealth(scope.role, scope.allAccess)) {
       throw new ForbiddenException('Realtime stream is restricted to assigned facility scope.');
     }
+    if (zoneId && !canManageAssignedScope(scope.role) && !canViewPilotHealth(scope.role, scope.allAccess)) {
+      throw new ForbiddenException('Zone-scoped realtime stream requires assigned scope authorization.');
+    }
 
-    const emitter = new EventEmitter();
-    const handler = (payload: unknown) => emitter.emit('event', payload);
-    const channelKey = `facility:${facilityId}`;
+    return new Observable<MessageEvent>((subscriber) => {
+      const channelKey = zoneId ? `zone:${zoneId}` : `facility:${facilityId}`;
+      let seq = 0;
 
-    this.gateway.on(channelKey, handler);
+      const handler = (payload: unknown) => {
+        seq += 1;
+        const dataObj = typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : { data: payload };
+        subscriber.next({
+          id: String(seq),
+          type: typeof dataObj.event === 'string' ? dataObj.event : 'message',
+          data: {
+            ...dataObj,
+            seq,
+          },
+        } as MessageEvent);
+      };
 
-    return fromEvent(emitter, 'event').pipe(
-      map((payload) => ({
-        data: payload,
-      } as MessageEvent)),
-    );
+      this.gateway.on(channelKey, handler);
+
+      return () => {
+        this.gateway.off(channelKey, handler);
+      };
+    });
   }
 }
+
