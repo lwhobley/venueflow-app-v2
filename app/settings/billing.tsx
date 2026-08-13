@@ -1,86 +1,81 @@
-import { Linking, View } from 'react-native';
-import { Button, Text } from 'react-native-paper';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import { useQuery } from '../../lib/railway-hooks';
-import { api } from '../../lib/railway-api';
-import { colors, spacing } from '../../lib/theme';
-import { AppCard, SectionHeader } from '../../components/AppCard';
-import { useAuthStore, type AuthState } from '../../lib/auth-store';
-import { useAuthenticatedSession } from '../../lib/auth-readiness';
-import { canManageBilling } from '../../lib/permissions';
-import { useI18n } from '../../lib/i18n';
-import { appApi } from '../../lib/api-client';
-
-const APPLE_SUBSCRIPTIONS_URL = 'https://apps.apple.com/account/subscriptions';
-const MONTHLY_PLAN_LABEL = '$99.99 / month';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { CommandButton, CommandSurface, CommandText } from '../../components/FutureUI';
+import { useAuthStore } from '../../lib/auth-store';
+import { spacing, useDesignTheme } from '../../lib/theme';
 
 export default function BillingScreen() {
-  const { t } = useI18n();
-  const user = useAuthStore((state: AuthState) => state.user);
-  const venue = useAuthStore((state: AuthState) => state.venue);
-  const { isReady } = useAuthenticatedSession();
-  const me = useQuery(api.app.getMe, isReady ? {} : 'skip');
-  const billing = useQuery(api.app.getMyVenueBilling, isReady && user && venue?.id ? {} : 'skip');
-
-  // Trial state is account-scoped. Drive the CTA off that, not off
-  // "never subscribed".
-  const trialEndsAt: number | null = me?.profile?.trialEndsAt ?? null;
-  const inTrial = trialEndsAt != null && trialEndsAt > Date.now();
-  const isPaid = billing?.status === 'active';
-  const trialDaysLeft = inTrial ? Math.max(0, Math.ceil((trialEndsAt - Date.now()) / (1000 * 60 * 60 * 24))) : 0;
-  const upgradeLabel = inTrial ? t('settingsBilling.upgrade') : t('settingsBilling.subscribe');
-  const canEditBilling = Boolean(me && canManageBilling(me.profile.role, me.profile.allAccess));
-
-  const manageSubscription = async () => {
-    if (billing?.platform === 'stripe') {
-      const { url } = await appApi.createStripePortal();
-      await Linking.openURL(url);
-      return;
-    }
-    await Linking.openURL(APPLE_SUBSCRIPTIONS_URL);
-  };
-
-  if (me === undefined) {
-    return (
-      <View style={{ flex: 1, backgroundColor: colors.background, padding: spacing.lg }}>
-        <Text style={{ color: colors.muted }}>{t('settingsBilling.loadingAccess')}</Text>
-      </View>
-    );
-  }
-
-  if (!canEditBilling) {
-    return (
-      <View style={{ flex: 1, backgroundColor: colors.background, padding: spacing.lg }}>
-        <Text style={{ color: colors.muted }}>{t('settingsBilling.ownerAdminOnly')}</Text>
-      </View>
-    );
-  }
+  const palette = useDesignTheme();
+  const venue = useAuthStore((state) => state.venue);
+  const user = useAuthStore((state) => state.user);
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background, padding: spacing.lg }}>
-      <AppCard>
-          <SectionHeader kicker={t('settingsBilling.kicker')} title={t('settingsBilling.title')} />
-          <View style={{ gap: spacing.sm }}>
-          <Text style={{ color: colors.muted }}>{venue?.name ?? t('settingsBilling.noVenueSelected')}</Text>
-          <Text style={{ color: colors.muted }}>{t('settingsBilling.statusLabel', { status: billing?.status ?? t('settingsBilling.notConfigured') })}</Text>
-          {inTrial ? <Text style={{ color: colors.muted }}>{t('settingsBilling.daysLeftIntro', { days: trialDaysLeft })}</Text> : null}
-          <Text style={{ color: colors.muted }}>{t('settingsBilling.renewsMonthlyNotice')}</Text>
-          <Text style={{ color: colors.muted }}>{t('settingsBilling.currentPlan', { plan: isPaid ? MONTHLY_PLAN_LABEL : inTrial ? t('settingsBilling.introAccess') : t('settingsBilling.notSubscribed') })}</Text>
-          <Text style={{ color: colors.muted }}>{t('settingsBilling.loggedInAs', { email: user?.email ?? t('settingsBilling.unknownEmail') })}</Text>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: palette.background }}
+      contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl }}
+    >
+      <View style={{ gap: spacing.xs, paddingTop: spacing.md }}>
+        <CommandText palette={palette} variant="hero">Enterprise Agreement</CommandText>
+        <CommandText palette={palette} variant="body" style={{ color: palette.muted }}>
+          Billing and master contract licensing are managed externally via enterprise invoice.
+        </CommandText>
+      </View>
 
-          {!isPaid ? (
-            <Button mode="contained" buttonColor={colors.primary} onPress={() => router.push('/billing/paywall')}>
-              {upgradeLabel}
-            </Button>
-          ) : null}
-          <Button mode="outlined" textColor={colors.primary} onPress={() => void manageSubscription()}>
-            {t('settingsBilling.manageSubscription')}
-          </Button>
-          <Button mode="text" textColor={colors.primary} onPress={() => router.push('/(tabs)/profile')}>
-            {t('settingsBilling.backToProfile')}
-          </Button>
+      <CommandSurface palette={palette} style={{ padding: spacing.lg, gap: spacing.md }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+          <View style={[styles.badgeIcon, { backgroundColor: '#E8F5E9' }]}>
+            <MaterialCommunityIcons name="domain" size={28} color="#074426" />
           </View>
-      </AppCard>
-    </View>
+          <View style={{ flex: 1 }}>
+            <CommandText palette={palette} variant="label" style={{ color: '#074426' }}>
+              ORGANIZATION PLAN
+            </CommandText>
+            <CommandText palette={palette} variant="title">
+              {venue?.name ?? 'Enterprise Venue'}
+            </CommandText>
+          </View>
+        </View>
+
+        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderColor: palette.divider, paddingTop: spacing.md, gap: spacing.sm }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <CommandText palette={palette} variant="body">Billing Method</CommandText>
+            <CommandText palette={palette} variant="body" style={{ fontWeight: '700' }}>
+              Direct Enterprise Invoicing
+            </CommandText>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <CommandText palette={palette} variant="body">Roster & Seat Budget</CommandText>
+            <CommandText palette={palette} variant="body" style={{ fontWeight: '700', color: palette.success }}>
+              Unlimited Stadium Staff
+            </CommandText>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <CommandText palette={palette} variant="body">Contract Administrator</CommandText>
+            <CommandText palette={palette} variant="body" style={{ fontWeight: '600' }}>
+              {user?.email ?? 'admin@venue.org'}
+            </CommandText>
+          </View>
+        </View>
+
+        <CommandText palette={palette} variant="caption" style={{ color: palette.muted, marginTop: 4 }}>
+          To modify enterprise seat allocations, add partner entities, or adjust annual SLA terms, contact your enterprise account executive.
+        </CommandText>
+
+        <CommandButton palette={palette} onPress={() => router.back()} style={{ marginTop: spacing.sm }}>
+          Back to Settings
+        </CommandButton>
+      </CommandSurface>
+    </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  badgeIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});
