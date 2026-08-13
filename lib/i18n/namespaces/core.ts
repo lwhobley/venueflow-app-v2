@@ -20,7 +20,7 @@ export const en = {
     profileFallback: 'Profile',
   },
   common: {
-    venueWrangler: 'Stadium Wrangler',
+    venueWrangler: 'Venue Wrangler Enterprise',
     loungeability: 'by Loungeability LLC',
     loading: 'Loading...',
     unread: 'unread',
@@ -138,7 +138,7 @@ export const es: CoreDictionary = {
   },
   common: {
     ...en.common,
-    venueWrangler: 'Stadium Wrangler',
+    venueWrangler: 'Venue Wrangler Enterprise',
     loungeability: 'por Loungeability LLC',
     loading: 'Cargando...',
     unread: 'sin leer',
@@ -256,7 +256,7 @@ export const fr: CoreDictionary = {
   },
   common: {
     ...en.common,
-    venueWrangler: 'Stadium Wrangler',
+    venueWrangler: 'Venue Wrangler Enterprise',
     loungeability: 'par Loungeability LLC',
     loading: 'Chargement...',
     unread: 'non lu',
