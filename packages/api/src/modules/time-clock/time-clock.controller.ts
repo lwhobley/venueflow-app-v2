@@ -386,7 +386,14 @@ export class TimeClockController {
     });
     if (!entry) throw new BadRequestException('Time entry not found.');
 
-    const existingBreaks = Array.isArray(entry.breaks) ? entry.breaks : [];
+    const currentBreaksObj = typeof entry.breaks === 'object' && entry.breaks !== null && !Array.isArray(entry.breaks)
+      ? (entry.breaks as Record<string, unknown>)
+      : { intervals: Array.isArray(entry.breaks) ? entry.breaks : [] };
+
+    if ((currentBreaksObj.approval as any)?.status === 'approved') {
+      throw new BadRequestException('Time entry has already been approved.');
+    }
+
     const approval = {
       approvedBy: scope.profileId,
       approvedAt: new Date().toISOString(),
@@ -394,11 +401,16 @@ export class TimeClockController {
       status: 'approved',
     };
 
+    const updatedBreaks = {
+      ...currentBreaksObj,
+      approval,
+    };
+
     await this.prisma.$transaction(async (tx) => {
       await tx.timeEntry.update({
         where: { id: entry.id },
         data: {
-          breaks: existingBreaks,
+          breaks: updatedBreaks,
         },
       });
 

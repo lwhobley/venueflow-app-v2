@@ -3,7 +3,7 @@ import { SuiteHospitalityGateway } from './suite-hospitality.gateway';
 import { StadiumRealtimeController } from './stadium-realtime.controller';
 
 describe('StadiumRealtimeController SSE teardown and sequence numbering', () => {
-  it('attaches monotonic seq numbers and removes event listener on unsubscription', () => {
+  it('attaches monotonic seq numbers and removes event listener on unsubscription', async () => {
     const gateway = new SuiteHospitalityGateway();
     const controller = new StadiumRealtimeController(gateway);
 
@@ -19,7 +19,7 @@ describe('StadiumRealtimeController SSE teardown and sequence numbering', () => 
       trialEndsAt: null,
     };
 
-    const stream$ = controller.streamFacilityEvents(scope, 'facility-1');
+    const stream$ = await controller.streamFacilityEvents(scope, 'facility-1');
     const received: any[] = [];
 
     const subscription = stream$.subscribe((event) => {
@@ -48,7 +48,7 @@ describe('StadiumRealtimeController SSE teardown and sequence numbering', () => 
     expect(received.length).toBe(2);
   });
 
-  it('generates short-lived stream ticket and allows ticket-based streaming with gap recovery', () => {
+  it('generates short-lived stream ticket and allows ticket-based streaming with gap recovery', async () => {
     const gateway = new SuiteHospitalityGateway();
     const controller = new StadiumRealtimeController(gateway);
 
@@ -65,7 +65,7 @@ describe('StadiumRealtimeController SSE teardown and sequence numbering', () => 
     };
 
     // 1. Generate stream ticket
-    const { ticket } = controller.createStreamTicket(scope, 'facility-1');
+    const { ticket } = await controller.createStreamTicket(scope, 'facility-1');
     expect(ticket).toBeDefined();
 
     // 2. Broadcast events into the gateway buffer before connection
@@ -73,7 +73,7 @@ describe('StadiumRealtimeController SSE teardown and sequence numbering', () => 
     gateway.broadcastBeoUpdate('facility-1', 'zone-1', { beoNumber: 'BEO-2002' });
 
     // 3. Connect with ticket and lastEventId = "1" to request missed event #2
-    const stream$ = controller.streamFacilityEvents(null as any, 'facility-1', undefined, '1', ticket);
+    const stream$ = await controller.streamFacilityEvents(null as any, 'facility-1', undefined, '1', ticket);
     const received: any[] = [];
     const subscription = stream$.subscribe((event) => {
       received.push(event);

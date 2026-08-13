@@ -55,6 +55,23 @@ export class SuiteHospitalityGateway implements OnModuleDestroy {
         try {
           const parsed = JSON.parse(message) as { instanceId: string; facilityId: string; zoneId: string; payload: Record<string, unknown> };
           if (parsed.instanceId === this.instanceId) return; // Already emitted locally
+
+          // Replicate into local ring buffer for cross-replica gap recovery
+          const eventSeq = typeof parsed.payload.seq === 'number' ? parsed.payload.seq : ++this.sequence;
+          this.sequence = Math.max(this.sequence, eventSeq);
+          const bufferedItem: BufferedStadiumEvent = {
+            seq: eventSeq,
+            facilityId: parsed.facilityId,
+            zoneId: parsed.zoneId,
+            event: typeof parsed.payload.event === 'string' ? parsed.payload.event : 'message',
+            data: typeof parsed.payload.data === 'object' && parsed.payload.data !== null ? (parsed.payload.data as Record<string, unknown>) : {},
+            timestamp: typeof parsed.payload.timestamp === 'string' ? parsed.payload.timestamp : new Date().toISOString(),
+          };
+          this.eventBuffer.push(bufferedItem);
+          if (this.eventBuffer.length > this.MAX_BUFFER) {
+            this.eventBuffer.shift();
+          }
+
           this.emitLocal(parsed.facilityId, parsed.zoneId, parsed.payload);
         } catch {
           // ignore malformed pub/sub message
@@ -65,18 +82,45 @@ export class SuiteHospitalityGateway implements OnModuleDestroy {
     }
   }
 
-  createTicket(payload: StreamTicketPayload): string {
+  async createTicket(payload: StreamTicketPayload): Promise<string> {
     const ticketId = randomUUID();
     this.tickets.set(ticketId, payload);
+    if (this.pubClient) {
+      const redisKey = `stadium:ticket:${ticketId}`;
+      await this.pubClient.set(redisKey, JSON.stringify(payload), 'PX', 60_000).catch(() => undefined);
+    }
     return ticketId;
   }
 
-  verifyAndConsumeTicket(ticketId: string): StreamTicketPayload | null {
-    const payload = this.tickets.get(ticketId);
-    if (!payload) return null;
-    this.tickets.delete(ticketId); // Single-use consumption
-    if (payload.expiresAt < Date.now()) return null;
-    return payload;
+  async verifyAndConsumeTicket(ticketId: string): Promise<StreamTicketPayload | null> {
+    // 1. Check local memory
+    const local = this.tickets.get(ticketId);
+    if (local) {
+      this.tickets.delete(ticketId);
+      if (this.pubClient) {
+        this.pubClient.del(`stadium:ticket:${ticketId}`).catch(() => undefined);
+      }
+      if (local.expiresAt < Date.now()) return null;
+      return local;
+    }
+
+    // 2. Check Redis for cross-replica ticket consumption
+    if (this.pubClient) {
+      try {
+        const redisKey = `stadium:ticket:${ticketId}`;
+        const raw = await this.pubClient.get(redisKey);
+        if (raw) {
+          await this.pubClient.del(redisKey).catch(() => undefined);
+          const parsed = JSON.parse(raw) as StreamTicketPayload;
+          if (parsed.expiresAt < Date.now()) return null;
+          return parsed;
+        }
+      } catch {
+        // Redis fallback
+      }
+    }
+
+    return null;
   }
 
   getEventsSince(facilityId: string, lastSeq: number, zoneId?: string): BufferedStadiumEvent[] {
