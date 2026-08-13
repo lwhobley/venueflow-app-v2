@@ -41,3 +41,17 @@ ALTER TABLE "EventCloseoutRevision" FORCE ROW LEVEL SECURITY;
 CREATE POLICY event_closeout_revision_scope ON "EventCloseoutRevision" FOR ALL TO stadium_api
   USING (app_private.scope_matches("organizationId", "venueId", NULL))
   WITH CHECK (app_private.scope_matches("organizationId", "venueId", NULL));
+
+-- DB Immutability Trigger: prevent UPDATE or DELETE on EventCloseoutRevision rows
+CREATE OR REPLACE FUNCTION app_private.prevent_closeout_revision_mutation()
+RETURNS trigger AS $$
+BEGIN
+    RAISE EXCEPTION 'EventCloseoutRevision records are immutable and cannot be updated or deleted.';
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS enforce_closeout_revision_immutability ON "EventCloseoutRevision";
+CREATE TRIGGER enforce_closeout_revision_immutability
+BEFORE UPDATE OR DELETE ON "EventCloseoutRevision"
+FOR EACH ROW EXECUTE FUNCTION app_private.prevent_closeout_revision_mutation();
+
