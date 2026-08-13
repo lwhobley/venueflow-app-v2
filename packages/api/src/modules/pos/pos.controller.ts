@@ -126,6 +126,13 @@ class IngestCheckDto {
   menuItems?: IngestMenuItemDto[];
 }
 
+class ReconcileStripeDto {
+  @IsString() externalCheckId!: string;
+  @IsString() paymentIntentId!: string;
+  @IsInt() posAmountCents!: number;
+  @IsInt() stripeAmountCents!: number;
+}
+
 class IngestLaborPunchDto {
   @IsString() externalEmployeeId!: string;
   @IsString() employeeName!: string;
@@ -686,4 +693,44 @@ export class PosController {
       updatedAt: check.updatedAt.getTime(),
     };
   }
+
+  @Post('reconcile-stripe')
+  async reconcileStripePayment(@VenueScope() scope: Scope, @Body() body: ReconcileStripeDto) {
+    if (!scope) throw new UnauthorizedException('Scope required.');
+    const check = await this.prisma.posCheck.findFirst({
+      where: { venueId: scope.venueId, externalCheckId: body.externalCheckId },
+    });
+    if (!check) throw new NotFoundException('POS check not found.');
+
+    const varianceCents = Math.abs(body.posAmountCents - body.stripeAmountCents);
+    const isMatched = varianceCents === 0;
+
+    await this.prisma.eventAuditLog.create({
+      data: {
+        organizationId: scope.organizationId,
+        venueId: scope.venueId,
+        actorProfileId: scope.profileId,
+        entityType: 'pos_stripe_reconciliation',
+        entityId: check.id,
+        action: isMatched ? 'stripe_payment_reconciled' : 'stripe_payment_variance_flagged',
+        metadata: {
+          externalCheckId: body.externalCheckId,
+          paymentIntentId: body.paymentIntentId,
+          posAmountCents: body.posAmountCents,
+          stripeAmountCents: body.stripeAmountCents,
+          varianceCents,
+        },
+      },
+    });
+
+    return {
+      status: isMatched ? 'matched' : 'variance_flagged',
+      externalCheckId: body.externalCheckId,
+      paymentIntentId: body.paymentIntentId,
+      posAmountCents: body.posAmountCents,
+      stripeAmountCents: body.stripeAmountCents,
+      varianceCents,
+    };
+  }
 }
+

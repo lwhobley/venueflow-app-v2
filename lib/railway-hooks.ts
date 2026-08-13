@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation as useReactMutation, useQuery as useReactQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from './api-client';
 import { useAuthStore } from './auth-store';
@@ -797,3 +797,83 @@ function mapFloorPlanBody(args: any) {
     })),
   };
 }
+
+export function useStadiumLiveStream(facilityId: string | null | undefined, zoneId?: string) {
+  const queryClient = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  const [connected, setConnected] = useState(false);
+  const [lastSeq, setLastSeq] = useState<number | null>(null);
+  const lastEventIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!facilityId || !token) return;
+
+    let active = true;
+    let eventSource: EventSource | null = null;
+    let retryDelay = 1000;
+
+    function connect() {
+      if (!active || !facilityId || !token) return;
+      const fId = String(facilityId);
+      const tok = String(token);
+      const baseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+      let url = `${baseUrl}/v1/stadium/facilities/${encodeURIComponent(fId)}/live-stream`;
+      const queryParams: string[] = [`token=${encodeURIComponent(tok)}`];
+      if (zoneId) queryParams.push(`zoneId=${encodeURIComponent(zoneId)}`);
+      const lastId = lastEventIdRef.current;
+      if (lastId) queryParams.push(`lastEventId=${encodeURIComponent(lastId)}`);
+
+      url += `?${queryParams.join('&')}`;
+
+      eventSource = new EventSource(url);
+
+      eventSource.onopen = () => {
+        if (!active) return;
+        setConnected(true);
+        retryDelay = 1000;
+      };
+
+      eventSource.onmessage = (event) => {
+        if (!active) return;
+        if (event.lastEventId) {
+          lastEventIdRef.current = event.lastEventId;
+        }
+        try {
+          const payload = JSON.parse(event.data);
+          if (typeof payload?.seq === 'number') {
+            setLastSeq(payload.seq);
+          }
+          queryClient.invalidateQueries({ queryKey: ['stadium.getOverview'] });
+          queryClient.invalidateQueries({ queryKey: ['stadium.listEventIssues'] });
+          queryClient.invalidateQueries({ queryKey: ['stadium.getPilotHealth'] });
+        } catch {
+          // ignore malformed frame
+        }
+      };
+
+      eventSource.onerror = () => {
+        if (!active) return;
+        setConnected(false);
+        if (eventSource) {
+          eventSource.close();
+          eventSource = null;
+        }
+        setTimeout(() => connect(), retryDelay);
+        retryDelay = Math.min(retryDelay * 2, 30000);
+      };
+    }
+
+    connect();
+
+    return () => {
+      active = false;
+      setConnected(false);
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
+  }, [facilityId, zoneId, token, queryClient]);
+
+  return { connected, lastSeq };
+}
+

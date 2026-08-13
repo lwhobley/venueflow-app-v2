@@ -2,11 +2,12 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Headers,
   Post,
 } from '@nestjs/common';
-import { IsBoolean, IsNumber, IsString, IsIn, Max, Min } from 'class-validator';
+import { IsBoolean, IsNumber, IsOptional, IsString, IsIn, Max, Min } from 'class-validator';
 import { CurrentUser } from '../../auth/current-user.decorator';
 import type { AuthUser } from '../../auth/auth.guard';
 import { isAdminRole } from '../../auth/roles';
@@ -46,6 +47,18 @@ class BreakStartDto {
   @IsString()
   @IsIn(['paid', 'unpaid'])
   type!: 'paid' | 'unpaid';
+}
+
+class ApprovePunchDto {
+  @IsString() punchId!: string;
+  @IsOptional() @IsString() managerNotes?: string;
+}
+
+class AdjustPunchDto {
+  @IsString() punchId!: string;
+  @IsNumber() clockInAt!: number;
+  @IsOptional() @IsNumber() clockOutAt?: number;
+  @IsString() adjustmentReason!: string;
 }
 
 @Controller('v1/time-clock')
@@ -361,4 +374,84 @@ export class TimeClockController {
     const updated = await this.prisma.timeEntry.findUniqueOrThrow({ where: { id: entry.id } });
     return mapClockEntry(updated, profile, venue);
   }
+
+  @RequireSubscription()
+  @Post('punches/approve')
+  async approvePunch(@VenueScope() scope: Scope, @Body() body: ApprovePunchDto) {
+    if (!scope || !isAdminRole(scope.role)) {
+      throw new ForbiddenException('Manager authorization required to approve time punches.');
+    }
+    const entry = await this.prisma.timeEntry.findFirst({
+      where: { id: body.punchId, venueId: scope.venueId },
+    });
+    if (!entry) throw new BadRequestException('Time entry not found.');
+
+    await this.prisma.eventAuditLog.create({
+      data: {
+        organizationId: scope.organizationId,
+        venueId: scope.venueId,
+        actorProfileId: scope.profileId,
+        entityType: 'time_clock_punch',
+        entityId: entry.id,
+        action: 'time_clock_punch_approved',
+        reason: body.managerNotes?.trim() || 'Manager punch approval',
+        metadata: { profileId: entry.profileId, clockInAt: entry.clockInAt.getTime(), clockOutAt: entry.clockOutAt?.getTime() ?? null },
+      },
+    });
+
+    return { status: 'approved', punchId: entry.id, approvedBy: scope.profileId, approvedAt: new Date().toISOString() };
+  }
+
+  @RequireSubscription()
+  @Post('punches/adjust')
+  async adjustPunch(@VenueScope() scope: Scope, @Body() body: AdjustPunchDto) {
+    if (!scope || !isAdminRole(scope.role)) {
+      throw new ForbiddenException('Manager authorization required to adjust time punches.');
+    }
+    if (!body.adjustmentReason?.trim()) {
+      throw new BadRequestException('A reason is required to adjust a time punch.');
+    }
+    const entry = await this.prisma.timeEntry.findFirst({
+      where: { id: body.punchId, venueId: scope.venueId },
+    });
+    if (!entry) throw new BadRequestException('Time entry not found.');
+
+    const newClockInAt = new Date(body.clockInAt);
+    const newClockOutAt = body.clockOutAt ? new Date(body.clockOutAt) : null;
+    const durationMinutes = newClockOutAt
+      ? Math.max(0, Math.round((newClockOutAt.getTime() - newClockInAt.getTime()) / 60000))
+      : null;
+
+    const updated = await this.prisma.timeEntry.update({
+      where: { id: entry.id },
+      data: {
+        clockInAt: newClockInAt,
+        clockOutAt: newClockOutAt,
+        durationMinutes,
+        isOpen: newClockOutAt === null,
+      },
+    });
+
+    await this.prisma.eventAuditLog.create({
+      data: {
+        organizationId: scope.organizationId,
+        venueId: scope.venueId,
+        actorProfileId: scope.profileId,
+        entityType: 'time_clock_punch',
+        entityId: entry.id,
+        action: 'time_clock_punch_adjusted',
+        reason: body.adjustmentReason.trim(),
+        metadata: {
+          originalClockInAt: entry.clockInAt.getTime(),
+          originalClockOutAt: entry.clockOutAt?.getTime() ?? null,
+          newClockInAt: newClockInAt.getTime(),
+          newClockOutAt: newClockOutAt?.getTime() ?? null,
+          adjustedBy: scope.profileId,
+        },
+      },
+    });
+
+    return { status: 'adjusted', punchId: updated.id, adjustedBy: scope.profileId, updated };
+  }
 }
+
