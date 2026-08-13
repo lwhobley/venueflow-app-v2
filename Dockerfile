@@ -39,8 +39,10 @@ COPY --from=build /app/packages/api/dist packages/api/dist
 COPY --from=build /app/packages/api/prisma packages/api/prisma
 COPY --from=build /app/packages/api/scripts/assert-database-target.mjs packages/api/scripts/assert-database-target.mjs
 
-# Prisma migrations run at startup as the non-root node user.
+# Database migrations are a separately authorized release job. The serving API
+# receives only its runtime DATABASE_URL and never carries a schema-owner
+# credential into a Cloud Run request container.
 RUN chown -R node:node /app
 USER node
 EXPOSE 8080
-CMD ["sh", "-c", "node packages/api/scripts/assert-database-target.mjs && DATABASE_URL=\"${DATABASE_DIRECT_URL:-$DATABASE_URL}\" ./node_modules/.bin/prisma migrate deploy --schema packages/api/prisma && exec node packages/api/dist/main.js"]
+CMD ["sh", "-c", "node packages/api/scripts/assert-database-target.mjs && exec node packages/api/dist/main.js"]

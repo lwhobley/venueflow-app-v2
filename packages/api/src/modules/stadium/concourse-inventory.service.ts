@@ -112,9 +112,12 @@ export class ConcourseInventoryService {
     return standSheet;
   }
 
-  async reconcileStandSheet(facilityId: string, standSheetId: string, dto: RecordCountOutDto) {
+  async reconcileStandSheet(facilityId: string, standSheetId: string, dto: RecordCountOutDto, idempotencyKey?: string) {
     const existing = await this.prisma.standSheet.findFirst({ where: { id: standSheetId, facilityId } });
     if (!existing) throw new NotFoundException('Stand sheet not found.');
+    if (existing.status === 'reconciled') {
+      throw new BadRequestException('Stand sheet is already reconciled. Use the authorized adjustment workflow.');
+    }
 
     const countInMap = new Map<string, StandItemCount>((existing.countIn as any[]).map(i => [i.code, i]));
     const restockMap = new Map<string, number>();
@@ -124,6 +127,20 @@ export class ConcourseInventoryService {
       });
     });
 
+    const requireExactCodes = (items: StandItemCount[], label: string) => {
+      const seen = new Set<string>();
+      for (const item of items) {
+        if (seen.has(item.code)) throw new BadRequestException(`${label} contains duplicate item code ${item.code}.`);
+        if (!countInMap.has(item.code)) throw new BadRequestException(`${label} includes an unknown item code ${item.code}.`);
+        seen.add(item.code);
+      }
+      for (const code of countInMap.keys()) {
+        if (!seen.has(code)) throw new BadRequestException(`${label} must include count-in item code ${code}.`);
+      }
+    };
+    requireExactCodes(dto.countOutItems, 'Count out');
+    requireExactCodes(dto.wasteItems, 'Waste count');
+    requireExactCodes(dto.posItemsSold, 'POS sales');
     const countOutMap = new Map<string, number>(dto.countOutItems.map(i => [i.code, i.count]));
     const wasteMap = new Map<string, number>(dto.wasteItems.map(i => [i.code, i.count]));
     const posSoldMap = new Map<string, number>(dto.posItemsSold.map(i => [i.code, i.count]));
@@ -150,6 +167,7 @@ export class ConcourseInventoryService {
       const posSoldQty = posSoldMap.get(code) || 0;
 
       const expectedSold = cIn + restockQty - cOut - wasteQty;
+      if (expectedSold < 0) throw new BadRequestException(`Count out and waste exceed available stock for ${code}.`);
       const varianceQuantity = expectedSold - posSoldQty;
       const itemExpectedRevenue = expectedSold * item.unitPriceCents;
       expectedSalesRevenueCents += itemExpectedRevenue;
@@ -171,8 +189,8 @@ export class ConcourseInventoryService {
 
     const varianceAmountCents = expectedSalesRevenueCents - dto.actualPosRevenueCents;
 
-    const reconciled = await this.prisma.standSheet.update({
-      where: { id: standSheetId },
+    const reconciled = await this.prisma.standSheet.updateMany({
+      where: { id: standSheetId, facilityId, status: { in: ['count_in_recorded', 'active_event'] } },
       data: {
         status: 'reconciled',
         countOut: dto.countOutItems as any,
@@ -184,8 +202,8 @@ export class ConcourseInventoryService {
         inventoryVariance: inventoryVariance as any,
       },
     });
-
-    return reconciled;
+    if (reconciled.count !== 1) throw new BadRequestException('Stand sheet state changed. Refresh and try again.');
+    return this.prisma.standSheet.findUniqueOrThrow({ where: { id: standSheetId } });
   }
 
   // --- Central Commissary Restock Transfers ---
@@ -193,6 +211,14 @@ export class ConcourseInventoryService {
     return this.prisma.inventoryTransferRequest.findMany({
       where: { facilityId },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async listHawkerSessions(facilityId: string) {
+    return this.prisma.hawkerVendorSession.findMany({
+      where: { facilityId },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
     });
   }
 
@@ -231,14 +257,16 @@ export class ConcourseInventoryService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.inventoryTransferRequest.update({
-        where: { id: transferId },
+      const transition = await tx.inventoryTransferRequest.updateMany({
+        where: { id: transferId, facilityId, status: transfer.status },
         data: { status, ...(status === 'completed' ? { completedAt: new Date() } : {}) },
       });
+      if (transition.count !== 1) throw new BadRequestException('Transfer state changed. Refresh and try again.');
+      const updated = await tx.inventoryTransferRequest.findUniqueOrThrow({ where: { id: transferId } });
       if (status !== 'completed') return updated;
 
       const activeSheet = await tx.standSheet.findFirst({
-        where: { facilityId, outletId: transfer.toOutletId, status: { in: ['count_in_recorded', 'active_event'] } },
+        where: { facilityId, outletId: transfer.toOutletId, ...(transfer.eventId ? { eventId: transfer.eventId } : {}), status: { in: ['count_in_recorded', 'active_event'] } },
         orderBy: { createdAt: 'desc' },
       });
       if (!activeSheet) return updated;
@@ -286,7 +314,8 @@ export class ConcourseInventoryService {
 
     checkedOutMap.forEach((item, code) => {
       const checkedInQty = checkedInMap.get(code) || 0;
-      const quantitySold = Math.max(0, item.quantity - checkedInQty);
+      if (checkedInQty > item.quantity) throw new BadRequestException(`Returned quantity exceeds checkout quantity for ${code}.`);
+      const quantitySold = item.quantity - checkedInQty;
       const subtotalCents = quantitySold * item.unitPriceCents;
       grossSalesCents += subtotalCents;
 
@@ -300,6 +329,10 @@ export class ConcourseInventoryService {
 
     const commissionRate = session.commissionRateBps / 10000.0;
     const commissionPayoutCents = Math.round(grossSalesCents * commissionRate);
+    const collectedCents = dto.cashCollectedCents + dto.cardCollectedCents;
+    if (collectedCents !== grossSalesCents) {
+      throw new BadRequestException(`Collected tender (${collectedCents}) must equal expected gross sales (${grossSalesCents}). Record a finance-approved variance before settlement.`);
+    }
 
     const settled = await this.prisma.hawkerVendorSession.update({
       where: { id: sessionId },

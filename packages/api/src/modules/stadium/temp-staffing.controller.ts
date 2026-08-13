@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Post } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Headers, Post } from '@nestjs/common';
 import { TempStaffingService, RosterImportRow } from './temp-staffing.service';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
@@ -14,7 +14,7 @@ class BulkImportRosterDto {
   @IsArray() @ArrayMaxSize(500) @ValidateNested({ each: true }) @Type(() => RosterImportRow) rows!: RosterImportRow[];
 }
 class KioskCheckInDto {
-  @IsString() @Matches(/^(?:\d{6}|QR-STADIUM-[A-Za-z0-9_-]+)$/) credential!: string;
+  @IsString() @Matches(/^(?:\d{6}|QR-[A-Za-z0-9_-]{16,})$/) credential!: string;
   @IsOptional() @IsString() outletId?: string;
 }
 
@@ -43,8 +43,11 @@ export class TempStaffingController {
   }
 
   @Post('kiosk-checkin')
-  async kioskCheckIn(@VenueScope() scope: Scope, @Body() body: KioskCheckInDto) {
-    return this.service.kioskCheckIn(scope.venueId, body.credential, body.outletId);
+  async kioskCheckIn(@VenueScope() scope: Scope, @Body() body: KioskCheckInDto, @Headers('idempotency-key') idempotencyKey?: string) {
+    if (!idempotencyKey || !/^[A-Za-z0-9._:-]{16,200}$/.test(idempotencyKey)) {
+      throw new ForbiddenException('A valid Idempotency-Key is required for kiosk check-in.');
+    }
+    return this.service.kioskCheckIn(scope.venueId, body.credential, body.outletId, idempotencyKey);
   }
 
   @Post('seed-200')

@@ -1,7 +1,13 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UnionComplianceService } from './union-compliance.service';
 import { IsBoolean, IsDateString, IsOptional, IsString } from 'class-validator';
+import { createHmac, pbkdf2, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
+import { promisify } from 'node:util';
+
+const pbkdf2Async = promisify(pbkdf2);
+const CREDENTIAL_ITERATIONS = 600_000;
+const CREDENTIAL_KEY_LENGTH = 32;
 
 export class RosterImportRow {
   @IsString() firstName!: string;
@@ -30,6 +36,8 @@ export interface KioskCheckInResult {
   };
 }
 
+type IssuedCredential = { workerId: string; pinCode: string; qrToken: string };
+
 @Injectable()
 export class TempStaffingService {
   constructor(
@@ -37,142 +45,149 @@ export class TempStaffingService {
     private readonly unionCompliance: UnionComplianceService,
   ) {}
 
-  async bulkImportRoster(organizationId: string, facilityId: string, agencyCode: string, rows: RosterImportRow[]) {
-    let agency = await this.prisma.tempAgency.findUnique({
-      where: { organizationId_facilityId_code: { organizationId, facilityId, code: agencyCode } },
-    });
-
-    if (!agency) {
-      agency = await this.prisma.tempAgency.create({
-        data: {
-          organizationId,
-          facilityId,
-          code: agencyCode,
-          name: `Agency ${agencyCode.toUpperCase()}`,
-          billingRateMultiplier: 1.35,
-        },
-      });
+  private pepper() {
+    const value = process.env.WORKER_CREDENTIAL_PEPPER;
+    if (!value || value.length < 32) {
+      throw new ServiceUnavailableException('Worker credential service is not configured. Set WORKER_CREDENTIAL_PEPPER.');
     }
-
-    const createdWorkers = [];
-    let pinCounter = 100000 + (await this.prisma.workerProfile.count({ where: { facilityId } }));
-
-    for (const row of rows) {
-      const pinCode = String(pinCounter++).padStart(6, '0');
-      const qrCodeIdentifier = `QR-STADIUM-${facilityId}-${pinCode}`;
-
-      const worker = await this.prisma.workerProfile.create({
-        data: {
-          organizationId,
-          facilityId,
-          agencyId: agency.id,
-          unionMemberId: row.unionMemberId ?? `LOCAL226-${pinCode}`,
-          firstName: row.firstName,
-          lastName: row.lastName,
-          pinCode,
-          qrCodeIdentifier,
-          certFoodSafety: row.certFoodSafety ?? true,
-          certAlcohol: row.certAlcohol ?? true,
-          certAlcoholExpiry: row.certAlcoholExpiry ? new Date(row.certAlcoholExpiry) : new Date(Date.now() + 180 * 86400000),
-          active: true,
-        },
-      });
-      createdWorkers.push(worker);
-    }
-
-    return {
-      agencyId: agency.id,
-      agencyName: agency.name,
-      importedCount: createdWorkers.length,
-      sampleWorker: createdWorkers[0],
-    };
+    return value;
   }
 
-  async kioskCheckIn(facilityId: string, credential: string, outletId?: string): Promise<KioskCheckInResult> {
-    // Match by PIN or QR Code Identifier
-    const worker = await this.prisma.workerProfile.findFirst({
-      where: {
-        facilityId,
-        OR: [
-          { pinCode: credential },
-          { qrCodeIdentifier: credential },
-        ],
-      },
-      include: { agency: true },
-    });
+  private lookupTag(facilityId: string, kind: 'pin' | 'qr', credential: string) {
+    return createHmac('sha256', this.pepper()).update(`${facilityId}:${kind}:${credential}`).digest('hex');
+  }
 
-    if (!worker) {
-      throw new NotFoundException('Worker credential not recognized.');
+  private async hashCredential(value: string) {
+    const salt = randomBytes(16).toString('hex');
+    const hash = await pbkdf2Async(value, salt, CREDENTIAL_ITERATIONS, CREDENTIAL_KEY_LENGTH, 'sha256') as Buffer;
+    return { salt, hash: hash.toString('hex') };
+  }
+
+  private async credentialsFor(facilityId: string): Promise<{ pinCode: string; qrToken: string; pinLookupTag: string; qrLookupTag: string; pinSalt: string; pinHash: string; qrSalt: string; qrHash: string }> {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const pinCode = String(randomInt(100_000, 1_000_000));
+      const qrToken = `QR-${randomBytes(24).toString('base64url')}`;
+      const pinLookupTag = this.lookupTag(facilityId, 'pin', pinCode);
+      const qrLookupTag = this.lookupTag(facilityId, 'qr', qrToken);
+      const existing = await this.prisma.workerProfile.findFirst({
+        where: { facilityId, OR: [{ pinLookupTag }, { qrLookupTag }] },
+        select: { id: true },
+      });
+      if (existing) continue;
+      const [pin, qr] = await Promise.all([this.hashCredential(pinCode), this.hashCredential(qrToken)]);
+      return { pinCode, qrToken, pinLookupTag, qrLookupTag, pinSalt: pin.salt, pinHash: pin.hash, qrSalt: qr.salt, qrHash: qr.hash };
+    }
+    throw new ServiceUnavailableException('Unable to issue a unique worker credential. Please retry the import.');
+  }
+
+  async bulkImportRoster(organizationId: string, facilityId: string, agencyCode: string, rows: RosterImportRow[]) {
+    const normalizedAgencyCode = agencyCode.trim().toUpperCase();
+    if (!normalizedAgencyCode) throw new BadRequestException('Agency code is required.');
+    let agency = await this.prisma.tempAgency.findUnique({
+      where: { organizationId_facilityId_code: { organizationId, facilityId, code: normalizedAgencyCode } },
+    });
+    if (!agency) {
+      agency = await this.prisma.tempAgency.create({
+        data: { organizationId, facilityId, code: normalizedAgencyCode, name: `Agency ${normalizedAgencyCode}`, billingRateMultiplier: 1.35 },
+      });
     }
 
-    // Evaluate RED condition: Expired Alcohol Cert or Active = false
-    const now = new Date();
-    const isAlcoholExpired = worker.certAlcoholExpiry && new Date(worker.certAlcoholExpiry) < now;
+    const prepared = await Promise.all(rows.map(async (row) => ({ row, credential: await this.credentialsFor(facilityId) })));
+    const created = await this.prisma.$transaction(async (tx) => Promise.all(prepared.map(async ({ row, credential }) => {
+      const worker = await tx.workerProfile.create({
+        data: {
+          organizationId,
+          facilityId,
+          agencyId: agency!.id,
+          unionMemberId: row.unionMemberId?.trim() || `TEMP-${randomBytes(8).toString('hex').toUpperCase()}`,
+          firstName: row.firstName.trim(),
+          lastName: row.lastName.trim(),
+          pinLookupTag: credential.pinLookupTag,
+          pinSalt: credential.pinSalt,
+          pinHash: credential.pinHash,
+          qrLookupTag: credential.qrLookupTag,
+          qrSalt: credential.qrSalt,
+          qrHash: credential.qrHash,
+          credentialsIssuedAt: new Date(),
+          // Missing certifications are never assumed true.
+          certFoodSafety: row.certFoodSafety === true,
+          certAlcohol: row.certAlcohol === true,
+          certAlcoholExpiry: row.certAlcoholExpiry ? new Date(row.certAlcoholExpiry) : null,
+          active: true,
+        },
+        select: { id: true },
+      });
+      return { worker, credential };
+    })));
 
-    if (!worker.active || !worker.certFoodSafety || isAlcoholExpired) {
+    // Raw credentials are returned only in this provisioning response. They are
+    // not stored, logged, or present in later roster responses.
+    const issuedCredentials: IssuedCredential[] = created.map(({ worker, credential }) => ({
+      workerId: worker.id,
+      pinCode: credential.pinCode,
+      qrToken: credential.qrToken,
+    }));
+    return { agencyId: agency.id, agencyName: agency.name, importedCount: created.length, issuedCredentials };
+  }
+
+  private async verifyCredential(value: string, salt: string | null, expectedHash: string | null) {
+    if (!salt || !expectedHash) return false;
+    const derived = await pbkdf2Async(value, salt, CREDENTIAL_ITERATIONS, CREDENTIAL_KEY_LENGTH, 'sha256') as Buffer;
+    const expected = Buffer.from(expectedHash, 'hex');
+    return derived.length === expected.length && timingSafeEqual(derived, expected);
+  }
+
+  async kioskCheckIn(facilityId: string, credential: string, outletId?: string, idempotencyKey?: string): Promise<KioskCheckInResult> {
+    const normalized = credential.trim();
+    const kind = /^\d{6}$/.test(normalized) ? 'pin' : 'qr';
+    const lookupTag = this.lookupTag(facilityId, kind, normalized);
+    const worker = await this.prisma.workerProfile.findFirst({
+      where: kind === 'pin' ? { facilityId, pinLookupTag: lookupTag } : { facilityId, qrLookupTag: lookupTag },
+      include: { agency: true },
+    });
+    if (!worker) throw new NotFoundException('Worker credential not recognized.');
+    const verified = kind === 'pin'
+      ? await this.verifyCredential(normalized, worker.pinSalt, worker.pinHash)
+      : await this.verifyCredential(normalized, worker.qrSalt, worker.qrHash);
+    if (!verified) throw new NotFoundException('Worker credential not recognized.');
+
+    const now = new Date();
+    const alcoholAuthorized = worker.certAlcohol && (!worker.certAlcoholExpiry || worker.certAlcoholExpiry >= now);
+    if (!worker.active || !worker.certFoodSafety || !alcoholAuthorized) {
       return {
         status: 'RED',
-        message: 'CHECK-IN BLOCKED: Expired Alcohol/Food Safety Certification or Union Barred.',
-        worker: {
-          id: worker.id,
-          fullName: `${worker.firstName} ${worker.lastName}`,
-          unionMemberId: worker.unionMemberId ?? undefined,
-          agencyName: worker.agency?.name,
-        },
+        message: 'CHECK-IN BLOCKED: active food-safety and alcohol certifications are required.',
+        worker: { id: worker.id, fullName: `${worker.firstName} ${worker.lastName}`, unionMemberId: worker.unionMemberId ?? undefined, agencyName: worker.agency?.name },
       };
     }
 
-    // Record Shift IN Punch
     await this.unionCompliance.recordPunch(
       worker.organizationId,
       worker.facilityId,
       worker.id,
       'IN',
-      credential.startsWith('QR-') ? 'qr_scan' : 'pin_entry',
+      kind === 'qr' ? 'qr_scan' : 'pin_entry',
       undefined,
       outletId,
+      undefined,
+      idempotencyKey,
     );
 
-    // Evaluate GREEN vs YELLOW condition
-    if (outletId) {
-      return {
-        status: 'GREEN',
-        message: `CHECKED-IN: Assigned to Outlet ${outletId}.`,
-        worker: {
-          id: worker.id,
-          fullName: `${worker.firstName} ${worker.lastName}`,
-          unionMemberId: worker.unionMemberId ?? undefined,
-          agencyName: worker.agency?.name,
-          assignedOutlet: outletId,
-        },
-      };
-    }
-
-    return {
-      status: 'YELLOW',
-      message: 'CHECKED-IN: Unassigned / Pending Supervisor Placement.',
-      worker: {
-        id: worker.id,
-        fullName: `${worker.firstName} ${worker.lastName}`,
-        unionMemberId: worker.unionMemberId ?? undefined,
-        agencyName: worker.agency?.name,
-      },
-    };
+    return outletId
+      ? { status: 'GREEN', message: `CHECKED-IN: Assigned to Outlet ${outletId}.`, worker: { id: worker.id, fullName: `${worker.firstName} ${worker.lastName}`, unionMemberId: worker.unionMemberId ?? undefined, agencyName: worker.agency?.name, assignedOutlet: outletId } }
+      : { status: 'YELLOW', message: 'CHECKED-IN: Unassigned / Pending Supervisor Placement.', worker: { id: worker.id, fullName: `${worker.firstName} ${worker.lastName}`, unionMemberId: worker.unionMemberId ?? undefined, agencyName: worker.agency?.name } };
   }
 
   async seedTempAgencyAndWorkers(organizationId: string, facilityId: string) {
-    const rows: RosterImportRow[] = [];
-    for (let i = 1; i <= 200; i++) {
-      rows.push({
-        firstName: `TempWorker`,
-        lastName: `${i}`,
-        unionMemberId: `LOCAL226-${100000 + i}`,
-        certFoodSafety: true,
-        certAlcohol: i !== 13, // Worker 13 has expired alcohol cert for RED test
-        certAlcoholExpiry: i === 13 ? '2025-01-01T00:00:00.000Z' : '2027-12-31T00:00:00.000Z',
-      });
-    }
-
+    if (process.env.NODE_ENV === 'production') throw new ForbiddenException('Demo workforce seeding is disabled in production.');
+    const rows: RosterImportRow[] = Array.from({ length: 200 }, (_, index) => ({
+      firstName: 'TempWorker',
+      lastName: String(index + 1),
+      unionMemberId: `LOCAL226-DEMO-${index + 1}`,
+      certFoodSafety: true,
+      certAlcohol: index !== 12,
+      certAlcoholExpiry: index === 12 ? '2025-01-01T00:00:00.000Z' : '2027-12-31T00:00:00.000Z',
+    }));
     return this.bulkImportRoster(organizationId, facilityId, 'INSTAWORK-01', rows);
   }
 }

@@ -9,7 +9,7 @@ import type { VerifiedCallback } from '@node-saml/passport-saml/lib/types';
 import { Authenticator } from 'passport';
 import type { Request, Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
-import { isAdminRole } from './roles';
+import { canManageEnterpriseSso } from './roles';
 
 const LOGIN_REQUEST_TTL_MS = 10 * 60 * 1000;
 const LOGIN_TICKET_TTL_MS = 5 * 60 * 1000;
@@ -90,7 +90,7 @@ export class EnterpriseSsoService {
       where: { organizationId_userId: { organizationId, userId } },
       select: { role: true, status: true },
     });
-    if (!membership || membership.status !== 'active' || !isAdminRole(membership.role)) {
+    if (!membership || membership.status !== 'active' || !canManageEnterpriseSso(membership.role)) {
       throw new ForbiddenException('Organization administrator access is required.');
     }
   }
@@ -231,8 +231,14 @@ export class EnterpriseSsoService {
         if (!provider.jitProvisioningEnabled) {
           throw new ForbiddenException('Your SSO identity has not been provisioned for this organization.');
         }
+        // An IdP assertion is bound only to its provider subject. Never merge a
+        // new provider identity into a global account merely because email text
+        // matches; that would let one tenant's IdP claim another tenant's user.
         const existingUser = await tx.user.findUnique({ where: { email }, select: { id: true } });
-        const user = existingUser ?? await tx.user.create({
+        if (existingUser) {
+          throw new ForbiddenException('This email already has an account. An organization administrator must complete the approved account-link process.');
+        }
+        const user = await tx.user.create({
           data: { email, emailVerifiedAt: new Date() },
           select: { id: true },
         });
@@ -257,13 +263,18 @@ export class EnterpriseSsoService {
         where: { organizationId_userId: { organizationId: provider.organizationId, userId } },
         select: { id: true },
       });
-      const existingScope = await tx.scopeAssignment.findFirst({
-        where: { membershipId: membership.id, facilityId, zoneId: mapping.zoneId ?? null, active: true },
+      // Reconcile the full provider-managed scope each successful login. Manual
+      // grants use a different workflow; stale SSO scopes must not remain live.
+      await tx.scopeAssignment.updateMany({ where: { membershipId: membership.id, active: true }, data: { active: false } });
+      const scopedAssignment = await tx.scopeAssignment.findFirst({
+        where: { membershipId: membership.id, facilityId, zoneId: mapping.zoneId ?? null },
         select: { id: true },
       });
-      if (!existingScope) {
+      if (scopedAssignment) {
+        await tx.scopeAssignment.update({ where: { id: scopedAssignment.id }, data: { active: true } });
+      } else {
         await tx.scopeAssignment.create({
-          data: { organizationId: provider.organizationId, membershipId: membership.id, facilityId, zoneId: mapping.zoneId ?? null },
+          data: { organizationId: provider.organizationId, membershipId: membership.id, facilityId, zoneId: mapping.zoneId ?? null, active: true },
         });
       }
 

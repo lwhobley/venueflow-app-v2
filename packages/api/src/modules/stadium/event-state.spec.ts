@@ -9,9 +9,11 @@ describe('event operational state machine', () => {
     expect(legacyStatusForState('pre_open')).toBe('ready');
   });
 
-  it('requires a reason for a post-approval rollback or unsupported override', () => {
+  it('permits only explicit, authorized recovery transitions after approval', () => {
     expect(() => assertEventTransition('approved', 'planning')).toThrow(BadRequestException);
     expect(() => assertEventTransition('live', 'archived')).toThrow(BadRequestException);
-    expect(() => assertEventTransition('live', 'archived', 'Event cancelled by venue security')).not.toThrow();
+    expect(() => assertEventTransition('live', 'archived', 'Event cancelled by venue security')).toThrow(BadRequestException);
+    expect(() => assertEventTransition('approved', 'planning', { reason: 'Forecast withdrawal', canOverride: true })).not.toThrow();
+    expect(() => assertEventTransition('archived', 'live', { reason: 'No longer cancelled', canOverride: true })).toThrow(BadRequestException);
   });
 });

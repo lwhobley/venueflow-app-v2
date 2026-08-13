@@ -24,8 +24,8 @@ Inspected the Prisma schema and migrations, NestJS venue scope/authorization, th
 
 - Backfill `organizationId` onto every legacy venue-owned model. The current repository has many mature restaurant/workforce models with only `venueId`; a safe backfill requires an organization migration, data migration, and a staged rollout rather than a broad untested rewrite.
 - Complete granular workflow permissions and a member-management migration for the requested Stadium role taxonomy. This pass adds the requested role values and server-side venue-operation authorization, but does not yet alter existing workforce role-management UI.
-- Persist forecasts, pars, recipes, labor plans, transfers, counts, 86s, and closeout actuals in canonical event-owned tables. The current plan generator is recommendation output only and inventory is venue-level.
-- Offline mutation queue with idempotency keys/conflict resolution and tests. There is no local queue or connectivity layer today; it must be added as a dedicated cross-screen capability.
+- Persist forecasts, pars, recipes, labor plans, transfers, counts, and 86s in canonical event-owned tables. Event closeout actuals are now persisted, but upstream POS/payroll/inventory feeds remain manual or CSV-based.
+- Expand the offline queue beyond event issues and readiness to every inventory/count/transfer surface, with per-operation conflict UI. The shared durable queue and replay path are now enabled for event issues/readiness.
 - Product analytics provider and a Pilot Health UI. No analytics client is configured; pilot metrics will be designed against the new audit events rather than fabricated third-party integrations.
 - Full demo data set and authenticated provider integrations. The pilot will use manual entry/CSV import paths until provider credentials and contracts are available.
 
@@ -43,3 +43,15 @@ Inspected the Prisma schema and migrations, NestJS venue scope/authorization, th
 3. Stadium API endpoints for lifecycle, issues, audit feed, and summary.
 4. React Query routes and a minimal Event Issues view in the existing F&B Operations screen.
 5. Pilot runbook, demo-seed design, and validation commands.
+
+## 2026-08-13 implementation update (priorities 1-3)
+
+- Added `EventCloseout` with forecast/actual sales, attendance, labor, inventory variance, outlet/inventory/labor results, finalization, adjustment reasons, and audit events.
+- Added a mobile closeout screen at `/event-closeout` linked from the event command center. Finalized records require an authorized adjustment reason before edits.
+- Added `organizationId` to `VenueEvent` and `EventFnbReadiness`, tenant-scoped RLS policies, and idempotent `clientMutationId` handling for event issues.
+- Added a durable SecureStore-backed offline write queue with replay on app activation. Event issue and readiness mutations enqueue on transient failures and replay without duplicating an issue.
+- Added role-aware operational issue authorization, leadership/audit-only Pilot Health access, server-side issue filters, and audit-derived pilot metrics for active events, readiness, critical issues, closeouts, and 24-hour user activity.
+- Added integration-readiness reporting for POS/reservations, recent POS activity, canonical inventory coverage, and the approved CSV/manual fallback path.
+- Added an NFL game-day brief with load-in, gates, pregame, kickoff, halftime, and postgame phases plus department activation and safety controls.
+- Added `EventPlanSnapshot` so generated forecasts, pars, labor, production, checklists, and data gaps are persisted against the event with tenant RLS.
+- Added a visible mobile sync status indicator for pending offline writes and automatic retry messaging.

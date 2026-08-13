@@ -22,7 +22,8 @@ export const VENUE_SCOPED_MODELS: ReadonlySet<string> = new Set([
   'SubscriptionEvent', 'TableAssignment', 'TableState', 'TableStateHistory', 'Team',
   'TimeEntry', 'VenueDocument', 'VenueEvent', 'VenueRole', 'Waitlist', 'WorkplaceJoinRequest',
   'EventExecutionWorkspace', 'EventExecutionTask', 'EventExecutionTimelineItem', 'EventExecutionVendor', 'EventExecutionIncident',
-  'EventIssue', 'EventAuditLog',
+  'EventIssue', 'EventAuditLog', 'EventCloseout', 'EventPlanSnapshot',
+  'AsyncWriteReceipt',
 ]);
 
 /** Stadium operational models use the newer `facilityId` tenant key. */

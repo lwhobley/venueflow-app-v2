@@ -2,6 +2,8 @@ import { useCallback } from 'react';
 import { useMutation as useReactMutation, useQuery as useReactQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from './api-client';
 import { useAuthStore } from './auth-store';
+import { enqueueOfflineMutation } from './offline-queue';
+import { createIdempotencyKey } from './idempotency';
 import type { RailwayFunctionRef } from './railway-api';
 
 type QueryArgs = Record<string, unknown> | 'skip' | undefined;
@@ -14,6 +16,9 @@ type Route = {
   body?: (args: any) => any;
   invalidate?: unknown[][];
   timeoutMs?: number;
+  offline?: boolean;
+  /** Server uses this header to make a write exactly-once across retries. */
+  idempotent?: boolean;
 };
 
 const queryRoutes: Record<string, Route> = {
@@ -52,6 +57,10 @@ const queryRoutes: Record<string, Route> = {
   'stadium.getOverview': { path: '/v1/stadium/overview' },
   'stadium.listEventIssues': { path: (args) => `/v1/stadium/events/${args.eventId}/issues` },
   'stadium.listEventAudit': { path: (args) => `/v1/stadium/events/${args.eventId}/audit` },
+  'stadium.getEventCloseout': { path: (args) => `/v1/stadium/events/${args.eventId}/closeout` },
+  'stadium.getPilotHealth': { path: '/v1/stadium/pilot-health' },
+  'stadium.getIntegrationReadiness': { path: '/v1/stadium/integration-readiness' },
+  'stadium.getNflBrief': { path: (args) => `/v1/stadium/events/${args.eventId}/nfl-brief` },
   'operations.listLogbook': { path: (args) => `/v1/operations/logbook${args?.limit ? `?limit=${args.limit}` : ''}` },
   'operations.getChecklist': {
     path: (args) => `/v1/operations/checklist?kind=${encodeURIComponent(args.kind)}${args?.date ? `&date=${encodeURIComponent(args.date)}` : ''}`,
@@ -146,8 +155,10 @@ const mutationRoutes: Record<string, Route> = {
   'stadium.createEventIssue': {
     path: (args) => `/v1/stadium/events/${args.eventId}/issues`,
     method: 'POST',
-    body: ({ outletId, issueType, severity, title, description, ownerUserId }) => ({ outletId, issueType, severity, title, description, ownerUserId }),
+    body: ({ outletId, issueType, severity, title, description, ownerUserId, clientMutationId }) => ({ outletId, issueType, severity, title, description, ownerUserId, clientMutationId }),
     invalidate: [['stadium', 'getOverview'], ['stadium', 'listEventIssues'], ['stadium', 'listEventAudit']],
+    offline: true,
+    idempotent: true,
   },
   'stadium.acknowledgeEventIssue': {
     path: (args) => `/v1/stadium/issues/${args.issueId}/acknowledge`,
@@ -166,6 +177,14 @@ const mutationRoutes: Record<string, Route> = {
     method: 'PATCH',
     body: ({ status, notes }) => ({ status, notes }),
     invalidate: [['stadium', 'getOverview'], ['operations', 'getCommandCenter']],
+    offline: true,
+    idempotent: true,
+  },
+  'stadium.upsertEventCloseout': {
+    path: (args) => `/v1/stadium/events/${args.eventId}/closeout`,
+    method: 'POST',
+    body: ({ actualAttendance, actualSalesCents, forecastSalesCents, laborHours, laborCostCents, inventoryVarianceCents, outletResults, inventoryResults, laborResults, notes, status, adjustmentReason }) => ({ actualAttendance, actualSalesCents, forecastSalesCents, laborHours, laborCostCents, inventoryVarianceCents, outletResults, inventoryResults, laborResults, notes, status, adjustmentReason }),
+    invalidate: [['stadium', 'getEventCloseout'], ['stadium', 'listEventAudit'], ['stadium', 'getOverview']],
   },
   'stadium.upsertPartner': {
     path: '/v1/stadium/partners',
@@ -203,8 +222,8 @@ const mutationRoutes: Record<string, Route> = {
     invalidate: [['app', 'getMe'], ['app', 'getDashboard']],
   },
   'app.deleteMyAccount': { path: '/v1/app/me', method: 'DELETE' },
-  'app.clockIn': { path: '/v1/time-clock/clock-in', method: 'POST', body: locationBody, invalidate: clockInvalidations() },
-  'app.clockOut': { path: '/v1/time-clock/clock-out', method: 'POST', body: locationBody, invalidate: clockInvalidations() },
+  'app.clockIn': { path: '/v1/time-clock/clock-in', method: 'POST', body: locationBody, invalidate: clockInvalidations(), idempotent: true },
+  'app.clockOut': { path: '/v1/time-clock/clock-out', method: 'POST', body: locationBody, invalidate: clockInvalidations(), idempotent: true },
   'app.breakStart': { path: '/v1/time-clock/break-start', method: 'POST', body: (args) => ({ type: args.type }), invalidate: clockInvalidations() },
   'app.breakEnd': { path: '/v1/time-clock/break-end', method: 'POST', body: () => ({}), invalidate: clockInvalidations() },
   'app.upsertVenueStaff': {
@@ -464,7 +483,7 @@ const mutationRoutes: Record<string, Route> = {
   'guests.rotateLeadsWebhookSecret': { path: '/v1/guests/rotate-webhook-secret', method: 'POST', body: () => ({}), invalidate: [['guests', 'listGuests']] },
   'operations.upsertManagerGoal': { path: '/v1/operations/manager-goal', method: 'PATCH', body: stripVenue, invalidate: [['operations', 'getManagerDashboard']] },
   'barInventory.upsertBarItem': { path: '/v1/bar-inventory', method: 'POST', body: stripVenue, invalidate: [['barInventory', 'getBarStock']] },
-  'barInventory.recordBarStockMovement': { path: (args) => `/v1/bar-inventory/${args.itemId}/movement`, method: 'POST', body: ({ movementType, quantity, notes }) => ({ movementType, quantity, notes }), invalidate: [['barInventory', 'getBarStock']] },
+  'barInventory.recordBarStockMovement': { path: (args) => `/v1/bar-inventory/${args.itemId}/movement`, method: 'POST', body: ({ movementType, quantity, notes }) => ({ movementType, quantity, notes }), invalidate: [['barInventory', 'getBarStock']], idempotent: true },
   'barInventory.importParsedBarItems': { path: '/v1/bar-inventory/import', method: 'POST', body: ({ items }) => ({ items }), invalidate: [['barInventory', 'getBarStock']] },
   'barInventory.parseBarInventoryInput': { path: '/v1/bar-inventory/parse', method: 'POST', body: ({ text, imageBase64, imageMimeType }) => ({ text, imageBase64, imageMimeType }) },
   'barInventory.updateItemCost': { path: (args) => `/v1/bar-inventory/${args.itemId}/cost`, method: 'PATCH', body: ({ unitCostCents }) => ({ unitCostCents }), invalidate: [['barInventory', 'getBarStock']] },
@@ -663,11 +682,33 @@ function getKey(ref: RailwayFunctionRef) {
 
 function requestRoute<T>(route: Route, args: any, signal?: AbortSignal): Promise<T> {
   const path = typeof route.path === 'function' ? route.path(args ?? {}) : route.path;
-  return apiRequest<T>(path, {
+  const rawBody = route.method && route.method !== 'GET' && route.method !== 'DELETE' ? route.body?.(args ?? {}) ?? args ?? {} : undefined;
+  const mutationId = route.idempotent || route.offline ? createIdempotencyKey() : undefined;
+  const body = mutationId
+    && rawBody
+    && typeof rawBody === 'object'
+    && !Array.isArray(rawBody)
+    && Object.prototype.hasOwnProperty.call(rawBody, 'clientMutationId')
+    ? { ...(rawBody as Record<string, unknown>), clientMutationId: (rawBody as Record<string, unknown>).clientMutationId ?? mutationId }
+    : rawBody;
+  const request = apiRequest<T>(path, {
     method: route.method ?? 'GET',
     signal,
     timeoutMs: route.timeoutMs,
-    body: route.method && route.method !== 'GET' && route.method !== 'DELETE' ? route.body?.(args ?? {}) ?? args ?? {} : undefined,
+    body,
+    headers: mutationId ? { 'Idempotency-Key': mutationId } : undefined,
+  });
+  if (!route.offline) return request;
+  return request.catch(async (error) => {
+    const transient = !(error instanceof Error && 'status' in error && typeof (error as { status?: unknown }).status === 'number' && ((error as { status: number }).status < 500 && (error as { status: number }).status !== 408 && (error as { status: number }).status !== 429));
+    if (!transient || !route.method || route.method === 'GET') throw error;
+    return enqueueOfflineMutation({
+      path,
+      method: route.method,
+      body,
+      idempotencyKey: mutationId ?? createIdempotencyKey(),
+      entityKey: route.path === '/v1/stadium/events' ? 'event:create' : path,
+    }) as T;
   });
 }
 

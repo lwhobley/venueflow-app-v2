@@ -54,7 +54,7 @@
       [
         "expo-splash-screen",
         {
-        "image": "./assets/stadium-wrangler-logo.png",
+          "image": "./assets/stadium-wrangler-logo.png",
           "resizeMode": "contain",
           "backgroundColor": "#F4FAFC"
         }
@@ -79,7 +79,8 @@
         }
       ],
       "expo-notifications",
-      "expo-font"
+      "expo-font",
+      "expo-sqlite"
     ],
     "runtimeVersion": {
       "policy": "appVersion"

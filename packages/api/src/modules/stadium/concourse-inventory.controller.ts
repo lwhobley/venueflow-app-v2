@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Headers, Param, Patch, Post, Query } from '@nestjs/common';
 import { ConcourseInventoryService, CreateStandSheetDto, RecordCountOutDto, CreateTransferDto, HawkerCheckoutDto, HawkerSettleDto } from './concourse-inventory.service';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
@@ -32,7 +32,10 @@ export class ConcourseInventoryController {
         membership: { userId: scope.userId, status: 'active' },
         AND: [
           { OR: [{ facilityId: null }, { facilityId: scope.venueId }] },
-          zoneId ? { OR: [{ zoneId: null }, { zoneId }] } : { zoneId: null },
+          // Listing an entire facility is valid for a facility-wide assignment;
+          // zone-only supervisors must provide a zone filter rather than being
+          // silently denied by a null-zone query.
+          zoneId ? { OR: [{ zoneId: null }, { zoneId }] } : { OR: [{ zoneId: null }, { zoneId: { not: null } }] },
         ],
       },
       select: { id: true },
@@ -61,11 +64,11 @@ export class ConcourseInventoryController {
   }
 
   @Post('stand-sheets/:id/reconcile')
-  async reconcileStandSheet(@VenueScope() scope: Scope, @Param('id') id: string, @Body() body: RecordCountOutDto) {
+  async reconcileStandSheet(@VenueScope() scope: Scope, @Param('id') id: string, @Body() body: RecordCountOutDto, @Headers('idempotency-key') idempotencyKey?: string) {
     const sheet = await this.prisma.standSheet.findFirst({ where: { id, facilityId: scope.venueId }, select: { zoneId: true } });
     if (!sheet) throw new ForbiddenException('Stand sheet is unavailable in this facility.');
     await this.assertOperator(scope, sheet.zoneId);
-    return this.service.reconcileStandSheet(scope.venueId, id, body);
+    return this.service.reconcileStandSheet(scope.venueId, id, body, idempotencyKey);
   }
 
   @Get('transfers')
@@ -78,6 +81,12 @@ export class ConcourseInventoryController {
   async submitTransferRequest(@VenueScope() scope: Scope, @Body() body: CreateTransferDto) {
     await this.assertOperator(scope);
     return this.service.submitTransferRequest({ ...body, organizationId: await this.organizationIdFor(scope.venueId), facilityId: scope.venueId, requestedBy: scope.fullName });
+  }
+
+  @Get('hawkers')
+  async listHawkerSessions(@VenueScope() scope: Scope) {
+    await this.assertOperator(scope);
+    return this.service.listHawkerSessions(scope.venueId);
   }
 
   @Patch('transfers/:id/status')

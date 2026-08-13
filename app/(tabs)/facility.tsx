@@ -13,18 +13,21 @@ type ZoneType = 'concession_stand' | 'grab_and_go' | 'portable_cart' | 'kiosk' |
 type FnbDepartment = 'concessions' | 'culinary_production' | 'premium_hospitality' | 'catering_banquets' | 'beverage_operations' | 'retail_fnb' | 'vendor_partners';
 type ZoneStatus = 'open' | 'restricted' | 'closed' | 'incident';
 type EventStatus = 'draft' | 'planning' | 'ready' | 'live' | 'completed' | 'cancelled';
+type EventOperationalState = 'draft' | 'planning' | 'approved' | 'pre_open' | 'live' | 'closing' | 'closed' | 'archived';
 
 type StadiumOverview = {
   venue: { name: string; stadiumCapacity: number | null; homeTeam: string | null };
   zones: Array<{ id: string; code: string; name: string; department: FnbDepartment; type: ZoneType; capacity: number | null; stadiumZone: string | null; level: string | null; status: ZoneStatus }>;
-  events: Array<{ id: string; title: string; eventType: string; status: EventStatus; operationalState?: string; startsAt: string; gatesOpenAt: string | null; expectedAttendance: number | null; ticketsScanned: number; opponentOrHeadliner: string | null; readinessPercent: number; openHighOrCriticalIssueCount?: number }>;
+  events: Array<{ id: string; title: string; eventType: string; status: EventStatus; operationalState: EventOperationalState; startsAt: string; gatesOpenAt: string | null; expectedAttendance: number | null; ticketsScanned: number; opponentOrHeadliner: string | null; readinessPercent: number; openHighOrCriticalIssueCount?: number }>;
   partners: Array<{ id: string; name: string; type: string; status: string; contactName: string | null; complianceExpiresAt: string | null; revenueShareBps: number | null }>;
 };
 
 const zoneTypes: ZoneType[] = ['concession_stand', 'grab_and_go', 'portable_cart', 'kiosk', 'food_vendor', 'commissary', 'production_kitchen', 'premium_suite', 'premium_club', 'loge_hospitality', 'in_seat_service', 'catering', 'banquet', 'bar', 'beer_cart', 'beverage', 'mobile_pickup', 'retail_fnb', 'partner_pop_up', 'back_of_house', 'other'];
 const departments: FnbDepartment[] = ['concessions', 'culinary_production', 'premium_hospitality', 'catering_banquets', 'beverage_operations', 'retail_fnb', 'vendor_partners'];
 const zoneStatusNext: Record<ZoneStatus, ZoneStatus> = { open: 'restricted', restricted: 'incident', incident: 'closed', closed: 'open' };
-const eventStatusNext: Partial<Record<EventStatus, EventStatus>> = { draft: 'planning', planning: 'ready', ready: 'live', live: 'completed' };
+const eventStateNext: Partial<Record<EventOperationalState, EventOperationalState>> = {
+  draft: 'planning', planning: 'approved', approved: 'pre_open', pre_open: 'live', live: 'closing', closing: 'closed', closed: 'archived',
+};
 
 const label = (value: string) => value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 
@@ -36,7 +39,7 @@ export default function FacilityScreen() {
   const generateEventPlan = useMutation(api.stadium.generateEventPlan);
   const updateZoneStatus = useMutation(api.stadium.updateZoneStatus);
   const createEvent = useMutation(api.stadium.createEvent);
-  const updateEventStatus = useMutation(api.stadium.updateEventStatus);
+  const updateEventState = useMutation(api.stadium.updateEventOperationalState);
   const upsertPartner = useMutation(api.stadium.upsertPartner);
   const [showZoneForm, setShowZoneForm] = useState(false);
   const [showEventForm, setShowEventForm] = useState(false);
@@ -128,6 +131,8 @@ export default function FacilityScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <CommandText palette={palette} variant="title">Upcoming events</CommandText>
           <Button compact mode="text" textColor={palette.primary} onPress={() => router.push('/event-issues')}>Live issues</Button>
+          <Button compact mode="text" textColor={palette.primary} onPress={() => router.push('/pilot-health')}>Pilot Health</Button>
+          <Button compact mode="text" textColor={palette.primary} onPress={() => router.push('/integration-readiness')}>Integrations</Button>
           {canManage ? <Button compact mode="text" textColor={palette.primary} onPress={() => setShowEventForm((value) => !value)}>Add event</Button> : null}
         </View>
         {showEventForm ? <View style={{ gap: spacing.sm }}>
@@ -141,11 +146,11 @@ export default function FacilityScreen() {
           <View key={event.id} style={{ borderTopWidth: 1, borderColor: palette.border, paddingTop: spacing.sm, gap: spacing.xs }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
               <View style={{ flex: 1 }}><CommandText palette={palette} variant="body" style={{ fontWeight: '800' }}>{event.title}</CommandText><CommandText palette={palette} variant="caption">{new Date(event.startsAt).toLocaleString()} · {event.expectedAttendance?.toLocaleString() ?? '—'} expected</CommandText></View>
-              <StatusPill palette={palette} tone={event.status === 'live' ? 'warn' : event.status === 'ready' || event.status === 'completed' ? 'good' : 'neutral'}>{label(event.status)}</StatusPill>
+              <StatusPill palette={palette} tone={event.operationalState === 'live' || event.operationalState === 'closing' ? 'warn' : event.operationalState === 'pre_open' || event.operationalState === 'closed' ? 'good' : 'neutral'}>{label(event.operationalState)}</StatusPill>
             </View>
             <CommandText palette={palette} variant="caption">F&B readiness {event.readinessPercent}% · {event.ticketsScanned.toLocaleString()} scanned</CommandText>
             {canManage ? <Button compact mode="contained-tonal" textColor={palette.primary} onPress={() => void buildEventPlan(event.id)}>Generate F&B plan</Button> : null}
-            {canManage && eventStatusNext[event.status] ? <Button compact mode="outlined" textColor={palette.primary} onPress={() => void updateEventStatus({ eventId: event.id, status: eventStatusNext[event.status] })}>Move to {label(eventStatusNext[event.status]!)}</Button> : null}
+            {canManage && eventStateNext[event.operationalState] ? <Button compact mode="outlined" textColor={palette.primary} onPress={() => void updateEventState({ eventId: event.id, state: eventStateNext[event.operationalState] })}>Move to {label(eventStateNext[event.operationalState]!)}</Button> : null}
           </View>
         )) : <CommandText palette={palette} variant="caption">No stadium events scheduled yet.</CommandText>}
       </CommandSurface>

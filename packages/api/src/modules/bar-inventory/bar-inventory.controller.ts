@@ -413,6 +413,7 @@ export class BarInventoryController {
         body.movementType === 'count'
           ? Math.max(0, body.quantity)
           : Math.max(0, previousOnHand + body.quantity);
+      const appliedQuantity = nextOnHand - previousOnHand;
       const now = new Date();
       await tx.barInventoryItem.update({
         where: { id: item.id },
@@ -427,7 +428,9 @@ export class BarInventoryController {
           venueId,
           itemId: item.id,
           movementType: body.movementType,
-          quantity: body.quantity,
+          quantity: appliedQuantity,
+          requestedQuantity: body.quantity,
+          appliedQuantity,
           previousOnHand,
           nextOnHand,
           notes: cleanText(body.notes) ?? null,

@@ -55,7 +55,11 @@ export class AuthGuard implements CanActivate {
 
     let payload: AuthUser;
     try {
-      payload = await this.jwt.verifyAsync<AuthUser>(token);
+      payload = await this.jwt.verifyAsync<AuthUser>(token, {
+        algorithms: ['HS256'],
+        issuer: process.env.JWT_ISSUER ?? 'venue-wrangler-enterprise',
+        audience: process.env.JWT_AUDIENCE ?? 'venue-wrangler-mobile',
+      });
     } catch {
       throw new UnauthorizedException('Invalid bearer token');
     }

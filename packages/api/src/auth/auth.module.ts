@@ -15,7 +15,16 @@ import { AuthService } from './auth.service';
         if (!secret) {
           throw new Error('JWT_SECRET environment variable is required');
         }
-        return { secret, signOptions: { expiresIn: '30d' } };
+        if (secret.length < 32) {
+          throw new Error('JWT_SECRET must contain at least 32 characters');
+        }
+        const issuer = config.get<string>('JWT_ISSUER', 'venue-wrangler-enterprise');
+        const audience = config.get<string>('JWT_AUDIENCE', 'venue-wrangler-mobile');
+        return {
+          secret,
+          signOptions: { expiresIn: '8h', issuer, audience, algorithm: 'HS256' },
+          verifyOptions: { issuer, audience, algorithms: ['HS256'] },
+        };
       },
     }),
   ],

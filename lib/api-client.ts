@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import { useAuthStore } from "./auth-store";
+import { createIdempotencyKey } from "./idempotency";
 import type { Role } from "./types";
 
 const configuredApiBaseUrl =
@@ -74,6 +75,12 @@ type RequestOptions = {
   body?: unknown;
   signal?: AbortSignal;
   timeoutMs?: number;
+  /**
+   * Per-request headers for operations such as idempotent event-day writes.
+   * Authentication and tenant headers are still always derived from the live
+   * authenticated session below and cannot be overridden by a caller.
+   */
+  headers?: Record<string, string>;
 };
 
 export async function apiRequest<T>(
@@ -107,6 +114,7 @@ export async function apiRequest<T>(
         ...(options.body !== undefined
           ? { "Content-Type": "application/json" }
           : {}),
+        ...options.headers,
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(venueId ? { "X-Venue-Id": venueId } : {}),
       },
@@ -296,13 +304,21 @@ export const appApi = {
     lng: number;
     accuracy: number;
     mocked: boolean;
-  }) => apiRequest("/v1/time-clock/clock-in", { method: "POST", body }),
+  }) => apiRequest("/v1/time-clock/clock-in", {
+    method: "POST",
+    body,
+    headers: { "Idempotency-Key": createIdempotencyKey() },
+  }),
   clockOut: (body: {
     lat: number;
     lng: number;
     accuracy: number;
     mocked: boolean;
-  }) => apiRequest("/v1/time-clock/clock-out", { method: "POST", body }),
+  }) => apiRequest("/v1/time-clock/clock-out", {
+    method: "POST",
+    body,
+    headers: { "Idempotency-Key": createIdempotencyKey() },
+  }),
   breakStart: (body: { type: "paid" | "unpaid" }) =>
     apiRequest("/v1/time-clock/break-start", { method: "POST", body }),
   breakEnd: () => apiRequest("/v1/time-clock/break-end", { method: "POST" }),

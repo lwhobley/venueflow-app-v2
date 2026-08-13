@@ -2,11 +2,12 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { UnionComplianceService } from './union-compliance.service';
 import { TempStaffingService } from './temp-staffing.service';
 
+process.env.WORKER_CREDENTIAL_PEPPER = 'test-worker-credential-pepper-is-at-least-32-characters';
+
 describe('Mass Temp Staffing & Union Compliance Services', () => {
   let unionService: UnionComplianceService;
   let staffingService: TempStaffingService;
   let prisma: any;
-  let wsGateway: any;
 
   beforeEach(() => {
     prisma = {
@@ -29,12 +30,10 @@ describe('Mass Temp Staffing & Union Compliance Services', () => {
         create: vi.fn(),
       },
     };
+    prisma.$executeRaw = vi.fn();
+    prisma.$transaction = vi.fn(async (callback: (tx: any) => unknown) => callback(prisma));
 
-    wsGateway = {
-      broadcastBeoUpdate: vi.fn(),
-    };
-
-    unionService = new UnionComplianceService(prisma, wsGateway);
+    unionService = new UnionComplianceService(prisma);
     staffingService = new TempStaffingService(prisma, unionService);
   });
 
@@ -83,9 +82,12 @@ describe('Mass Temp Staffing & Union Compliance Services', () => {
       code: 'INSTAWORK-01',
     });
 
-    prisma.workerProfile.create.mockImplementation(async ({ data }) => ({ id: `w_${data.pinCode}`, ...data }));
+    prisma.workerProfile.create.mockImplementation(async ({ data }) => ({ id: `w_${data.pinLookupTag}`, ...data }));
+    (staffingService as any).hashCredential = async (value: string) => ({ salt: `salt-${value}`, hash: `hash-${value}` });
 
-    const seedResult = await staffingService.seedTempAgencyAndWorkers('org-1', 'facility-1');
+    const seedResult = await staffingService.bulkImportRoster('org-1', 'facility-1', 'INSTAWORK-01', Array.from({ length: 200 }, (_, index) => ({
+      firstName: 'TempWorker', lastName: String(index + 1), certFoodSafety: true, certAlcohol: true,
+    })));
 
     expect(seedResult.importedCount).toBe(200);
     expect(prisma.workerProfile.create).toHaveBeenCalledTimes(200);
@@ -99,13 +101,21 @@ describe('Mass Temp Staffing & Union Compliance Services', () => {
       facilityId: 'facility-1',
       firstName: 'Alex',
       lastName: 'Mercer',
-      pinCode: '100001',
-      qrCodeIdentifier: 'QR-STADIUM-facility-1-100001',
+      pinLookupTag: 'unused-in-this-mock',
+      pinSalt: 'unused',
+      pinHash: 'unused',
+      qrLookupTag: 'unused',
+      qrSalt: 'unused',
+      qrHash: 'unused',
       certFoodSafety: true,
       certAlcohol: true,
       certAlcoholExpiry: new Date('2028-01-01'),
       active: true,
     };
+    // Credential verification is covered by integration tests. This service
+    // unit spec exercises only check-in status branching.
+    (staffingService as any).lookupTag = () => 'unused-in-this-mock';
+    (staffingService as any).verifyCredential = async () => true;
     prisma.workerProfile.findFirst.mockResolvedValueOnce(validWorker).mockResolvedValueOnce(validWorker);
 
     prisma.shiftPunch.create.mockResolvedValue({ id: 'p_101' });
@@ -122,8 +132,12 @@ describe('Mass Temp Staffing & Union Compliance Services', () => {
       facilityId: 'facility-1',
       firstName: 'John',
       lastName: 'Doe',
-      pinCode: '100013',
-      qrCodeIdentifier: 'QR-STADIUM-facility-1-100013',
+      pinLookupTag: 'unused-in-this-mock',
+      pinSalt: 'unused',
+      pinHash: 'unused',
+      qrLookupTag: 'unused',
+      qrSalt: 'unused',
+      qrHash: 'unused',
       certFoodSafety: true,
       certAlcohol: true,
       certAlcoholExpiry: new Date('2025-01-01'), // Expired!
