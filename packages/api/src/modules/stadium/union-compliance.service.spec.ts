@@ -82,7 +82,7 @@ describe('Mass Temp Staffing & Union Compliance Services', () => {
       code: 'INSTAWORK-01',
     });
 
-    prisma.workerProfile.create.mockImplementation(async ({ data }) => ({ id: `w_${data.pinLookupTag}`, ...data }));
+    prisma.workerProfile.create.mockImplementation(async ({ data }: any) => ({ id: `w_${data.pinLookupTag}`, ...data }));
     (staffingService as any).hashCredential = async (value: string) => ({ salt: `salt-${value}`, hash: `hash-${value}` });
 
     const seedResult = await staffingService.bulkImportRoster('org-1', 'facility-1', 'INSTAWORK-01', Array.from({ length: 200 }, (_, index) => ({

@@ -8,12 +8,15 @@ describe('StadiumRealtimeController SSE teardown and sequence numbering', () => 
     const controller = new StadiumRealtimeController(gateway);
 
     const scope = {
+      userId: 'user-1',
+      profileId: 'profile-1',
+      fullName: 'Manager',
       venueId: 'facility-1',
+      venueName: 'Facility',
       role: 'event_manager',
       allAccess: false,
-      profileId: 'profile-1',
-      userId: 'user-1',
-      organizationId: 'org-1',
+      subscriptionStatus: 'active',
+      trialEndsAt: null,
     };
 
     const stream$ = controller.streamFacilityEvents(scope, 'facility-1');
