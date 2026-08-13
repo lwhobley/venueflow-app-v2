@@ -2225,11 +2225,12 @@ enum EventCloseoutStatus {
 }
 
 model EventCloseout {
-  id                     String              @id @default(cuid())
+  id                     String                  @id @default(cuid())
   organizationId         String
   venueId                String
-  eventId                String              @unique
-  status                 EventCloseoutStatus @default(draft)
+  eventId                String                  @unique
+  status                 EventCloseoutStatus     @default(draft)
+  currentVersion         Int                     @default(1)
   actualAttendance       Int?
   actualSalesCents       Int?
   forecastSalesCents     Int?
@@ -2243,14 +2244,43 @@ model EventCloseout {
   finalizedAt            DateTime?
   finalizedBy            String?
   adjustmentReason       String?
-  createdAt              DateTime            @default(now())
-  updatedAt              DateTime            @updatedAt
-  organization           Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  venue                  Venue               @relation(fields: [venueId], references: [id], onDelete: Cascade)
-  event                  VenueEvent          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  venue                  Venue                   @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  event                  VenueEvent              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  revisions              EventCloseoutRevision[]
 
   @@index([organizationId, venueId, status])
   @@index([venueId, updatedAt])
+}
+
+model EventCloseoutRevision {
+  id                     String        @id @default(cuid())
+  organizationId         String
+  venueId                String
+  closeoutId             String
+  version                Int
+  parentRevisionId       String?
+  revisionHash           String
+  actualAttendance       Int?
+  actualSalesCents       Int?
+  forecastSalesCents     Int?
+  laborHours             Float?
+  laborCostCents         Int?
+  inventoryVarianceCents Int?
+  outletResults          Json?
+  inventoryResults       Json?
+  laborResults           Json?
+  adjustmentReason       String?
+  createdBy              String
+  approvedBy             String?
+  approvedAt             DateTime?
+  createdAt              DateTime      @default(now())
+  closeout               EventCloseout @relation(fields: [closeoutId], references: [id], onDelete: Cascade)
+
+  @@unique([closeoutId, version])
+  @@index([organizationId, venueId, closeoutId])
 }
 
 model EventPlanSnapshot {
