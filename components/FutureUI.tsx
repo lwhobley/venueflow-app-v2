@@ -9,16 +9,18 @@ import {
   ViewStyle,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { DesignPalette, radius, spacing } from "../lib/theme";
+import { DesignPalette, radius, shadowSoft, spacing } from "../lib/theme";
 
 type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 type CommandTextVariant =
-  "hero" | "title" | "label" | "body" | "caption" | "metric";
+  | "hero"
+  | "title"
+  | "label"
+  | "body"
+  | "caption"
+  | "metric";
 
-// Editorial surface: hairline border, sharp corners, no shadow, no glass
-// blur. `strong` is the one place allowed the soft radius (it reads as a
-// distinct panel, e.g. a manager brief); `inset` drops the border entirely
-// for content nested inside another surface.
+/** Fluid surface: soft radius, light border, optional elevation for strong panels. */
 export function CommandSurface({
   palette,
   children,
@@ -36,12 +38,17 @@ export function CommandSurface({
     <View
       style={[
         {
-          backgroundColor: "transparent",
-          borderWidth: 0,
-          borderColor: "transparent",
-          borderRadius: strong ? radius.soft : radius.sharp,
+          backgroundColor: strong
+            ? palette.surface
+            : inset
+              ? palette.surfaceSoft
+              : "transparent",
+          borderWidth: strong ? StyleSheet.hairlineWidth : 0,
+          borderColor: strong ? palette.border : "transparent",
+          borderRadius: strong ? radius.lg : radius.md,
           padding: inset ? spacing.md : spacing.lg,
           overflow: "hidden",
+          ...(strong ? shadowSoft : null),
         },
         style,
       ]}
@@ -67,14 +74,14 @@ export function CommandText({
       color: palette.charcoal,
       fontSize: 30,
       lineHeight: 36,
-      letterSpacing: -0.5,
+      letterSpacing: -0.6,
       fontWeight: "800",
     },
     title: {
       color: palette.charcoal,
       fontSize: 19,
       lineHeight: 25,
-      letterSpacing: -0.2,
+      letterSpacing: -0.25,
       fontWeight: "700",
     },
     label: {
@@ -82,13 +89,13 @@ export function CommandText({
       fontSize: 11,
       lineHeight: 15,
       fontWeight: "700",
-      letterSpacing: 0.6,
+      letterSpacing: 0.8,
       textTransform: "uppercase",
     },
     body: {
       color: palette.charcoal,
       fontSize: 14,
-      lineHeight: 20,
+      lineHeight: 21,
       fontWeight: "500",
     },
     caption: {
@@ -101,7 +108,7 @@ export function CommandText({
       color: palette.charcoal,
       fontSize: 28,
       lineHeight: 33,
-      letterSpacing: -0.4,
+      letterSpacing: -0.5,
       fontWeight: "700",
     },
   };
@@ -109,9 +116,7 @@ export function CommandText({
   return <Text style={[styles[variant], style]}>{children}</Text>;
 }
 
-// Sharp-cornered, mostly-borderless action — never a pill. `selected` fills
-// with the accent; the resting state is a quiet outline so a row of these
-// doesn't read as a chip tray.
+/** Soft-rounded action — resting outline, filled when selected. */
 export function CommandButton({
   palette,
   children,
@@ -137,18 +142,19 @@ export function CommandButton({
       onPress={onPress}
       style={({ pressed }) => [
         {
-          minHeight: 34,
-          paddingHorizontal: 12,
-          paddingVertical: 7,
-          borderRadius: radius.sharp,
+          minHeight: 36,
+          paddingHorizontal: 14,
+          paddingVertical: 8,
+          borderRadius: radius.pill,
           borderWidth: selected ? 0 : StyleSheet.hairlineWidth,
           borderColor: palette.border,
-          backgroundColor: selected ? palette.primary : "transparent",
+          backgroundColor: selected ? palette.primary : palette.surfaceSoft,
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "center",
           gap: 8,
-          opacity: pressed ? 0.7 : 1,
+          opacity: pressed ? 0.72 : 1,
+          transform: [{ scale: pressed ? 0.98 : 1 }],
         },
         style,
       ]}
@@ -157,15 +163,16 @@ export function CommandButton({
         <MaterialCommunityIcons
           name={icon}
           size={15}
-          color={selected ? palette.backgroundAlt : palette.muted}
+          color={selected ? palette.buttonText : palette.muted}
         />
       ) : null}
       <Text
         numberOfLines={1}
         style={{
-          color: selected ? palette.backgroundAlt : palette.charcoal,
-          fontSize: 12,
+          color: selected ? palette.buttonText : palette.charcoal,
+          fontSize: 12.5,
           fontWeight: "600",
+          letterSpacing: 0.1,
         }}
       >
         {children}
@@ -174,8 +181,7 @@ export function CommandButton({
   );
 }
 
-// A tag, not a pill: sharp corners, a colored left bar carries the tone
-// instead of a filled colored background.
+/** Soft status chip with tinted fill instead of a hard left bar. */
 export function StatusPill({
   palette,
   children,
@@ -196,11 +202,10 @@ export function StatusPill({
   return (
     <View
       style={{
-        borderLeftWidth: 2,
-        borderLeftColor: toneColor,
-        backgroundColor: palette.surfaceSoft,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
+        borderRadius: radius.pill,
+        backgroundColor: `${toneColor}18`,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
         alignSelf: "flex-start",
       }}
     >
@@ -235,8 +240,9 @@ export function MiniTrend({
         <View
           key={`${value}-${index}`}
           style={{
-            width: 5,
+            width: 6,
             height: Math.max(6, (value / max) * 34),
+            borderRadius: radius.pill,
             backgroundColor:
               index === values.length - 1
                 ? palette.primary
