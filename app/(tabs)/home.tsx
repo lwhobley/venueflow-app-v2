@@ -13,10 +13,10 @@ import { Skeleton } from '../../components/Skeleton';
 import { useAuthStore } from '../../lib/auth-store';
 import { usePushNotifications } from '../../lib/usePushNotifications';
 import { useAuthenticatedSession } from '../../lib/auth-readiness';
-import { useResponsive } from '../../lib/responsive';
 import { spacing, useDesignTheme } from '../../lib/theme';
 import { formatDuration, formatMoney } from '../../lib/format';
 import { canManageVenue } from '../../lib/permissions';
+import { useResponsive } from '../../lib/responsive';
 
 type NotificationItem = {
   _id: Id<'notificationEvents'>;
@@ -87,12 +87,12 @@ export default function HomeScreen() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: 'transparent' }} contentContainerStyle={{ paddingBottom: spacing.xxl }} showsVerticalScrollIndicator={false}>
-      <View style={{ backgroundColor: '#074426', paddingHorizontal: pagePadding, paddingTop: isPhone ? spacing.lg : spacing.xl, paddingBottom: spacing.lg, gap: spacing.md }}>
+      <View style={{ backgroundColor: '#013369', paddingHorizontal: pagePadding, paddingTop: isPhone ? spacing.lg : spacing.xl, paddingBottom: spacing.lg, gap: spacing.md, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
           <View style={{ flex: 1 }}>
             <Pressable onPress={() => router.push('/venue/settings')} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, flexDirection: 'row', alignItems: 'center', gap: 4 })}>
-              <CommandText palette={palette} variant="label" style={{ color: '#B6D6BE' }}>{venueName}</CommandText>
-              {venues.length > 1 ? <MaterialCommunityIcons name="swap-horizontal" size={16} color="#B6D6BE" /> : null}
+              <CommandText palette={palette} variant="label" style={{ color: '#A8C4E0' }}>{venueName}</CommandText>
+              {venues.length > 1 ? <MaterialCommunityIcons name="swap-horizontal" size={16} color="#A8C4E0" /> : null}
             </Pressable>
             <CommandText palette={palette} variant="hero" style={{ color: '#FFFFFF', fontSize: isPhone ? 26 : undefined }}>Stadium F&B Command</CommandText>
           </View>
@@ -105,11 +105,11 @@ export default function HomeScreen() {
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <MaterialCommunityIcons name="calendar-blank-outline" size={16} color="#D9EBDD" />
-            <CommandText palette={palette} variant="body" style={{ color: '#D9EBDD' }}>{currentDate}</CommandText>
+            <MaterialCommunityIcons name="calendar-blank-outline" size={16} color="#C5D6EB" />
+            <CommandText palette={palette} variant="body" style={{ color: '#C5D6EB' }}>{currentDate}</CommandText>
           </View>
-          <View style={{ width: StyleSheet.hairlineWidth, height: 20, backgroundColor: '#70A381' }} />
-          <CommandText palette={palette} variant="body" style={{ color: '#D9EBDD' }}>
+          <View style={{ width: StyleSheet.hairlineWidth, height: 20, backgroundColor: '#4A6FA5' }} />
+          <CommandText palette={palette} variant="body" style={{ color: '#C5D6EB' }}>
             {readiness?.status === 'blocked' ? 'Needs attention' : readiness?.status === 'at-risk' ? 'Watch F&B operations' : 'F&B command ready'}
           </CommandText>
         </View>
@@ -117,23 +117,25 @@ export default function HomeScreen() {
 
       <View style={{ paddingHorizontal: pagePadding, paddingTop: spacing.md }}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-          <Pressable onPress={() => router.push('/stadium-map')} style={({ pressed }) => [styles.quickActionTile, { backgroundColor: '#074426', opacity: pressed ? 0.8 : 1 }]}>
+          <Pressable onPress={() => router.push('/stadium-map')} style={({ pressed }) => [styles.quickActionTile, { backgroundColor: '#013369', opacity: pressed ? 0.8 : 1 }]}>
             <MaterialCommunityIcons name="stadium" size={22} color="#FFFFFF" />
             <CommandText palette={palette} variant="body" style={{ color: '#FFFFFF', fontWeight: '800' }}>Stadium Map</CommandText>
-            <CommandText palette={palette} variant="caption" style={{ color: '#B6D6BE' }}>Zones, Suites, Stands</CommandText>
+            <CommandText palette={palette} variant="caption" style={{ color: '#A8C4E0' }}>Zones, Suites, Stands</CommandText>
           </Pressable>
           <Pressable onPress={() => router.push('/event-command-center')} style={({ pressed }) => [styles.quickActionTile, { backgroundColor: palette.surface, borderColor: palette.border, borderWidth: 1, opacity: pressed ? 0.8 : 1 }]}>
-            <MaterialCommunityIcons name="shield-star-outline" size={22} color="#074426" />
+            <MaterialCommunityIcons name="shield-star-outline" size={22} color="#013369" />
             <CommandText palette={palette} variant="body" style={{ fontWeight: '800' }}>Command Center</CommandText>
             <CommandText palette={palette} variant="caption" style={{ color: palette.muted }}>Event Status & Gates</CommandText>
           </Pressable>
           <Pressable onPress={() => router.push('/stadium/stand-sheet')} style={({ pressed }) => [styles.quickActionTile, { backgroundColor: palette.surface, borderColor: palette.border, borderWidth: 1, opacity: pressed ? 0.8 : 1 }]}>
-            <MaterialCommunityIcons name="clipboard-list-outline" size={22} color="#7A5A35" />
+            <MaterialCommunityIcons name="clipboard-list-outline" size={22} color="#013369" />
             <CommandText palette={palette} variant="body" style={{ fontWeight: '800' }}>Stand Sheets</CommandText>
+            <CommandText palette={palette} variant="caption" style={{ color: palette.muted }}>Concession Cash & Par</CommandText>
           </Pressable>
           <Pressable onPress={() => router.push('/stadium/suite-attendant')} style={({ pressed }) => [styles.quickActionTile, { backgroundColor: palette.surface, borderColor: palette.border, borderWidth: 1, opacity: pressed ? 0.8 : 1 }]}>
-            <MaterialCommunityIcons name="room-service-outline" size={22} color="#7A5A35" />
+            <MaterialCommunityIcons name="room-service-outline" size={22} color="#013369" />
             <CommandText palette={palette} variant="body" style={{ fontWeight: '800' }}>Suite BEOs</CommandText>
+            <CommandText palette={palette} variant="caption" style={{ color: palette.muted }}>VIP Luxury Hospitality</CommandText>
           </Pressable>
         </View>
       </View>
@@ -142,7 +144,21 @@ export default function HomeScreen() {
         <View style={{ paddingHorizontal: pagePadding, paddingTop: spacing.md, gap: spacing.xs }}>
           <CommandText palette={palette} variant="label">More operations</CommandText>
           {MORE_OPS.map((item) => (
-            <Pressable key={item.href} onPress={() => router.push(item.href as any)} accessibilityRole="button" accessibilityLabel={item.label} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: palette.divider })}>
+            <Pressable
+              key={item.href}
+              onPress={() => router.push(item.href as any)}
+              accessibilityRole="button"
+              accessibilityLabel={item.label}
+              style={({ pressed }) => ({
+                opacity: pressed ? 0.7 : 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing.sm,
+                paddingVertical: spacing.sm,
+                borderBottomWidth: StyleSheet.hairlineWidth,
+                borderColor: palette.divider,
+              })}
+            >
               <MaterialCommunityIcons name={item.icon} size={20} color={palette.primary} />
               <CommandText palette={palette} variant="body" style={{ flex: 1, fontWeight: '600' }}>{item.label}</CommandText>
               <MaterialCommunityIcons name="chevron-right" size={18} color={palette.muted} />
@@ -156,12 +172,12 @@ export default function HomeScreen() {
       <View style={{ paddingHorizontal: pagePadding, paddingTop: spacing.lg }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <MaterialCommunityIcons name="map-marker-radius" size={20} color="#074426" />
+            <MaterialCommunityIcons name="map-marker-radius" size={20} color="#013369" />
             <CommandText palette={palette} variant="title">Stadium Layout & Zone Status</CommandText>
           </View>
           <Pressable onPress={() => router.push('/stadium-map')} style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, flexDirection: 'row', alignItems: 'center', gap: 2 })}>
-            <CommandText palette={palette} variant="caption" style={{ color: '#074426', fontWeight: '700' }}>Full Screen Map</CommandText>
-            <MaterialCommunityIcons name="chevron-right" size={16} color="#074426" />
+            <CommandText palette={palette} variant="caption" style={{ color: '#013369', fontWeight: '700' }}>Full Screen Map</CommandText>
+            <MaterialCommunityIcons name="chevron-right" size={16} color="#013369" />
           </Pressable>
         </View>
         <StadiumVenueMap />
@@ -224,16 +240,17 @@ const styles = StyleSheet.create({
     top: -7,
     minWidth: 17,
     height: 17,
-    borderRadius: 9,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#B8711B',
+    backgroundColor: '#D50A0A',
   },
   quickActionTile: {
     flex: 1,
     minWidth: 148,
-    borderRadius: 8,
+    borderRadius: 16,
     padding: spacing.md,
-    gap: 3,
+    gap: 4,
+    overflow: 'hidden',
   },
 });
