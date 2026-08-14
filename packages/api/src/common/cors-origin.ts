@@ -3,11 +3,16 @@ export const DEFAULT_CORS_ORIGINS = [
   'https://venuewrangler.com',
   'https://www.stadiumwrangler.com',
   'https://stadiumwrangler.com',
+  'https://desktop-web.venue-wrangler.pages.dev',
+  'https://venue-wrangler.pages.dev',
+  'https://venueflow-desktop-web.pages.dev',
   'http://localhost:8081',
   'http://127.0.0.1:8081',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
 ];
 
-const PRODUCTION_HOSTS = ['venuewrangler.com', 'stadiumwrangler.com'];
+const PRODUCTION_HOSTS = ['venuewrangler.com', 'stadiumwrangler.com', 'pages.dev'];
 
 export function isAllowedOrigin(origin: string, isProduction: boolean): boolean {
   if (!/^https?:\/\//i.test(origin)) return false;

@@ -9,10 +9,12 @@ import { useAuthStore } from "./auth-store";
 import { createIdempotencyKey } from "./idempotency";
 import type { Role } from "./types";
 
+const DEFAULT_API_BASE_URL = "https://stadium-wrangler-api-c57mm72zpa-ue.a.run.app/api";
+
 const configuredApiBaseUrl =
   process.env.EXPO_PUBLIC_API_URL ??
   (Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL as string | undefined) ??
-  null;
+  DEFAULT_API_BASE_URL;
 
 export class ApiError extends Error {
   constructor(
