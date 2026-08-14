@@ -9,7 +9,7 @@ import { useI18n } from '../lib/i18n';
 type ExpoTabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
 type TabRoute = ExpoTabBarProps['state']['routes'][number];
 
-export default function CarouselTabBar({ state, descriptors, navigation }: ExpoTabBarProps) {
+export function CarouselTabBar({ state, descriptors, navigation }: ExpoTabBarProps) {
   const insets = useSafeAreaInsets();
   const palette = useDesignTheme();
   const { isPhone } = useResponsive();
@@ -17,7 +17,6 @@ export default function CarouselTabBar({ state, descriptors, navigation }: ExpoT
 
   const visible = state.routes.filter((route: TabRoute) => {
     const { options } = descriptors[route.key];
-    // Expo Router hides tabs with href: null from the bar.
     return (options as { href?: string | null }).href !== null;
   });
 
