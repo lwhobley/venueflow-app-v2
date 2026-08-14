@@ -93,6 +93,14 @@ export default function StadiumMapScreen() {
             >
               POS Aggregator
             </CommandButton>
+            <CommandButton
+              palette={palette}
+              icon="shield-check-outline"
+              onPress={() => router.push('/stadium/multi-venue-compliance')}
+              style={{ flex: 1, minWidth: 150 }}
+            >
+              Multi-Venue Compliance
+            </CommandButton>
           </View>
         </View>
       </View>
