@@ -117,7 +117,7 @@ describe('e2e smoke: auth, billing, scheduling', () => {
         .get('/api/v1/app/billing')
         .set('Authorization', `Bearer ${token}`)
         .expect(200);
-      expect(res.body.plan).toBe('enterprise');
+      expect(res.body.platform).toBe('enterprise');
       expect(res.body.status).toBe('active');
     });
 
