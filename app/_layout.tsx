@@ -21,6 +21,7 @@ import { useAuthStore, type AuthState } from '../lib/auth-store';
 import { configurePurchases, logoutPurchases } from '../lib/purchases';
 import { queryClient } from '../lib/query-client';
 import { flushOfflineQueue } from '../lib/offline-queue';
+import { OfflineBanner } from '../components/OfflineBanner';
 
 const shouldIgnoreWebError = (message: string) =>
   message.includes('ResizeObserver loop completed with undelivered notifications') ||
@@ -32,18 +33,12 @@ const shouldIgnoreWebError = (message: string) =>
 export default function RootLayout() {
   const themeMode = useAppearanceStore((state) => state.mode);
   const palette = designPalettes[themeMode];
-  // Preload the MaterialCommunityIcons glyph font so icons render on web (Paper
-  // and the nav use it). We hold the first paint until it's loaded, otherwise
-  // web shows blank "tofu" squares. A load error still lets the app through.
   const [fontsLoaded, fontError] = useFonts({
     ...MaterialCommunityIcons.font,
     Fraunces_500Medium,
     Fraunces_600SemiBold,
     Fraunces_600SemiBold_Italic,
   });
-  // Only block the first paint on web (where an unloaded glyph font shows tofu
-  // squares). On native the icon font is bundled and renders fine, so never
-  // gate there — a gate could leave a blank screen if loading misbehaves.
   const fontsReady = Platform.OS !== 'web' || fontsLoaded || !!fontError;
   const authScopeKey = useAuthStore(
     (state: AuthState) => `${state.authEpoch}:${state.user?.id ?? 'anon'}:${state.venue?.id ?? 'none'}`,
@@ -129,10 +124,9 @@ export default function RootLayout() {
           <PaperProvider theme={makePaperTheme(themeMode)}>
             <A0PurchaseProvider config={{ appUserId: venueId ?? undefined, debug }}>
               <View style={{ flex: 1, width: '100%', backgroundColor: '#FFFFFF' }}>
-                {/* Top inset keeps content below the status bar / notch; the tab
-                    bar and screens handle the bottom inset. */}
                 <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }} edges={['top', 'left', 'right']}>
                   <ErrorBoundary>
+                    <OfflineBanner />
                     <SubscriptionGate>
                       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }} />
                     </SubscriptionGate>
