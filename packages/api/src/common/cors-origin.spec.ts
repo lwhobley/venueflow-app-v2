@@ -6,8 +6,12 @@ describe('CORS origin allowlist', () => {
     'https://stadiumwrangler.com',
     'https://app.stadiumwrangler.com',
     'https://venuewrangler.com',
+    'https://desktop-web.venue-wrangler.pages.dev',
+    'https://6716c575.venue-wrangler.pages.dev',
+    'https://venueflow-desktop-web.pages.dev',
     'http://localhost:8081',
     'http://127.0.0.1:8081',
+    'http://localhost:3000',
   ])('allows a trusted production or local preview origin: %s', (origin) => {
     expect(isAllowedOrigin(origin, true)).toBe(true);
   });
@@ -22,5 +26,6 @@ describe('CORS origin allowlist', () => {
 
   it('keeps the local Expo preview in the default middleware allowlist', () => {
     expect(DEFAULT_CORS_ORIGINS).toContain('http://localhost:8081');
+    expect(DEFAULT_CORS_ORIGINS).toContain('https://desktop-web.venue-wrangler.pages.dev');
   });
 });

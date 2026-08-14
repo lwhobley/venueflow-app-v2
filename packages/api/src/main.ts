@@ -9,7 +9,7 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { jsonBodyLimitForPath } from './common/body-limit';
 import { initSentry } from './observability/sentry';
-import { DEFAULT_CORS_ORIGINS, isAllowedOrigin } from './common/cors-origin';
+import { isAllowedOrigin } from './common/cors-origin';
 
 async function bootstrap() {
   // Error tracking — no-op unless SENTRY_DSN is set.
@@ -32,22 +32,8 @@ async function bootstrap() {
     console.warn('[Bootstrap] WARNING: TRUST_PROXY_HOPS is not explicitly configured in environment; defaulting to 1 for Cloud Run load balancer');
   }
   app.getHttpAdapter().getInstance().set('trust proxy', trustProxyHops);
-  // Only accept fully-qualified http(s) origins. In production, further
-  // restrict to product domains and local Expo previews so a mis-set CORS_ORIGINS cannot
-  // open credentialed browser access to an attacker origin.
+  
   const isProduction = process.env.NODE_ENV === 'production';
-  const origins = config
-    .get<string>('CORS_ORIGINS', '')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter((origin) => origin && isAllowedOrigin(origin, isProduction));
-  const allowedOrigins = Array.from(
-    new Set([
-      ...DEFAULT_CORS_ORIGINS,
-      ...(isProduction ? [] : origins),
-      ...(isProduction ? origins.filter((o) => isAllowedOrigin(o, true)) : origins),
-    ]),
-  );
 
   app.use(helmet());
   const STRIPE_WEBHOOK_PATH = '/api/v1/billing/stripe/webhook';
@@ -67,13 +53,32 @@ async function bootstrap() {
     })(req, res, next);
   });
   app.use(urlencoded({ extended: true, limit: config.get<string>('URLENCODED_BODY_LIMIT', '1mb') }));
-  // Fail closed: only origins explicitly listed (and production-filtered) are
-  // allowed. Native mobile clients don't send an Origin header, so this does
-  // not affect them; it only restricts browsers.
+
+  // Fail closed: only origins explicitly passing isAllowedOrigin are allowed.
+  // Native mobile clients don't send an Origin header, so this does not affect them.
   app.enableCors({
-    origin: allowedOrigins,
+    origin: (requestOrigin, callback) => {
+      if (!requestOrigin) {
+        return callback(null, true);
+      }
+      if (isAllowedOrigin(requestOrigin, isProduction)) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
     credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Requested-With',
+      'Accept',
+      'Origin',
+      'Idempotency-Key',
+      'x-venue-id',
+    ],
   });
+
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalPipes(
     new ValidationPipe({
