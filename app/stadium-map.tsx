@@ -36,7 +36,7 @@ export default function StadiumMapScreen() {
         style={[
           styles.headerBanner,
           {
-            backgroundColor: '#074426',
+            backgroundColor: '#013369',
             paddingHorizontal: pagePadding,
             paddingTop: isPhone ? spacing.lg : spacing.xl,
           },
@@ -50,17 +50,17 @@ export default function StadiumMapScreen() {
             style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, flexDirection: 'row', alignItems: 'center', gap: 6 })}
           >
             <MaterialCommunityIcons name="arrow-left" size={20} color="#FFFFFF" />
-            <CommandText palette={palette} variant="label" style={{ color: '#B6D6BE' }}>BACK</CommandText>
+            <CommandText palette={palette} variant="label" style={{ color: '#A8C4E0' }}>BACK</CommandText>
           </Pressable>
           <View style={styles.liveIndicator}>
             <View style={styles.liveDot} />
             <CommandText palette={palette} variant="caption" style={{ color: '#FFFFFF', fontWeight: '800' }}>LIVE F&B MAPPING</CommandText>
           </View>
         </View>
-        <CommandText palette={palette} variant="hero" style={{ color: '#FFFFFF', marginTop: spacing.xs, fontSize: isPhone ? 26 : undefined }}>
+        <CommandText palette={palette} variant="hero" style={{ color: '#FFFFFF', fontSize: isPhone ? 24 : undefined }}>
           Interactive Stadium Layout
         </CommandText>
-        <CommandText palette={palette} variant="body" style={{ color: '#D9EBDD', marginTop: 2 }}>
+        <CommandText palette={palette} variant="body" style={{ color: '#C5D6EB', marginTop: 2 }}>
           {isPhone
             ? 'Use Directory to open a stand, or Map for the bowl layout.'
             : 'Click concourses, club lounges, and luxury suite corridors to inspect live stand sheets, BEO orders, and stock pars.'}
@@ -98,13 +98,13 @@ export default function StadiumMapScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerBanner: { paddingBottom: spacing.lg, gap: spacing.xs },
+  headerBanner: { paddingBottom: spacing.lg, gap: spacing.xs, borderBottomLeftRadius: 22, borderBottomRightRadius: 22 },
   headerTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   liveIndicator: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: 'rgba(255, 255, 255, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4,
   },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#00E676' },
-  quickActionsCard: { borderRadius: 8, borderWidth: 1, padding: spacing.md, gap: spacing.md },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#D50A0A' },
+  quickActionsCard: { borderRadius: 16, borderWidth: 1, padding: spacing.md, gap: spacing.md },
   actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
 });
