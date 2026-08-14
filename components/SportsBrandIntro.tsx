@@ -13,7 +13,7 @@ import {
   nbaJerseyImages,
   nflHelmetImages,
 } from '../lib/intro-logo-map';
-import { VENUE_WRANGLER_ENTERPRISE_LOGO_URI } from '../lib/enterprise-logo-data';
+import { VENUE_WRANGLER_ENTERPRISE_LOGO_SOURCE } from '../lib/enterprise-logo-data';
 
 /**
  * Cold-start brand intro:
@@ -211,7 +211,7 @@ export function SportsBrandIntro({ onComplete }: { onComplete: () => void }) {
         Animated.timing(vignette, { toValue: 0, duration: 280, useNativeDriver: true }),
       ]),
       Animated.delay(LOGO_HOLD_MS),
-      // Fade black + logo away so Home is revealed underneath
+      // Fade black + logo so Home is revealed underneath
       Animated.timing(overlayOpacity, {
         toValue: 0,
         duration: LOGO_FADE_MS,
@@ -276,7 +276,7 @@ export function SportsBrandIntro({ onComplete }: { onComplete: () => void }) {
             ]}
           >
             <Image
-              source={{ uri: VENUE_WRANGLER_ENTERPRISE_LOGO_URI }}
+              source={VENUE_WRANGLER_ENTERPRISE_LOGO_SOURCE}
               style={styles.logo}
               resizeMode="contain"
               accessibilityLabel="Venue Wrangler Enterprise"
