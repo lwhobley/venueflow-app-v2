@@ -20,7 +20,7 @@ import {
  * - Left: 32 NFL clubs (helmet)
  * - Right: 30 NBA clubs (jersey)
  * - ≤180ms per flash
- * - Lasso pulls Venue Wrangler Enterprise logo
+ * - Lasso pulls Venue Wrangler Enterprise logo, then fades into Home
  *
  * Official marks only when you provide licensed assets via
  * lib/intro-logo-map.ts or EXPO_PUBLIC_INTRO_ASSET_BASE.
@@ -28,7 +28,8 @@ import {
 
 const FLASH_MS = 180;
 const LASSO_MS = 1400;
-const LOGO_HOLD_MS = 900;
+const LOGO_HOLD_MS = 1100;
+const LOGO_FADE_MS = 700;
 
 const NFL_CLUBS: { code: string; color: string; accent: string }[] = [
   { code: 'ARI', color: '#97233F', accent: '#000000' },
@@ -174,6 +175,7 @@ export function SportsBrandIntro({ onComplete }: { onComplete: () => void }) {
   const logoScale = useRef(new Animated.Value(0.55)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
   const vignette = useRef(new Animated.Value(0)).current;
+  const overlayOpacity = useRef(new Animated.Value(1)).current;
 
   const maxFlashSteps = useMemo(() => Math.max(NFL_CLUBS.length, NBA_CLUBS.length), []);
 
@@ -219,21 +221,30 @@ export function SportsBrandIntro({ onComplete }: { onComplete: () => void }) {
         Animated.timing(logoOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
       ]),
       Animated.parallel([
-        Animated.timing(logoX, { toValue: width / 2 - 90, duration: LASSO_MS * 0.45, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-        Animated.timing(logoY, { toValue: height / 2 - 90, duration: LASSO_MS * 0.45, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(logoX, { toValue: width / 2 - 130, duration: LASSO_MS * 0.45, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(logoY, { toValue: height / 2 - 130, duration: LASSO_MS * 0.45, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
         Animated.timing(logoScale, { toValue: 1, duration: LASSO_MS * 0.45, useNativeDriver: true }),
         Animated.timing(lassoX, { toValue: -width * 0.35, duration: LASSO_MS * 0.45, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
         Animated.timing(vignette, { toValue: 1, duration: LASSO_MS * 0.45, useNativeDriver: true }),
       ]),
+      Animated.parallel([
+        Animated.timing(lassoOpacity, { toValue: 0, duration: 280, useNativeDriver: true }),
+        Animated.timing(vignette, { toValue: 0, duration: 280, useNativeDriver: true }),
+      ]),
       Animated.delay(LOGO_HOLD_MS),
-      Animated.timing(logoOpacity, { toValue: 0, duration: 320, useNativeDriver: true }),
+      Animated.timing(overlayOpacity, {
+        toValue: 0,
+        duration: LOGO_FADE_MS,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
     ]).start(({ finished }) => {
       if (finished) {
         setPhase('done');
         onComplete();
       }
     });
-  }, [phase, height, width, lassoX, lassoY, lassoScale, lassoOpacity, logoX, logoY, logoScale, logoOpacity, vignette, onComplete]);
+  }, [phase, height, width, lassoX, lassoY, lassoScale, lassoOpacity, logoX, logoY, logoScale, logoOpacity, vignette, overlayOpacity, onComplete]);
 
   if (phase === 'done') return null;
 
@@ -241,7 +252,7 @@ export function SportsBrandIntro({ onComplete }: { onComplete: () => void }) {
   const nba = NBA_CLUBS[nbaIndex];
 
   return (
-    <View style={styles.root} pointerEvents="none">
+    <Animated.View style={[styles.root, { opacity: overlayOpacity }]} pointerEvents="none">
       <View style={styles.black} />
       {phase === 'flash' ? (
         <Animated.View style={[styles.flashRow, { opacity: flashOpacity }]}>
@@ -284,14 +295,17 @@ export function SportsBrandIntro({ onComplete }: { onComplete: () => void }) {
               },
             ]}
           >
-            <Image source={require('../assets/stadium-wrangler-logo.png')} style={styles.logo} resizeMode="contain" accessibilityLabel="Venue Wrangler Enterprise" />
-            <Text style={styles.logoCaption}>VENUE WRANGLER</Text>
-            <Text style={styles.logoSub}>ENTERPRISE</Text>
+            <Image
+              source={require('../assets/venue-wrangler-enterprise-logo.jpg')}
+              style={styles.logo}
+              resizeMode="contain"
+              accessibilityLabel="Venue Wrangler Enterprise"
+            />
           </Animated.View>
           <Animated.View pointerEvents="none" style={[styles.vignette, { opacity: vignette.interpolate({ inputRange: [0, 1], outputRange: [0, 0.55] }) }]} />
         </>
       ) : null}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -316,9 +330,7 @@ const styles = StyleSheet.create({
   lasso: { position: 'absolute', width: 160, height: 160, alignItems: 'center', justifyContent: 'center' },
   lassoLoop: { width: 120, height: 120, borderRadius: 60, borderWidth: 5, borderColor: '#C4A574', shadowColor: '#C4A574', shadowOpacity: 0.5, shadowRadius: 8 },
   lassoRope: { position: 'absolute', right: -40, width: 90, height: 5, borderRadius: 3, backgroundColor: '#A67C52', transform: [{ rotate: '12deg' }] },
-  logoWrap: { position: 'absolute', width: 180, alignItems: 'center', gap: 6 },
-  logo: { width: 160, height: 160 },
-  logoCaption: { color: '#FFFFFF', fontSize: 13, fontWeight: '800', letterSpacing: 3 },
-  logoSub: { color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '600', letterSpacing: 4 },
+  logoWrap: { position: 'absolute', width: 280, alignItems: 'center' },
+  logo: { width: 260, height: 260, borderRadius: 28 },
   vignette: { ...StyleSheet.absoluteFill, backgroundColor: '#000000' },
 });
