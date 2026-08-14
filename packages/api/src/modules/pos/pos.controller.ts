@@ -14,7 +14,7 @@ import { RequireSubscription } from '../../billing/require-subscription.decorato
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 
-type Scope = VenueScopedRequest['venueScope'];
+type Scope = NonNullable<VenueScopedRequest['venueScope']>;
 
 const num = (v: unknown) => (v == null ? 0 : Number(v));
 const MAX_INGEST_ROWS = 1000;
