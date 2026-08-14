@@ -296,8 +296,8 @@ export function SportsBrandIntro({ onComplete }: { onComplete: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  root: { ...StyleSheet.absoluteFillObject, zIndex: 9999, elevation: 9999 },
-  black: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000000' },
+  root: { ...StyleSheet.absoluteFill, zIndex: 9999, elevation: 9999 },
+  black: { ...StyleSheet.absoluteFill, backgroundColor: '#000000' },
   flashRow: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly', paddingHorizontal: 12 },
   column: { alignItems: 'center', gap: 14 },
   columnLabel: { color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: '800', letterSpacing: 3 },
@@ -320,5 +320,5 @@ const styles = StyleSheet.create({
   logo: { width: 160, height: 160 },
   logoCaption: { color: '#FFFFFF', fontSize: 13, fontWeight: '800', letterSpacing: 3 },
   logoSub: { color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '600', letterSpacing: 4 },
-  vignette: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000000' },
+  vignette: { ...StyleSheet.absoluteFill, backgroundColor: '#000000' },
 });

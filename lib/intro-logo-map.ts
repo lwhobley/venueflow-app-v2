@@ -80,5 +80,11 @@ export const nbaJerseyImages: Partial<Record<string, ImageSourcePropType>> = {
   // WAS: require('../assets/intro/nba/WAS.png'),
 };
 
-export const introRemoteAssetBase =
-  (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_INTRO_ASSET_BASE) || '';
+export const introRemoteAssetBase = (() => {
+  try {
+    const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+    return env?.EXPO_PUBLIC_INTRO_ASSET_BASE ?? '';
+  } catch {
+    return '';
+  }
+})();
