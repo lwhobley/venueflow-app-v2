@@ -108,10 +108,12 @@ ALTER TABLE "EventAuditLog" ENABLE ROW LEVEL SECURITY;
 -- Conditionally revoke privileges from Supabase roles if they exist
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-    REVOKE ALL ON TABLE "Organization", "EventIssue", "EventAuditLog" FROM anon, authenticated;
-  ELSE
-    REVOKE ALL ON TABLE "Organization", "EventIssue", "EventAuditLog" FROM authenticated;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+      REVOKE ALL ON TABLE "Organization", "EventIssue", "EventAuditLog" FROM anon, authenticated;
+    ELSE
+      REVOKE ALL ON TABLE "Organization", "EventIssue", "EventAuditLog" FROM authenticated;
+    END IF;
   END IF;
 END
 $$;
@@ -128,10 +130,12 @@ $$;
 -- Conditionally revoke function privileges
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-    REVOKE ALL ON FUNCTION public.prevent_event_audit_mutation() FROM PUBLIC, anon, authenticated;
-  ELSE
-    REVOKE ALL ON FUNCTION public.prevent_event_audit_mutation() FROM PUBLIC, authenticated;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+      REVOKE ALL ON FUNCTION public.prevent_event_audit_mutation() FROM PUBLIC, anon, authenticated;
+    ELSE
+      REVOKE ALL ON FUNCTION public.prevent_event_audit_mutation() FROM PUBLIC, authenticated;
+    END IF;
   END IF;
 END
 $$;
