@@ -3,22 +3,22 @@ import type { Tabs } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDesignTheme } from '../lib/theme';
+import { useResponsive } from '../lib/responsive';
 import { useI18n } from '../lib/i18n';
 
 type ExpoTabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
 type TabRoute = ExpoTabBarProps['state']['routes'][number];
 
-// Editorial tab bar: no filled pill indicator — the active tab is marked by
-// a hairline underline and the accent color, like a masthead nav rather than
-// a row of chips. Separated from content by a single top rule, not a shadow.
-export function CarouselTabBar({ state, descriptors, navigation }: ExpoTabBarProps) {
+export default function CarouselTabBar({ state, descriptors, navigation }: ExpoTabBarProps) {
   const insets = useSafeAreaInsets();
   const palette = useDesignTheme();
+  const { isPhone } = useResponsive();
   const { t } = useI18n();
 
   const visible = state.routes.filter((route: TabRoute) => {
-    const opts = descriptors[route.key].options as { href?: string | null };
-    return opts.href !== null;
+    const { options } = descriptors[route.key];
+    // Expo Router hides tabs with href: null from the bar.
+    return (options as { href?: string | null }).href !== null;
   });
 
   return (
@@ -57,7 +57,7 @@ export function CarouselTabBar({ state, descriptors, navigation }: ExpoTabBarPro
               accessibilityLabel={label}
               accessibilityState={isFocused ? { selected: true } : {}}
               style={{
-                minWidth: 66,
+                minWidth: isPhone ? 56 : 66,
                 paddingTop: 9,
                 paddingBottom: 7,
                 paddingHorizontal: 8,
