@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { TextInput } from 'react-native-paper';
 import { CommandButton, CommandText, StatusPill } from './FutureUI';
 import { spacing, useDesignTheme } from '../lib/theme';
+import { useResponsive } from '../lib/responsive';
 import { StadiumUnitDetailModal, type StadiumZoneItem } from './StadiumUnitDetailModal';
 
 export interface StadiumZoneData {
@@ -966,10 +967,9 @@ export function StadiumVenueMap({
   onSelectUnit?: (unit: StadiumZoneItem) => void;
 }) {
   const palette = useDesignTheme();
-  const { width: windowWidth } = useWindowDimensions();
-  const isMobile = windowWidth < 800;
+  const { width: windowWidth, isMobile, preferListFirst } = useResponsive();
 
-  const [mobileTab, setMobileTab] = useState<'map' | 'directory'>('map');
+  const [mobileTab, setMobileTab] = useState<'map' | 'directory'>(preferListFirst ? 'directory' : 'map');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedZoneId, setSelectedZoneId] = useState<string>(initialZoneId ?? 'ALL');
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(initialSelectedUnitId ?? null);
@@ -1368,7 +1368,7 @@ export function StadiumVenueMap({
                   TICKETMASTER 3D STADIUM ARCHITECTURE
                 </CommandText>
                 <CommandText palette={palette} variant="caption" style={{ color: '#68706A' }}>
-                  Concourses, 2 VIP bunkers, 8 service hubs, sidelines, endzones &amp; athlete lockers
+                  Concourses, 2 VIP bunkers, 8 service hubs, sidelines, endzones & athlete lockers
                 </CommandText>
               </View>
 
@@ -1424,7 +1424,7 @@ export function StadiumVenueMap({
                   <View style={styles.outerUpperDeckRing}>
                     <View style={styles.ringLabelHeader}>
                       <CommandText palette={palette} variant="caption" style={styles.tierPill}>
-                        LEVEL 400 · UPPER DECK &amp; SKYLINE
+                        LEVEL 400 · UPPER DECK & SKYLINE
                       </CommandText>
                     </View>
 
@@ -1465,7 +1465,7 @@ export function StadiumVenueMap({
                     <View style={styles.suitesTierRing}>
                       <View style={styles.ringLabelHeader}>
                         <CommandText palette={palette} variant="caption" style={styles.tierPillGold}>
-                          LEVEL 300 · LUXURY SUITES &amp; OWNERS BOXES
+                          LEVEL 300 · LUXURY SUITES & OWNERS BOXES
                         </CommandText>
                       </View>
 
@@ -1572,7 +1572,7 @@ export function StadiumVenueMap({
                         <View style={styles.concourseLevelRing}>
                           <View style={styles.ringLabelHeader}>
                             <CommandText palette={palette} variant="caption" style={styles.tierPillConcourse}>
-                              LEVEL 100 · CONCOURSE 8 SERVICE HUBS &amp; 2 FIELD BUNKERS
+                              LEVEL 100 · CONCOURSE 8 SERVICE HUBS & 2 FIELD BUNKERS
                             </CommandText>
                           </View>
 
@@ -1925,7 +1925,7 @@ export function StadiumVenueMap({
                   <View style={styles.undergroundLockerCompound}>
                     <View style={styles.ringLabelHeader}>
                       <CommandText palette={palette} variant="caption" style={styles.tierPillUnderground}>
-                        LEVEL 0 · ATHLETE COMPOUND &amp; PERFORMER AUX SUITES
+                        LEVEL 0 · ATHLETE COMPOUND & PERFORMER AUX SUITES
                       </CommandText>
                     </View>
 
