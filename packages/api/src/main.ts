@@ -57,7 +57,7 @@ async function bootstrap() {
   // Fail closed: only origins explicitly passing isAllowedOrigin are allowed.
   // Native mobile clients don't send an Origin header, so this does not affect them.
   app.enableCors({
-    origin: (requestOrigin, callback) => {
+    origin: (requestOrigin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       if (!requestOrigin) {
         return callback(null, true);
       }
