@@ -16,7 +16,19 @@ export default function StadiumMapScreen() {
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
       showsVerticalScrollIndicator={false}
     >
-      {/* Header Banner */}
+      <View
+        style={{
+          backgroundColor: palette.warning,
+          paddingHorizontal: spacing.md,
+          paddingVertical: spacing.sm,
+        }}
+        accessibilityRole="alert"
+        accessibilityLabel="Demo stadium layout. Sales and staff figures may be simulated."
+      >
+        <CommandText palette={palette} variant="caption" style={{ color: '#FFFFFF', fontWeight: '800' }}>
+          Demo layout — stand sales, staff names, and in-seat orders may be simulated until live POS/roster feeds are bound.
+        </CommandText>
+      </View>
       <View style={[styles.headerBanner, { backgroundColor: '#074426' }]}>
         <View style={styles.headerTopRow}>
           <Pressable
@@ -24,83 +36,29 @@ export default function StadiumMapScreen() {
             style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, flexDirection: 'row', alignItems: 'center', gap: 6 })}
           >
             <MaterialCommunityIcons name="arrow-left" size={20} color="#FFFFFF" />
-            <CommandText palette={palette} variant="label" style={{ color: '#B6D6BE' }}>
-              BACK
-            </CommandText>
+            <CommandText palette={palette} variant="label" style={{ color: '#B6D6BE' }}>BACK</CommandText>
           </Pressable>
-
           <View style={styles.liveIndicator}>
             <View style={styles.liveDot} />
-            <CommandText palette={palette} variant="caption" style={{ color: '#FFFFFF', fontWeight: '800' }}>
-              LIVE F&B MAPPING
-            </CommandText>
+            <CommandText palette={palette} variant="caption" style={{ color: '#FFFFFF', fontWeight: '800' }}>LIVE F&B MAPPING</CommandText>
           </View>
         </View>
-
-        <CommandText palette={palette} variant="hero" style={{ color: '#FFFFFF', marginTop: spacing.xs }}>
-          Interactive Stadium Layout
-        </CommandText>
+        <CommandText palette={palette} variant="hero" style={{ color: '#FFFFFF', marginTop: spacing.xs }}>Interactive Stadium Layout</CommandText>
         <CommandText palette={palette} variant="body" style={{ color: '#D9EBDD', marginTop: 2 }}>
           Click concourses, club lounges, and luxury suite corridors to inspect live stand sheets, BEO orders, and stock pars.
         </CommandText>
       </View>
-
-      {/* Main Map Explorer */}
       <View style={{ padding: spacing.md, gap: spacing.md }}>
         <StadiumVenueMap initialZoneId={initialZoneId} />
-
-        {/* Stadium Operations Quick Links */}
         <View style={[styles.quickActionsCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
           <CommandText palette={palette} variant="title">Stadium F&B Workflows</CommandText>
           <View style={styles.actionsGrid}>
-            <CommandButton
-              palette={palette}
-              icon="clipboard-list-outline"
-              onPress={() => router.push('/stadium/stand-sheet')}
-              style={{ flex: 1, minWidth: 150 }}
-            >
-              Stand Sheets
-            </CommandButton>
-            <CommandButton
-              palette={palette}
-              icon="room-service-outline"
-              onPress={() => router.push('/stadium/suite-attendant')}
-              style={{ flex: 1, minWidth: 150 }}
-            >
-              Suite Attendant
-            </CommandButton>
-            <CommandButton
-              palette={palette}
-              icon="chef-hat"
-              onPress={() => router.push('/stadium/kds')}
-              style={{ flex: 1, minWidth: 150 }}
-            >
-              Kitchen KDS
-            </CommandButton>
-            <CommandButton
-              palette={palette}
-              icon="warehouse"
-              onPress={() => router.push('/stadium/commissary')}
-              style={{ flex: 1, minWidth: 150 }}
-            >
-              Commissary Hub
-            </CommandButton>
-            <CommandButton
-              palette={palette}
-              icon="broadcast"
-              onPress={() => router.push('/stadium/pos-aggregator')}
-              style={{ flex: 1, minWidth: 150 }}
-            >
-              POS Aggregator
-            </CommandButton>
-            <CommandButton
-              palette={palette}
-              icon="shield-check-outline"
-              onPress={() => router.push('/stadium/multi-venue-compliance')}
-              style={{ flex: 1, minWidth: 150 }}
-            >
-              Multi-Venue Compliance
-            </CommandButton>
+            <CommandButton palette={palette} icon="clipboard-list-outline" onPress={() => router.push('/stadium/stand-sheet')} style={{ flex: 1, minWidth: 150 }}>Stand Sheets</CommandButton>
+            <CommandButton palette={palette} icon="room-service-outline" onPress={() => router.push('/stadium/suite-attendant')} style={{ flex: 1, minWidth: 150 }}>Suite Attendant</CommandButton>
+            <CommandButton palette={palette} icon="chef-hat" onPress={() => router.push('/stadium/kds')} style={{ flex: 1, minWidth: 150 }}>Kitchen KDS</CommandButton>
+            <CommandButton palette={palette} icon="warehouse" onPress={() => router.push('/stadium/commissary')} style={{ flex: 1, minWidth: 150 }}>Commissary Hub</CommandButton>
+            <CommandButton palette={palette} icon="broadcast" onPress={() => router.push('/stadium/pos-aggregator')} style={{ flex: 1, minWidth: 150 }}>POS Aggregator</CommandButton>
+            <CommandButton palette={palette} icon="shield-check-outline" onPress={() => router.push('/stadium/multi-venue-compliance')} style={{ flex: 1, minWidth: 150 }}>Multi-Venue Compliance</CommandButton>
           </View>
         </View>
       </View>
@@ -109,41 +67,10 @@ export default function StadiumMapScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerBanner: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.lg,
-    gap: spacing.xs,
-  },
-  headerTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  liveIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
-  },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#00E676',
-  },
-  quickActionsCard: {
-    borderRadius: 8,
-    borderWidth: 1,
-    padding: spacing.md,
-    gap: spacing.md,
-  },
-  actionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
+  headerBanner: { paddingHorizontal: spacing.lg, paddingTop: spacing.xl, paddingBottom: spacing.lg, gap: spacing.xs },
+  headerTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  liveIndicator: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255, 255, 255, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#00E676' },
+  quickActionsCard: { borderRadius: 8, borderWidth: 1, padding: spacing.md, gap: spacing.md },
+  actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
 });
