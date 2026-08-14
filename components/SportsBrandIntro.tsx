@@ -8,17 +8,22 @@ import {
   Text,
   View,
 } from 'react-native';
+import {
+  introRemoteAssetBase,
+  nbaJerseyImages,
+  nflHelmetImages,
+} from '../lib/intro-logo-map';
 
 /**
  * Cold-start brand intro:
  * - Black field
- * - Left: rapid stylized NFL-team-color helmet silhouettes (32)
- * - Right: rapid stylized NBA-team-color jersey silhouettes (30)
- * - Each card ≤ 500ms; columns run in parallel (~180ms each)
- * - Lasso sweeps in and pulls the Venue Wrangler logo to center
+ * - Left: 32 NFL clubs (helmet)
+ * - Right: 30 NBA clubs (jersey)
+ * - ≤180ms per flash
+ * - Lasso pulls Venue Wrangler Enterprise logo
  *
- * NOTE: Uses generic silhouettes + public team color associations only.
- * Does NOT embed official NFL or NBA trademarks/logos (license required).
+ * Official marks only when you provide licensed assets via
+ * lib/intro-logo-map.ts or EXPO_PUBLIC_INTRO_ASSET_BASE.
  */
 
 const FLASH_MS = 180;
@@ -73,7 +78,7 @@ const NBA_CLUBS: { code: string; color: string; accent: string }[] = [
   { code: 'GSW', color: '#1D428A', accent: '#FFC72C' },
   { code: 'HOU', color: '#CE1141', accent: '#000000' },
   { code: 'IND', color: '#002D62', accent: '#FDBB30' },
-  { code: 'LAC', color: '#C8102E', accent: '#1D428A' },
+  { code: 'LAC', color: '#C8102E', accent: '#1D42BA' },
   { code: 'LAL', color: '#552583', accent: '#FDB927' },
   { code: 'MEM', color: '#5D76A9', accent: '#12173F' },
   { code: 'MIA', color: '#98002E', accent: '#F9A01B' },
@@ -93,12 +98,32 @@ const NBA_CLUBS: { code: string; color: string; accent: string }[] = [
   { code: 'WAS', color: '#002B5C', accent: '#E31837' },
 ];
 
+function resolveArt(league: 'nfl' | 'nba', code: string) {
+  const local = league === 'nfl' ? nflHelmetImages[code] : nbaJerseyImages[code];
+  if (local) return { local };
+  if (introRemoteAssetBase) {
+    const base = introRemoteAssetBase.replace(/\/$/, '');
+    return { remote: `${base}/${league}/${code}.png` };
+  }
+  return {};
+}
+
 function HelmetCard({ code, color, accent }: { code: string; color: string; accent: string }) {
+  const art = resolveArt('nfl', code);
   return (
     <View style={[styles.card, { backgroundColor: color, borderColor: accent }]}>
-      <View style={[styles.helmetShell, { backgroundColor: accent === '#000000' ? '#FFFFFF' : accent }]}>
-        <View style={[styles.helmetFacemask, { borderColor: color }]} />
-      </View>
+      {art.local || art.remote ? (
+        <Image
+          source={art.local ?? { uri: art.remote }}
+          style={styles.officialArt}
+          resizeMode="contain"
+          accessibilityLabel={`${code} helmet`}
+        />
+      ) : (
+        <View style={[styles.helmetShell, { backgroundColor: accent === '#000000' ? '#FFFFFF' : accent }]}>
+          <View style={[styles.helmetFacemask, { borderColor: color }]} />
+        </View>
+      )}
       <Text style={[styles.cardCode, { color: accent === '#000000' || accent === '#FFFFFF' ? '#FFFFFF' : accent }]}>
         {code}
       </Text>
@@ -108,13 +133,23 @@ function HelmetCard({ code, color, accent }: { code: string; color: string; acce
 }
 
 function JerseyCard({ code, color, accent }: { code: string; color: string; accent: string }) {
+  const art = resolveArt('nba', code);
   return (
     <View style={[styles.card, { backgroundColor: color, borderColor: accent }]}>
-      <View style={[styles.jerseyBody, { backgroundColor: accent === '#FFFFFF' ? '#111111' : accent }]}>
-        <View style={[styles.jerseySleeve, styles.jerseySleeveL, { backgroundColor: color }]} />
-        <View style={[styles.jerseySleeve, styles.jerseySleeveR, { backgroundColor: color }]} />
-        <View style={styles.jerseyNumberBar} />
-      </View>
+      {art.local || art.remote ? (
+        <Image
+          source={art.local ?? { uri: art.remote }}
+          style={styles.officialArt}
+          resizeMode="contain"
+          accessibilityLabel={`${code} jersey`}
+        />
+      ) : (
+        <View style={[styles.jerseyBody, { backgroundColor: accent === '#FFFFFF' ? '#111111' : accent }]}>
+          <View style={[styles.jerseySleeve, styles.jerseySleeveL, { backgroundColor: color }]} />
+          <View style={[styles.jerseySleeve, styles.jerseySleeveR, { backgroundColor: color }]} />
+          <View style={styles.jerseyNumberBar} />
+        </View>
+      )}
       <Text style={[styles.cardCode, { color: '#FFFFFF' }]}>{code}</Text>
       <Text style={styles.cardKind}>JERSEY</Text>
     </View>
@@ -155,11 +190,9 @@ export function SportsBrandIntro({ onComplete }: { onComplete: () => void }) {
         duration: Math.min(90, FLASH_MS * 0.45),
         useNativeDriver: true,
       }).start();
-
       setNflIndex(step % NFL_CLUBS.length);
       setNbaIndex(step % NBA_CLUBS.length);
       step += 1;
-
       if (step >= maxFlashSteps) {
         setPhase('lasso');
         return;
@@ -176,71 +209,24 @@ export function SportsBrandIntro({ onComplete }: { onComplete: () => void }) {
 
   useEffect(() => {
     if (phase !== 'lasso') return;
-
     logoOpacity.setValue(0.85);
     lassoOpacity.setValue(1);
-
     Animated.sequence([
       Animated.parallel([
-        Animated.timing(lassoX, {
-          toValue: width * 0.12,
-          duration: LASSO_MS * 0.55,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(lassoY, {
-          toValue: height * 0.48,
-          duration: LASSO_MS * 0.55,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-        Animated.timing(lassoScale, {
-          toValue: 1.15,
-          duration: LASSO_MS * 0.55,
-          useNativeDriver: true,
-        }),
-        Animated.timing(logoOpacity, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true,
-        }),
+        Animated.timing(lassoX, { toValue: width * 0.12, duration: LASSO_MS * 0.55, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(lassoY, { toValue: height * 0.48, duration: LASSO_MS * 0.55, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(lassoScale, { toValue: 1.15, duration: LASSO_MS * 0.55, useNativeDriver: true }),
+        Animated.timing(logoOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
       ]),
       Animated.parallel([
-        Animated.timing(logoX, {
-          toValue: width / 2 - 90,
-          duration: LASSO_MS * 0.45,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(logoY, {
-          toValue: height / 2 - 90,
-          duration: LASSO_MS * 0.45,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(logoScale, {
-          toValue: 1,
-          duration: LASSO_MS * 0.45,
-          useNativeDriver: true,
-        }),
-        Animated.timing(lassoX, {
-          toValue: -width * 0.35,
-          duration: LASSO_MS * 0.45,
-          easing: Easing.in(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(vignette, {
-          toValue: 1,
-          duration: LASSO_MS * 0.45,
-          useNativeDriver: true,
-        }),
+        Animated.timing(logoX, { toValue: width / 2 - 90, duration: LASSO_MS * 0.45, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(logoY, { toValue: height / 2 - 90, duration: LASSO_MS * 0.45, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(logoScale, { toValue: 1, duration: LASSO_MS * 0.45, useNativeDriver: true }),
+        Animated.timing(lassoX, { toValue: -width * 0.35, duration: LASSO_MS * 0.45, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(vignette, { toValue: 1, duration: LASSO_MS * 0.45, useNativeDriver: true }),
       ]),
       Animated.delay(LOGO_HOLD_MS),
-      Animated.timing(logoOpacity, {
-        toValue: 0,
-        duration: 320,
-        useNativeDriver: true,
-      }),
+      Animated.timing(logoOpacity, { toValue: 0, duration: 320, useNativeDriver: true }),
     ]).start(({ finished }) => {
       if (finished) {
         setPhase('done');
@@ -257,7 +243,6 @@ export function SportsBrandIntro({ onComplete }: { onComplete: () => void }) {
   return (
     <View style={styles.root} pointerEvents="none">
       <View style={styles.black} />
-
       {phase === 'flash' ? (
         <Animated.View style={[styles.flashRow, { opacity: flashOpacity }]}>
           <View style={styles.column}>
@@ -271,7 +256,6 @@ export function SportsBrandIntro({ onComplete }: { onComplete: () => void }) {
           </View>
         </Animated.View>
       ) : null}
-
       {phase === 'lasso' ? (
         <>
           <Animated.View
@@ -283,12 +267,7 @@ export function SportsBrandIntro({ onComplete }: { onComplete: () => void }) {
                   { translateX: lassoX },
                   { translateY: lassoY },
                   { scale: lassoScale },
-                  {
-                    rotate: lassoX.interpolate({
-                      inputRange: [-width, width],
-                      outputRange: ['-25deg', '35deg'],
-                    }),
-                  },
+                  { rotate: lassoX.interpolate({ inputRange: [-width, width], outputRange: ['-25deg', '35deg'] }) },
                 ],
               },
             ]}
@@ -296,194 +275,50 @@ export function SportsBrandIntro({ onComplete }: { onComplete: () => void }) {
             <View style={styles.lassoLoop} />
             <View style={styles.lassoRope} />
           </Animated.View>
-
           <Animated.View
             style={[
               styles.logoWrap,
               {
                 opacity: logoOpacity,
-                transform: [
-                  { translateX: logoX },
-                  { translateY: logoY },
-                  { scale: logoScale },
-                ],
+                transform: [{ translateX: logoX }, { translateY: logoY }, { scale: logoScale }],
               },
             ]}
           >
-            <Image
-              source={require('../assets/stadium-wrangler-logo.png')}
-              style={styles.logo}
-              resizeMode="contain"
-              accessibilityLabel="Venue Wrangler Enterprise"
-            />
+            <Image source={require('../assets/stadium-wrangler-logo.png')} style={styles.logo} resizeMode="contain" accessibilityLabel="Venue Wrangler Enterprise" />
             <Text style={styles.logoCaption}>VENUE WRANGLER</Text>
             <Text style={styles.logoSub}>ENTERPRISE</Text>
           </Animated.View>
-
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.vignette,
-              {
-                opacity: vignette.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, 0.55],
-                }),
-              },
-            ]}
-          />
+          <Animated.View pointerEvents="none" style={[styles.vignette, { opacity: vignette.interpolate({ inputRange: [0, 1], outputRange: [0, 0.55] }) }]} />
         </>
       ) : null}
     </View>
   );
 }
 
-const CARD_W = 150;
-const CARD_H = 190;
-
 const styles = StyleSheet.create({
-  root: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 9999,
-    elevation: 9999,
-  },
-  black: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#000000',
-  },
-  flashRow: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-evenly',
-    paddingHorizontal: 12,
-  },
-  column: {
-    alignItems: 'center',
-    gap: 14,
-  },
-  columnLabel: {
-    color: 'rgba(255,255,255,0.45)',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 3,
-  },
-  centerRule: {
-    width: StyleSheet.hairlineWidth,
-    height: '42%',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-  },
-  card: {
-    width: CARD_W,
-    height: CARD_H,
-    borderRadius: 18,
-    borderWidth: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    overflow: 'hidden',
-  },
-  cardCode: {
-    fontSize: 28,
-    fontWeight: '900',
-    letterSpacing: 1,
-  },
-  cardKind: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 2,
-  },
-  helmetShell: {
-    width: 72,
-    height: 58,
-    borderRadius: 36,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    paddingBottom: 6,
-  },
-  helmetFacemask: {
-    width: 48,
-    height: 16,
-    borderWidth: 3,
-    borderTopWidth: 0,
-    borderRadius: 4,
-  },
-  jerseyBody: {
-    width: 64,
-    height: 70,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  jerseySleeve: {
-    position: 'absolute',
-    top: 8,
-    width: 22,
-    height: 18,
-    borderRadius: 4,
-  },
+  root: { ...StyleSheet.absoluteFillObject, zIndex: 9999, elevation: 9999 },
+  black: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000000' },
+  flashRow: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly', paddingHorizontal: 12 },
+  column: { alignItems: 'center', gap: 14 },
+  columnLabel: { color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: '800', letterSpacing: 3 },
+  centerRule: { width: StyleSheet.hairlineWidth, height: '42%', backgroundColor: 'rgba(255,255,255,0.18)' },
+  card: { width: 150, height: 190, borderRadius: 18, borderWidth: 3, alignItems: 'center', justifyContent: 'center', gap: 10, overflow: 'hidden' },
+  officialArt: { width: 96, height: 96 },
+  cardCode: { fontSize: 28, fontWeight: '900', letterSpacing: 1 },
+  cardKind: { color: 'rgba(255,255,255,0.55)', fontSize: 10, fontWeight: '700', letterSpacing: 2 },
+  helmetShell: { width: 72, height: 58, borderRadius: 36, borderBottomLeftRadius: 20, borderBottomRightRadius: 20, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 6 },
+  helmetFacemask: { width: 48, height: 16, borderWidth: 3, borderTopWidth: 0, borderRadius: 4 },
+  jerseyBody: { width: 64, height: 70, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  jerseySleeve: { position: 'absolute', top: 8, width: 22, height: 18, borderRadius: 4 },
   jerseySleeveL: { left: -14 },
   jerseySleeveR: { right: -14 },
-  jerseyNumberBar: {
-    width: 28,
-    height: 34,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-  },
-  lasso: {
-    position: 'absolute',
-    width: 160,
-    height: 160,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  lassoLoop: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 5,
-    borderColor: '#C4A574',
-    borderStyle: 'solid',
-    shadowColor: '#C4A574',
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-  },
-  lassoRope: {
-    position: 'absolute',
-    right: -40,
-    width: 90,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: '#A67C52',
-    transform: [{ rotate: '12deg' }],
-  },
-  logoWrap: {
-    position: 'absolute',
-    width: 180,
-    alignItems: 'center',
-    gap: 6,
-  },
-  logo: {
-    width: 160,
-    height: 160,
-  },
-  logoCaption: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 3,
-  },
-  logoSub: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 4,
-  },
-  vignette: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#000000',
-  },
+  jerseyNumberBar: { width: 28, height: 34, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.25)' },
+  lasso: { position: 'absolute', width: 160, height: 160, alignItems: 'center', justifyContent: 'center' },
+  lassoLoop: { width: 120, height: 120, borderRadius: 60, borderWidth: 5, borderColor: '#C4A574', shadowColor: '#C4A574', shadowOpacity: 0.5, shadowRadius: 8 },
+  lassoRope: { position: 'absolute', right: -40, width: 90, height: 5, borderRadius: 3, backgroundColor: '#A67C52', transform: [{ rotate: '12deg' }] },
+  logoWrap: { position: 'absolute', width: 180, alignItems: 'center', gap: 6 },
+  logo: { width: 160, height: 160 },
+  logoCaption: { color: '#FFFFFF', fontSize: 13, fontWeight: '800', letterSpacing: 3 },
+  logoSub: { color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '600', letterSpacing: 4 },
+  vignette: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000000' },
 });
