@@ -115,9 +115,6 @@ export const spacing = {
   huge: 64,
 };
 
-// Fluid system: soft curves by default. `sharp` is rare (dense data cells).
-// `soft`/`md`/`lg` are the everyday panel language; `pill` for chips and tab
-// indicators. Existing call sites keep working via the aliased keys.
 export const radius = {
   sharp: 6,
   soft: 14,
@@ -144,24 +141,22 @@ export const type = {
     fontSize: 20,
     lineHeight: 26,
     letterSpacing: -0.2,
-    fontWeight: "700",
+    fontWeight: "700" as const,
   },
   title: {
     fontSize: 28,
     lineHeight: 34,
     letterSpacing: -0.4,
-    fontWeight: "700",
+    fontWeight: "700" as const,
   },
   display: {
     fontSize: 40,
     lineHeight: 44,
     letterSpacing: -0.6,
-    fontWeight: "700",
+    fontWeight: "700" as const,
   },
 } as const;
 
-// Soft elevation for floating panels, tiles, and the tab bar. Prefer
-// translucent borders + light shadow over hard boxes.
 export const shadow = {
   shadowColor: designPalettes.light.shadow,
   shadowOpacity: 0.08,
@@ -194,26 +189,37 @@ export const authCardStyle = {
 } as const;
 
 export const glass = {
-  backgroundColor: designPalettes.light.glass,
-  borderColor: designPalettes.light.border,
-  borderWidth: 1,
+  backgroundColor: "transparent",
+  borderWidth: 0,
+  borderColor: "transparent",
 } as const;
 
-export function makePaperTheme(mode: ThemeMode) {
+export const makePaperTheme = (mode: ThemeMode) => {
   const palette = designPalettes[mode];
   const base = mode === "dark" ? MD3DarkTheme : MD3LightTheme;
+
   return {
     ...base,
+    dark: mode === "dark",
+    roundness: radius.md,
     colors: {
       ...base.colors,
       primary: palette.primary,
       secondary: palette.secondary,
       background: palette.background,
-      surface: palette.surface,
+      surface: palette.surfaceStrong,
       onSurface: palette.charcoal,
+      onBackground: palette.charcoal,
       outline: palette.border,
       error: palette.danger,
+      elevation: {
+        ...base.colors.elevation,
+        level1: palette.surface,
+        level2: palette.surfaceSoft,
+      },
     },
-    roundness: 14,
   };
-}
+};
+
+export const lightTheme = makePaperTheme("light");
+export const darkTheme = makePaperTheme("dark");
