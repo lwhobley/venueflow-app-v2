@@ -69,31 +69,16 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="schedule"
         options={{
+          href: null,
           title: "Rosters",
           tabBarIcon: icon("calendar-week"),
-        }}
-      />
-      <Tabs.Screen
-        name="floor"
-        options={{
-          title: t("nav.floor"),
-          href: null,
-          tabBarIcon: icon("floor-plan"),
-        }}
-      />
-      <Tabs.Screen
-        name="reservations"
-        options={{
-          title: t("nav.reservations"),
-          href: null,
-          tabBarIcon: icon("book-clock-outline"),
         }}
       />
       <Tabs.Screen
         name="guests"
         options={{
           title: "VIP Guests",
-          href: canManage ? "/guests" : null,
+          href: null,
           tabBarIcon: icon("account-heart-outline"),
         }}
       />
@@ -101,7 +86,7 @@ export default function TabsLayout() {
         name="integrations"
         options={{
           title: "POS & Hardware",
-          href: canManage ? "/integrations" : null,
+          href: null,
           tabBarIcon: icon("connection"),
         }}
       />
@@ -109,7 +94,7 @@ export default function TabsLayout() {
         name="sales"
         options={{
           title: "Concessions POS",
-          href: canManage ? "/sales" : null,
+          href: null,
           tabBarIcon: icon("cash-register"),
         }}
       />
@@ -129,7 +114,7 @@ export default function TabsLayout() {
         name="documents"
         options={{
           title: "BEOs & Docs",
-          href: "/documents",
+          href: null,
           tabBarIcon: icon("file-document-multiple-outline"),
         }}
       />
@@ -137,7 +122,7 @@ export default function TabsLayout() {
         name="reports"
         options={{
           title: "Reports & Recon",
-          href: canManage ? "/reports" : null,
+          href: null,
           tabBarIcon: icon("chart-box-outline"),
         }}
       />
@@ -145,7 +130,7 @@ export default function TabsLayout() {
         name="staff"
         options={{
           title: "Staff & Union",
-          href: canManage ? "/staff" : null,
+          href: null,
           tabBarIcon: icon("account-group"),
         }}
       />
