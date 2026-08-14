@@ -7,12 +7,14 @@ import { useMutation, useQueryState } from '../lib/railway-hooks';
 import { api } from '../lib/railway-api';
 import { CommandButton, CommandSurface, CommandText, StatusPill } from '../components/FutureUI';
 import { colors, spacing, useDesignTheme, radius } from '../lib/theme';
+import { useResponsive } from '../lib/responsive';
 
 export default function EventCommandCenterScreen() {
   const params = useLocalSearchParams<{ eventId?: string }>();
   const initialEventId = typeof params.eventId === 'string' ? params.eventId : '';
   const [selectedEventId, setSelectedEventId] = useState<string>(initialEventId);
   const palette = useDesignTheme();
+  const { pagePadding, isPhone } = useResponsive();
   const masterQuery = useQueryState(api.operations.getCommandCenter);
   const masterData = masterQuery.data as any;
   const generateWorkspace = useMutation(api.operations.generateExecutionWorkspace);
@@ -49,7 +51,7 @@ export default function EventCommandCenterScreen() {
   if (selectedEventId) {
     if (generationState === 'loading' || (workspaceQuery.isLoading && !workspace)) {
       return (
-        <View style={{ flex: 1, backgroundColor: '#FFFFFF', padding: spacing.lg, justifyContent: 'center', alignItems: 'center', gap: spacing.md }}>
+        <View style={{ flex: 1, backgroundColor: '#FFFFFF', padding: pagePadding, justifyContent: 'center', alignItems: 'center', gap: spacing.md }}>
           <MaterialCommunityIcons name="shield-sync-outline" size={48} color="#17643B" />
           <Text variant="titleLarge" style={{ fontWeight: '800', color: '#17643B' }}>Loading Event Workspace…</Text>
           <Text style={{ color: '#1D2420', textAlign: 'center' }}>Synchronizing live run-of-show, staffing, and execution tasks.</Text>
@@ -59,12 +61,12 @@ export default function EventCommandCenterScreen() {
     if (workspace) {
       const { event, readiness } = workspace;
       return (
-        <ScrollView style={{ flex: 1, backgroundColor: '#FFFFFF' }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+        <ScrollView style={{ flex: 1, backgroundColor: '#FFFFFF' }} contentContainerStyle={{ padding: pagePadding, gap: spacing.md, paddingBottom: spacing.xxl }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: isPhone ? 'wrap' : 'nowrap' }}>
             <Button mode="outlined" icon="arrow-left" textColor="#17643B" onPress={() => { if (initialEventId) router.back(); else setSelectedEventId(''); }}>{initialEventId ? 'Back' : 'Master Overview'}</Button>
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, minWidth: isPhone ? '100%' : undefined }}>
               <Text style={{ fontSize: 12, fontWeight: '700', color: '#17643B', textTransform: 'uppercase' }}>Event Command Center</Text>
-              <Text variant="titleLarge" style={{ fontWeight: '800', color: '#1D2420' }}>{event.title}</Text>
+              <Text variant="titleLarge" style={{ fontWeight: '800', color: '#1D2420', fontSize: isPhone ? 20 : undefined }}>{event.title}</Text>
             </View>
             <View style={{ backgroundColor: readiness?.status === 'blocked' ? '#FDE7E9' : '#EEF5F0', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }}>
               <Text style={{ color: readiness?.status === 'blocked' ? '#C5221F' : '#17643B', fontWeight: '800', fontSize: 13 }}>{`${readiness?.score ?? 0}% Ready`}</Text>
@@ -79,7 +81,7 @@ export default function EventCommandCenterScreen() {
                   <View key={`${blocker.code}-${blocker.title}`} style={{ padding: spacing.sm, backgroundColor: '#FFF8E1', borderRadius: 6, gap: 4 }}>
                     <Text style={{ fontWeight: '700', color: '#1D2420' }}>{blocker.title}</Text>
                     <Text style={{ fontSize: 12, color: '#1D2420' }}>{blocker.detail}</Text>
-                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
                       {blocker.code === 'OPEN_SHIFT' ? (<Button compact mode="outlined" textColor="#17643B" onPress={() => router.push('/(tabs)/schedule')}>Open Schedule</Button>) : null}
                       {blocker.code === 'UNASSIGNED_TABLE' ? (<Button compact mode="outlined" textColor="#17643B" onPress={() => router.push('/stadium-map')}>Open Stadium Map</Button>) : null}
                       {blocker.code === 'BEO_NOT_CONFIRMED' ? (<Button compact mode="outlined" textColor="#17643B" onPress={() => router.push('/(tabs)/guests')}>Open Event BEO</Button>) : null}
@@ -107,8 +109,8 @@ export default function EventCommandCenterScreen() {
             </Card.Content>
           </Card>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-            <Button mode="outlined" textColor="#17643B" style={{ flex: 1 }} onPress={() => router.push({ pathname: '/event-closeout', params: { eventId: selectedEventId } })}>Open Closeout</Button>
-            <Button mode="outlined" textColor="#17643B" style={{ flex: 1 }} onPress={() => router.push({ pathname: '/nfl-brief', params: { eventId: selectedEventId } })}>Game-Day Brief</Button>
+            <Button mode="outlined" textColor="#17643B" style={{ flex: 1, minWidth: isPhone ? 140 : undefined }} onPress={() => router.push({ pathname: '/event-closeout', params: { eventId: selectedEventId } })}>Open Closeout</Button>
+            <Button mode="outlined" textColor="#17643B" style={{ flex: 1, minWidth: isPhone ? 140 : undefined }} onPress={() => router.push({ pathname: '/nfl-brief', params: { eventId: selectedEventId } })}>Game-Day Brief</Button>
           </View>
         </ScrollView>
       );
@@ -123,14 +125,14 @@ export default function EventCommandCenterScreen() {
   const floor = masterData?.floor ?? { tableCount: 0, unassignedReservations: 0 };
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: '#FFFFFF' }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <View style={{ gap: 2 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: '#FFFFFF' }} contentContainerStyle={{ padding: pagePadding, gap: spacing.md, paddingBottom: spacing.xxl }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: spacing.sm }}>
+        <View style={{ gap: 2, flex: 1, minWidth: isPhone ? '70%' : undefined }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <MaterialCommunityIcons name="shield-star" size={20} color="#17643B" />
             <Text style={{ fontSize: 12, fontWeight: '800', color: '#17643B', textTransform: 'uppercase' }}>Operations Command Center</Text>
           </View>
-          <Text variant="headlineSmall" style={{ fontWeight: '900', color: '#1D2420' }}>Venue Master Workspace</Text>
+          <Text variant="headlineSmall" style={{ fontWeight: '900', color: '#1D2420', fontSize: isPhone ? 22 : undefined }}>Venue Master Workspace</Text>
         </View>
         <View style={{ backgroundColor: '#EEF5F0', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#17643B' }}>
           <Text style={{ color: '#17643B', fontWeight: '900', fontSize: 15 }}>{`${readiness?.score ?? 98}% Ready`}</Text>
@@ -145,17 +147,17 @@ export default function EventCommandCenterScreen() {
         <Card.Content style={{ gap: spacing.sm }}>
           <Text variant="titleMedium" style={{ fontWeight: '800', color: '#17643B' }}>Today's Operational Posture</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-            <View style={{ flexGrow: 1, flexBasis: 100, backgroundColor: '#FFFFFF', borderRadius: 6, padding: spacing.sm, borderWidth: 1, borderColor: '#D9E2DC' }}>
+            <View style={{ flexGrow: 1, flexBasis: isPhone ? '45%' : 100, backgroundColor: '#FFFFFF', borderRadius: 6, padding: spacing.sm, borderWidth: 1, borderColor: '#D9E2DC' }}>
               <Text style={{ fontSize: 20, fontWeight: '900', color: '#17643B' }}>{`${readiness?.categories?.staffing ?? 100}%`}</Text>
               <Text style={{ fontSize: 11, color: '#1D2420', fontWeight: '700' }}>Staffing Coverage</Text>
               <Text style={{ fontSize: 10, color: '#17643B' }}>{staffing.covered}/{staffing.scheduled || '—'} shifts</Text>
             </View>
-            <View style={{ flexGrow: 1, flexBasis: 100, backgroundColor: '#FFFFFF', borderRadius: 6, padding: spacing.sm, borderWidth: 1, borderColor: '#D9E2DC' }}>
+            <View style={{ flexGrow: 1, flexBasis: isPhone ? '45%' : 100, backgroundColor: '#FFFFFF', borderRadius: 6, padding: spacing.sm, borderWidth: 1, borderColor: '#D9E2DC' }}>
               <Text style={{ fontSize: 20, fontWeight: '900', color: '#17643B' }}>{`${readiness?.categories?.setup ?? 100}%`}</Text>
               <Text style={{ fontSize: 11, color: '#1D2420', fontWeight: '700' }}>Opening Prep</Text>
               <Text style={{ fontSize: 10, color: '#17643B' }}>{setup.checklistOpen} checklists open</Text>
             </View>
-            <View style={{ flexGrow: 1, flexBasis: 100, backgroundColor: '#FFFFFF', borderRadius: 6, padding: spacing.sm, borderWidth: 1, borderColor: '#D9E2DC' }}>
+            <View style={{ flexGrow: 1, flexBasis: isPhone ? '45%' : 100, backgroundColor: '#FFFFFF', borderRadius: 6, padding: spacing.sm, borderWidth: 1, borderColor: '#D9E2DC' }}>
               <Text style={{ fontSize: 20, fontWeight: '900', color: '#17643B' }}>{`${readiness?.categories?.floor ?? 100}%`}</Text>
               <Text style={{ fontSize: 11, color: '#1D2420', fontWeight: '700' }}>Floor Readiness</Text>
               <Text style={{ fontSize: 10, color: '#17643B' }}>{floor.tableCount} tables active</Text>
@@ -173,7 +175,7 @@ export default function EventCommandCenterScreen() {
             </View>
           ) : events.map((event: any) => (
             <Pressable key={event._id} onPress={() => setSelectedEventId(event._id)} style={({ pressed }) => ({ padding: spacing.md, backgroundColor: pressed ? '#EEF5F0' : '#F6FAF7', borderRadius: 6, borderWidth: 1, borderColor: '#D9E2DC', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' })}>
-              <View style={{ gap: 2 }}>
+              <View style={{ gap: 2, flex: 1 }}>
                 <Text style={{ fontWeight: '800', color: '#1D2420', fontSize: 15 }}>{event.title}</Text>
                 <Text style={{ color: '#17643B', fontSize: 12 }}>{new Date(event.startsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {event.expectedGuests ?? '—'} expected attendees</Text>
               </View>
