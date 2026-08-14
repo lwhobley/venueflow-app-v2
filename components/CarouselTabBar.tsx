@@ -26,13 +26,14 @@ export function CarouselTabBar({ state, descriptors, navigation }: ExpoTabBarPro
         backgroundColor: palette.backgroundAlt,
         borderTopWidth: StyleSheet.hairlineWidth,
         borderTopColor: palette.divider,
-        paddingBottom: insets.bottom,
+        paddingBottom: Math.max(insets.bottom, 6),
+        paddingTop: 4,
       }}
     >
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 14, alignItems: 'center' }}
+        contentContainerStyle={{ paddingHorizontal: 12, alignItems: 'center', gap: 2 }}
       >
         {visible.map((route: TabRoute) => {
           const { options } = descriptors[route.key];
@@ -56,15 +57,15 @@ export function CarouselTabBar({ state, descriptors, navigation }: ExpoTabBarPro
               accessibilityLabel={label}
               accessibilityState={isFocused ? { selected: true } : {}}
               style={{
-                minWidth: isPhone ? 56 : 66,
-                paddingTop: 9,
-                paddingBottom: 7,
-                paddingHorizontal: 8,
-                marginHorizontal: 3,
+                minWidth: isPhone ? 58 : 68,
+                paddingTop: 8,
+                paddingBottom: 8,
+                paddingHorizontal: 10,
+                marginHorizontal: 2,
                 alignItems: 'center',
                 gap: 3,
-                borderBottomWidth: 2,
-                borderBottomColor: isFocused ? palette.primary : 'transparent',
+                borderRadius: 14,
+                backgroundColor: isFocused ? `${palette.primary}14` : 'transparent',
               }}
             >
               {options.tabBarIcon?.({ focused: isFocused, color, size: 21 })}

@@ -6,10 +6,7 @@ import { CommandText } from './FutureUI';
 import { flushOfflineQueue, offlineQueueSize, subscribeOfflineQueue } from '../lib/offline-queue';
 import { spacing, useDesignTheme } from '../lib/theme';
 
-/**
- * Global offline / sync status for game-day operations.
- * Shows when the device is offline or when offline mutations are queued.
- */
+/** Global offline / sync status for game-day operations. */
 export function OfflineBanner() {
   const palette = useDesignTheme();
   const [online, setOnline] = useState(true);
@@ -46,6 +43,8 @@ export function OfflineBanner() {
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.sm,
+        borderBottomLeftRadius: 12,
+        borderBottomRightRadius: 12,
       }}
       accessibilityRole="alert"
       accessibilityLabel={label}
