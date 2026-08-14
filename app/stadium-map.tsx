@@ -16,6 +16,19 @@ export default function StadiumMapScreen() {
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
       showsVerticalScrollIndicator={false}
     >
+      <View
+        style={{
+          backgroundColor: palette.warning,
+          paddingHorizontal: spacing.md,
+          paddingVertical: spacing.sm,
+        }}
+        accessibilityRole="alert"
+        accessibilityLabel="Demo stadium layout. Sales and staff figures may be simulated."
+      >
+        <CommandText palette={palette} variant="caption" style={{ color: '#FFFFFF', fontWeight: '800' }}>
+          Demo layout — stand sales, staff names, and in-seat orders may be simulated until live POS/roster feeds are bound.
+        </CommandText>
+      </View>
       {/* Header Banner */}
       <View style={[styles.headerBanner, { backgroundColor: '#074426' }]}>
         <View style={styles.headerTopRow}>
