@@ -13,17 +13,14 @@ import {
   nbaJerseyImages,
   nflHelmetImages,
 } from '../lib/intro-logo-map';
+import { VENUE_WRANGLER_ENTERPRISE_LOGO_URI } from '../lib/enterprise-logo-data';
 
 /**
  * Cold-start brand intro:
  * - Black field
- * - Left: 32 NFL clubs (helmet)
- * - Right: 30 NBA clubs (jersey)
+ * - Left: 32 NFL clubs (helmet) / Right: 30 NBA clubs (jersey)
  * - ≤180ms per flash
  * - Lasso pulls Venue Wrangler Enterprise logo, then fades into Home
- *
- * Official marks only when you provide licensed assets via
- * lib/intro-logo-map.ts or EXPO_PUBLIC_INTRO_ASSET_BASE.
  */
 
 const FLASH_MS = 180;
@@ -114,20 +111,13 @@ function HelmetCard({ code, color, accent }: { code: string; color: string; acce
   return (
     <View style={[styles.card, { backgroundColor: color, borderColor: accent }]}>
       {art.local || art.remote ? (
-        <Image
-          source={art.local ?? { uri: art.remote }}
-          style={styles.officialArt}
-          resizeMode="contain"
-          accessibilityLabel={`${code} helmet`}
-        />
+        <Image source={art.local ?? { uri: art.remote }} style={styles.officialArt} resizeMode="contain" accessibilityLabel={`${code} helmet`} />
       ) : (
         <View style={[styles.helmetShell, { backgroundColor: accent === '#000000' ? '#FFFFFF' : accent }]}>
           <View style={[styles.helmetFacemask, { borderColor: color }]} />
         </View>
       )}
-      <Text style={[styles.cardCode, { color: accent === '#000000' || accent === '#FFFFFF' ? '#FFFFFF' : accent }]}>
-        {code}
-      </Text>
+      <Text style={[styles.cardCode, { color: accent === '#000000' || accent === '#FFFFFF' ? '#FFFFFF' : accent }]}>{code}</Text>
       <Text style={styles.cardKind}>HELMET</Text>
     </View>
   );
@@ -138,12 +128,7 @@ function JerseyCard({ code, color, accent }: { code: string; color: string; acce
   return (
     <View style={[styles.card, { backgroundColor: color, borderColor: accent }]}>
       {art.local || art.remote ? (
-        <Image
-          source={art.local ?? { uri: art.remote }}
-          style={styles.officialArt}
-          resizeMode="contain"
-          accessibilityLabel={`${code} jersey`}
-        />
+        <Image source={art.local ?? { uri: art.remote }} style={styles.officialArt} resizeMode="contain" accessibilityLabel={`${code} jersey`} />
       ) : (
         <View style={[styles.jerseyBody, { backgroundColor: accent === '#FFFFFF' ? '#111111' : accent }]}>
           <View style={[styles.jerseySleeve, styles.jerseySleeveL, { backgroundColor: color }]} />
@@ -183,15 +168,10 @@ export function SportsBrandIntro({ onComplete }: { onComplete: () => void }) {
     let step = 0;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
-
     const tick = () => {
       if (cancelled) return;
       flashOpacity.setValue(0.35);
-      Animated.timing(flashOpacity, {
-        toValue: 1,
-        duration: Math.min(90, FLASH_MS * 0.45),
-        useNativeDriver: true,
-      }).start();
+      Animated.timing(flashOpacity, { toValue: 1, duration: Math.min(90, FLASH_MS * 0.45), useNativeDriver: true }).start();
       setNflIndex(step % NFL_CLUBS.length);
       setNbaIndex(step % NBA_CLUBS.length);
       step += 1;
@@ -201,7 +181,6 @@ export function SportsBrandIntro({ onComplete }: { onComplete: () => void }) {
       }
       timer = setTimeout(tick, FLASH_MS);
     };
-
     timer = setTimeout(tick, 40);
     return () => {
       cancelled = true;
@@ -232,6 +211,7 @@ export function SportsBrandIntro({ onComplete }: { onComplete: () => void }) {
         Animated.timing(vignette, { toValue: 0, duration: 280, useNativeDriver: true }),
       ]),
       Animated.delay(LOGO_HOLD_MS),
+      // Fade black + logo away so Home is revealed underneath
       Animated.timing(overlayOpacity, {
         toValue: 0,
         duration: LOGO_FADE_MS,
@@ -296,7 +276,7 @@ export function SportsBrandIntro({ onComplete }: { onComplete: () => void }) {
             ]}
           >
             <Image
-              source={require('../assets/venue-wrangler-enterprise-logo.jpg')}
+              source={{ uri: VENUE_WRANGLER_ENTERPRISE_LOGO_URI }}
               style={styles.logo}
               resizeMode="contain"
               accessibilityLabel="Venue Wrangler Enterprise"
