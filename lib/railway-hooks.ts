@@ -65,6 +65,9 @@ const queryRoutes: Record<string, Route> = {
   'stadium.getPilotHealth': { path: '/v1/stadium/pilot-health' },
   'stadium.getIntegrationReadiness': { path: '/v1/stadium/integration-readiness' },
   'stadium.getNflBrief': { path: (args) => `/v1/stadium/events/${args.eventId}/nfl-brief` },
+  'unionCompliance.getMultiVenueOverview': { path: '/v1/stadium/union-compliance/multi-venue-overview' },
+  'unionCompliance.getCrossVenueConflicts': { path: '/v1/stadium/union-compliance/cross-venue-conflicts' },
+  'unionCompliance.getCertifications': { path: '/v1/stadium/union-compliance/certifications' },
   'operations.listLogbook': { path: (args) => `/v1/operations/logbook${args?.limit ? `?limit=${args.limit}` : ''}` },
   'operations.getChecklist': {
     path: (args) => `/v1/operations/checklist?kind=${encodeURIComponent(args.kind)}${args?.date ? `&date=${encodeURIComponent(args.date)}` : ''}`,

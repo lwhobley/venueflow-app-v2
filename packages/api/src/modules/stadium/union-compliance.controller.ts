@@ -61,4 +61,25 @@ export class UnionComplianceController {
       body.overrideReason,
     );
   }
+
+  @Get('multi-venue-overview')
+  async getMultiVenueOverview(@VenueScope() scope: Scope) {
+    this.assertManager(scope);
+    const orgId = await this.organizationIdFor(scope.venueId);
+    return this.service.getMultiVenueComplianceOverview(orgId);
+  }
+
+  @Get('cross-venue-conflicts')
+  async getCrossVenueConflicts(@VenueScope() scope: Scope) {
+    this.assertManager(scope);
+    const orgId = await this.organizationIdFor(scope.venueId);
+    return this.service.getCrossVenueSchedulingConflicts(orgId);
+  }
+
+  @Get('certifications')
+  async getCertifications(@VenueScope() scope: Scope) {
+    this.assertManager(scope);
+    const orgId = await this.organizationIdFor(scope.venueId);
+    return this.service.getMultiVenueCertificationStatus(orgId);
+  }
 }
