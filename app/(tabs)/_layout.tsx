@@ -23,24 +23,16 @@ export default function TabsLayout() {
   const fullName = localUser?.full_name ?? "Profile";
   const { t } = useI18n();
   const palette = useDesignTheme();
-  // Server-authoritative role so a stale/incorrect persisted role can never
-  // expose manager-only tabs. While loading, hide gated tabs.
   const { isReady } = useAuthenticatedSession();
   const me = useQuery(api.app.getMe, isReady ? {} : "skip");
   const canManage = Boolean(
     me && canManageVenue(me.profile.role, me.profile.allAccess),
   );
 
-  // Render-gate the whole tab tree: an unauthenticated deep link must not
-  // mount tab screens at all (even one render) before auth redirects fire.
-  // <Redirect> is render-safe (no navigate-before-mount), unlike an
-  // imperative router.replace here.
   if (hydrated && !localUser) {
     return <Redirect href="/(auth)/sign-in" />;
   }
 
-  // Enforce venue membership without creating a silent sign-in loop. The
-  // dedicated route explains that authentication worked and assignment did not.
   if (hydrated && localUser && !venue) {
     return <Redirect href="/(auth)/no-venue" />;
   }
@@ -69,31 +61,16 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="schedule"
         options={{
+          href: null,
           title: "Rosters",
           tabBarIcon: icon("calendar-week"),
-        }}
-      />
-      <Tabs.Screen
-        name="floor"
-        options={{
-          title: t("nav.floor"),
-          href: null,
-          tabBarIcon: icon("floor-plan"),
-        }}
-      />
-      <Tabs.Screen
-        name="reservations"
-        options={{
-          title: t("nav.reservations"),
-          href: null,
-          tabBarIcon: icon("book-clock-outline"),
         }}
       />
       <Tabs.Screen
         name="guests"
         options={{
           title: "VIP Guests",
-          href: canManage ? "/guests" : null,
+          href: null,
           tabBarIcon: icon("account-heart-outline"),
         }}
       />
@@ -101,7 +78,7 @@ export default function TabsLayout() {
         name="integrations"
         options={{
           title: "POS & Hardware",
-          href: canManage ? "/integrations" : null,
+          href: null,
           tabBarIcon: icon("connection"),
         }}
       />
@@ -109,7 +86,7 @@ export default function TabsLayout() {
         name="sales"
         options={{
           title: "Concessions POS",
-          href: canManage ? "/sales" : null,
+          href: null,
           tabBarIcon: icon("cash-register"),
         }}
       />
@@ -129,7 +106,7 @@ export default function TabsLayout() {
         name="documents"
         options={{
           title: "BEOs & Docs",
-          href: "/documents",
+          href: null,
           tabBarIcon: icon("file-document-multiple-outline"),
         }}
       />
@@ -137,7 +114,7 @@ export default function TabsLayout() {
         name="reports"
         options={{
           title: "Reports & Recon",
-          href: canManage ? "/reports" : null,
+          href: null,
           tabBarIcon: icon("chart-box-outline"),
         }}
       />
@@ -145,7 +122,7 @@ export default function TabsLayout() {
         name="staff"
         options={{
           title: "Staff & Union",
-          href: canManage ? "/staff" : null,
+          href: null,
           tabBarIcon: icon("account-group"),
         }}
       />
