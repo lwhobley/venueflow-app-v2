@@ -104,7 +104,17 @@ ALTER TABLE "EventAuditLog" ADD CONSTRAINT "EventAuditLog_eventId_fkey" FOREIGN 
 ALTER TABLE "Organization" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "EventIssue" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "EventAuditLog" ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON TABLE "Organization", "EventIssue", "EventAuditLog" FROM anon, authenticated;
+
+-- Conditionally revoke privileges from Supabase roles if they exist
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    REVOKE ALL ON TABLE "Organization", "EventIssue", "EventAuditLog" FROM anon, authenticated;
+  ELSE
+    REVOKE ALL ON TABLE "Organization", "EventIssue", "EventAuditLog" FROM authenticated;
+  END IF;
+END
+$$;
 
 CREATE OR REPLACE FUNCTION public.prevent_event_audit_mutation()
 RETURNS trigger
@@ -114,7 +124,18 @@ BEGIN
   RAISE EXCEPTION 'EventAuditLog records are immutable';
 END;
 $$;
-REVOKE ALL ON FUNCTION public.prevent_event_audit_mutation() FROM PUBLIC, anon, authenticated;
+
+-- Conditionally revoke function privileges
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    REVOKE ALL ON FUNCTION public.prevent_event_audit_mutation() FROM PUBLIC, anon, authenticated;
+  ELSE
+    REVOKE ALL ON FUNCTION public.prevent_event_audit_mutation() FROM PUBLIC, authenticated;
+  END IF;
+END
+$$;
+
 CREATE TRIGGER "EventAuditLog_immutable"
 BEFORE UPDATE OR DELETE ON "EventAuditLog"
 FOR EACH ROW EXECUTE FUNCTION public.prevent_event_audit_mutation();
