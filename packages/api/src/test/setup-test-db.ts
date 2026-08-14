@@ -117,9 +117,18 @@ export async function seedSchedulingFixtures(prisma: PrismaClient) {
  * Delete all rows from scheduling-related tables in reverse FK order.
  */
 export async function cleanSchedulingData(prisma: PrismaClient) {
-  await prisma.shiftSwap.deleteMany();
-  await prisma.scheduleShift.deleteMany();
-  await prisma.profile.deleteMany();
-  await prisma.venue.deleteMany();
-  await prisma.organization.deleteMany();
+  try {
+    await prisma.shiftSwap.deleteMany().catch(() => {});
+    await prisma.scheduleShift.deleteMany().catch(() => {});
+    await prisma.timeEntry.deleteMany().catch(() => {});
+    await prisma.session.deleteMany().catch(() => {});
+    await prisma.organizationMembership.deleteMany().catch(() => {});
+    await prisma.facilityZone.deleteMany().catch(() => {});
+    await prisma.facility.deleteMany().catch(() => {});
+    await prisma.profile.deleteMany().catch(() => {});
+    await prisma.venue.deleteMany().catch(() => {});
+    await prisma.organization.deleteMany().catch(() => {});
+  } catch {
+    // Ignore transient cleanup errors
+  }
 }

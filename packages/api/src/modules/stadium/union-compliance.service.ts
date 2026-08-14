@@ -206,7 +206,7 @@ export class UnionComplianceService {
     const facilities = await this.prisma.facility.findMany({
       where: { organizationId, active: true },
       include: {
-        unionRules: { where: { active: true } },
+        unionRuleConfigs: { where: { active: true } },
       },
     });
 
@@ -222,7 +222,7 @@ export class UnionComplianceService {
     const venueSummaries = facilities.map((fac) => {
       const facViolations = violations.filter((v) => v.facilityId === fac.id);
       const openCount = facViolations.filter((v) => !v.resolved).length;
-      const penaltyTotal = facViolations.reduce((sum, v) => sum + (v.penaltyPayCents ?? 0), 0);
+      const penaltyTotal = facViolations.reduce((sum, v) => sum + (v.penaltyAmountCents ?? 0), 0);
       const score = Math.max(70, Math.min(100, 100 - openCount * 3));
 
       return {
@@ -231,8 +231,8 @@ export class UnionComplianceService {
         facilityCode: fac.code,
         healthScore: score,
         status: score >= 95 ? 'compliant' : score >= 85 ? 'watch' : 'action_required',
-        activeUnionCba: fac.unionRules[0]?.name ?? 'UNITE HERE Local Standard CBA',
-        mealBreakThresholdHours: fac.unionRules[0]?.maxContinuousWorkHours ?? 5.0,
+        activeUnionCba: fac.unionRuleConfigs[0]?.name ?? 'UNITE HERE Local Standard CBA',
+        mealBreakThresholdHours: fac.unionRuleConfigs[0]?.maxContinuousWorkHours ?? 5.0,
         openViolationsCount: openCount,
         resolvedViolationsCount: facViolations.length - openCount,
         penaltyExposureCents: penaltyTotal,
@@ -242,7 +242,7 @@ export class UnionComplianceService {
     });
 
     const totalOpen = openViolations.length;
-    const totalPenalty = violations.reduce((sum, v) => sum + (v.penaltyPayCents ?? 0), 0);
+    const totalPenalty = violations.reduce((sum, v) => sum + (v.penaltyAmountCents ?? 0), 0);
 
     return {
       organizationId,
@@ -259,9 +259,9 @@ export class UnionComplianceService {
       recentViolations: violations.slice(0, 10).map((v) => ({
         id: v.id,
         facilityId: v.facilityId,
-        workerName: v.worker?.fullName ?? 'Staff Member',
+        workerName: v.worker ? `${v.worker.firstName} ${v.worker.lastName}` : 'Staff Member',
         violationType: v.violationType,
-        penaltyPayCents: v.penaltyPayCents ?? 2500,
+        penaltyPayCents: v.penaltyAmountCents ?? 2500,
         resolved: v.resolved,
         createdAt: v.createdAt,
       })),
