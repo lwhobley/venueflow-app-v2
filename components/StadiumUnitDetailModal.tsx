@@ -4,6 +4,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { CommandButton, CommandText, StatusPill } from './FutureUI';
 import { spacing, useDesignTheme } from '../lib/theme';
+import { useResponsive } from '../lib/responsive';
 
 export interface BeoPreOrderItem {
   id: string;
@@ -105,6 +106,7 @@ type ModalTab = 'hierarchy' | 'beo' | 'orders' | 'stand_metrics';
 
 export function StadiumUnitDetailModal({ visible, unit, onClose, onStatusChange }: Props) {
   const palette = useDesignTheme();
+  const { isPhone, height } = useResponsive();
   const [activeTab, setActiveTab] = useState<ModalTab>('hierarchy');
 
   if (!unit) return null;
@@ -180,11 +182,28 @@ export function StadiumUnitDetailModal({ visible, unit, onClose, onStatusChange 
     });
   };
 
+  const sheetMaxHeight = isPhone ? Math.min(height * 0.92, height - 24) : undefined;
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
+    <Modal visible={visible} transparent animationType={isPhone ? 'slide' : 'fade'} onRequestClose={onClose}>
+      <View style={[styles.backdrop, isPhone && styles.backdropPhone]}>
         <Pressable style={styles.dismissOverlay} onPress={onClose} />
-        <View style={[styles.modalCard, { backgroundColor: '#FFFFFF', borderColor: palette.border }]}>
+        <View
+          style={[
+            styles.modalCard,
+            { backgroundColor: '#FFFFFF', borderColor: palette.border },
+            isPhone && {
+              width: '100%',
+              maxWidth: '100%',
+              maxHeight: sheetMaxHeight,
+              borderRadius: 16,
+              borderBottomLeftRadius: 0,
+              borderBottomRightRadius: 0,
+              marginBottom: 0,
+              paddingBottom: spacing.md,
+            },
+          ]}
+        >
           {/* Header */}
           <View style={[styles.headerRow, { borderBottomColor: palette.divider }]}>
             <View style={styles.headerLeft}>
@@ -214,7 +233,7 @@ export function StadiumUnitDetailModal({ visible, unit, onClose, onStatusChange 
                     </View>
                   ) : null}
                 </View>
-                <CommandText palette={palette} variant="title" style={{ marginTop: 2, fontSize: 18 }}>
+                <CommandText palette={palette} variant="title" style={{ marginTop: 2, fontSize: isPhone ? 16 : 18 }}>
                   {unit.name}
                 </CommandText>
               </View>
@@ -225,7 +244,7 @@ export function StadiumUnitDetailModal({ visible, unit, onClose, onStatusChange 
           </View>
 
           {/* Navigation Tab Bar */}
-          <View style={[styles.tabBar, { borderBottomColor: palette.divider }]}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.tabBar, { borderBottomColor: palette.divider }]} contentContainerStyle={{ gap: spacing.md, paddingHorizontal: 2 }}>
             <Pressable
               onPress={() => setActiveTab('hierarchy')}
               style={[styles.tabItem, activeTab === 'hierarchy' && { borderBottomColor: '#17643B', borderBottomWidth: 2 }]}
@@ -269,9 +288,13 @@ export function StadiumUnitDetailModal({ visible, unit, onClose, onStatusChange 
                 </CommandText>
               </Pressable>
             ) : null}
-          </View>
+          </ScrollView>
 
-          <ScrollView style={styles.bodyScroll} contentContainerStyle={{ gap: spacing.md, paddingVertical: spacing.md }} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={[styles.bodyScroll, isPhone && { maxHeight: Math.max(280, (sheetMaxHeight ?? 520) - 180) }]}
+            contentContainerStyle={{ gap: spacing.md, paddingVertical: spacing.md }}
+            showsVerticalScrollIndicator={false}
+          >
             {/* Meta Tags */}
             <View style={styles.metaRow}>
               <View style={[styles.metaChip, { backgroundColor: '#F7F7F4', borderColor: palette.border }]}>
@@ -308,7 +331,7 @@ export function StadiumUnitDetailModal({ visible, unit, onClose, onStatusChange 
                         {suiteDetails?.beoNumber ?? 'BEO-2026-904'}
                       </CommandText>
                     </View>
-                    <View style={styles.gridTwoCol}>
+                    <View style={[styles.gridTwoCol, isPhone && { flexDirection: 'column' }]}>
                       <View style={styles.infoCol}>
                         <CommandText palette={palette} variant="caption">Suiteholder / Company</CommandText>
                         <CommandText palette={palette} variant="body" style={{ fontWeight: '700', color: '#1D2420' }}>
@@ -381,7 +404,7 @@ export function StadiumUnitDetailModal({ visible, unit, onClose, onStatusChange 
                       <View key={idx} style={[styles.staffRow, { borderColor: palette.divider }]}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
                           <MaterialCommunityIcons name="account-check" size={18} color="#17643B" />
-                          <View>
+                          <View style={{ flex: 1 }}>
                             <CommandText palette={palette} variant="body" style={{ fontWeight: '700', fontSize: 14 }}>
                               {staff.name}
                             </CommandText>
@@ -486,9 +509,9 @@ export function StadiumUnitDetailModal({ visible, unit, onClose, onStatusChange 
                   {inSeatOrders.map((seatOrder) => (
                     <View key={seatOrder.id} style={[styles.orderItemCard, { borderColor: palette.divider }]}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
                           <MaterialCommunityIcons name="seat-passenger" size={16} color="#17643B" />
-                          <CommandText palette={palette} variant="body" style={{ fontWeight: '700' }}>
+                          <CommandText palette={palette} variant="body" style={{ fontWeight: '700', flexShrink: 1 }}>
                             {seatOrder.seatLocation}
                           </CommandText>
                         </View>
@@ -499,7 +522,7 @@ export function StadiumUnitDetailModal({ visible, unit, onClose, onStatusChange 
                       <CommandText palette={palette} variant="body" style={{ marginTop: 4, color: '#1D2420' }}>
                         {seatOrder.items}
                       </CommandText>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, flexWrap: 'wrap', gap: 4 }}>
                         <CommandText palette={palette} variant="caption" style={{ color: '#68706A' }}>
                           Customer: {seatOrder.customerName} · Ordered at {seatOrder.orderedAt}
                         </CommandText>
@@ -520,7 +543,7 @@ export function StadiumUnitDetailModal({ visible, unit, onClose, onStatusChange 
                     {inSuiteOrders.map((order) => (
                       <View key={order.id} style={[styles.orderItemCard, { borderColor: palette.divider }]}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <CommandText palette={palette} variant="caption" style={{ color: '#68706A' }}>
+                          <CommandText palette={palette} variant="caption" style={{ color: '#68706A', flex: 1 }}>
                             Ordered: {order.orderedAt} by {order.orderedBy}
                           </CommandText>
                           <StatusPill palette={palette} tone={order.status === 'fulfilled' ? 'good' : 'warn'}>
@@ -544,7 +567,7 @@ export function StadiumUnitDetailModal({ visible, unit, onClose, onStatusChange 
             {activeTab === 'stand_metrics' && isStand ? (
               <View style={{ gap: spacing.md }}>
                 <View style={[styles.sectionCard, { backgroundColor: '#FDFBF7', borderColor: '#E5DFD5' }]}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 }}>
                     <CommandText palette={palette} variant="label" style={{ color: '#8A5D23' }}>
                       CONCESSION STAND POS METRICS
                     </CommandText>
@@ -552,7 +575,7 @@ export function StadiumUnitDetailModal({ visible, unit, onClose, onStatusChange 
                       {standDetails?.terminalCount ?? 6} Terminals Active
                     </CommandText>
                   </View>
-                  <View style={styles.gridTwoCol}>
+                  <View style={[styles.gridTwoCol, isPhone && { flexDirection: 'column' }]}>
                     <View style={styles.infoCol}>
                       <CommandText palette={palette} variant="caption">Beginning Cash Float</CommandText>
                       <CommandText palette={palette} variant="body" style={{ fontWeight: '700' }}>
@@ -588,7 +611,7 @@ export function StadiumUnitDetailModal({ visible, unit, onClose, onStatusChange 
                 style={[styles.statusActionButton, { borderColor: statusColor, backgroundColor: '#FFFFFF' }]}
               >
                 <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-                <CommandText palette={palette} variant="body" style={{ fontWeight: '700', color: '#1D2420' }}>
+                <CommandText palette={palette} variant="body" style={{ fontWeight: '700', color: '#1D2420', flex: 1 }}>
                   Status: {unit.status.toUpperCase()} (Tap to toggle status)
                 </CommandText>
               </Pressable>
@@ -596,18 +619,18 @@ export function StadiumUnitDetailModal({ visible, unit, onClose, onStatusChange 
           </ScrollView>
 
           {/* Action Footer */}
-          <View style={[styles.footerRow, { borderTopColor: palette.divider }]}>
+          <View style={[styles.footerRow, { borderTopColor: palette.divider }, isPhone && { flexWrap: 'wrap' }]}>
             {isStand ? (
-              <CommandButton palette={palette} icon="clipboard-list-outline" selected onPress={handleOpenStandSheet} style={{ flex: 1 }}>
+              <CommandButton palette={palette} icon="clipboard-list-outline" selected onPress={handleOpenStandSheet} style={{ flex: 1, minWidth: isPhone ? 140 : undefined }}>
                 Stand Sheet
               </CommandButton>
             ) : null}
             {isSuite ? (
-              <CommandButton palette={palette} icon="room-service-outline" selected onPress={handleOpenSuiteAttendant} style={{ flex: 1 }}>
+              <CommandButton palette={palette} icon="room-service-outline" selected onPress={handleOpenSuiteAttendant} style={{ flex: 1, minWidth: isPhone ? 140 : undefined }}>
                 Suite Attendant
               </CommandButton>
             ) : null}
-            <CommandButton palette={palette} icon="alert-outline" onPress={handleReportIssue} style={{ flex: 1 }}>
+            <CommandButton palette={palette} icon="alert-outline" onPress={handleReportIssue} style={{ flex: 1, minWidth: isPhone ? 140 : undefined }}>
               Log Issue
             </CommandButton>
           </View>
@@ -624,6 +647,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.md,
+  },
+  backdropPhone: {
+    justifyContent: 'flex-end',
+    alignItems: 'stretch',
+    padding: 0,
   },
   dismissOverlay: {
     position: 'absolute',
@@ -672,10 +700,9 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   tabBar: {
-    flexDirection: 'row',
     borderBottomWidth: 1,
-    gap: spacing.md,
     paddingTop: spacing.xs,
+    flexGrow: 0,
   },
   tabItem: {
     flexDirection: 'row',
