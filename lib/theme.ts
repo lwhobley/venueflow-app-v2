@@ -77,16 +77,16 @@ export const useDesignTheme = () => {
 export const colors = designPalettes.light;
 
 export const authColors = {
-  background: "transparent",
-  surface: "transparent",
-  primary: designPalettes.dark.primary,
-  text: designPalettes.dark.charcoal,
-  muted: designPalettes.dark.muted,
-  border: designPalettes.dark.muted,
-  danger: designPalettes.dark.danger,
-  success: designPalettes.dark.success,
-  buttonText: designPalettes.dark.buttonText,
-  highlight: "transparent",
+  background: "#FFFFFF",
+  surface: "#FFFFFF",
+  primary: designPalettes.light.primary,
+  text: designPalettes.light.charcoal,
+  muted: designPalettes.light.muted,
+  border: designPalettes.light.border,
+  danger: designPalettes.light.danger,
+  success: designPalettes.light.success,
+  buttonText: designPalettes.light.buttonText,
+  highlight: designPalettes.light.surfaceSoft,
 };
 
 export const authInputProps = {

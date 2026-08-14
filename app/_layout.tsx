@@ -128,7 +128,7 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <PaperProvider theme={makePaperTheme(themeMode)}>
             <A0PurchaseProvider config={{ appUserId: venueId ?? undefined, debug }}>
-              <ImageBackground source={require('../assets/stadium-turf-texture.png')} resizeMode="cover" style={{ flex: 1, width: '100%' }}>
+              <View style={{ flex: 1, width: '100%', backgroundColor: '#FFFFFF' }}>
                 {/* Top inset keeps content below the status bar / notch; the tab
                     bar and screens handle the bottom inset. */}
                 <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }} edges={['top', 'left', 'right']}>
@@ -138,7 +138,7 @@ export default function RootLayout() {
                     </SubscriptionGate>
                   </ErrorBoundary>
                 </SafeAreaView>
-              </ImageBackground>
+              </View>
             </A0PurchaseProvider>
           </PaperProvider>
         </QueryClientProvider>
