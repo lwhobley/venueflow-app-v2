@@ -2,7 +2,6 @@ import { useState } from "react";
 import {
   Alert,
   Image,
-  ImageBackground,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -18,7 +17,6 @@ import { Kicker } from "../../components/AppCard";
 import { useAuthStore, type AuthState } from "../../lib/auth-store";
 
 const logoSource = require("../../assets/stadium-wrangler-logo.png");
-const turfSource = require("../../assets/stadium-turf-texture.png");
 
 export default function SignInScreen() {
   const setSession = useAuthStore((state: AuthState) => state.setSession);
@@ -84,7 +82,7 @@ export default function SignInScreen() {
   };
 
   return (
-    <ImageBackground source={turfSource} resizeMode="cover" style={{ flex: 1, width: "100%" }}>
+    <View style={styles.page}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -93,85 +91,98 @@ export default function SignInScreen() {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.branding}>
-            <Image source={logoSource} style={styles.logo} />
-            <Kicker>Stadium F&B operations</Kicker>
-            <Text
-              style={{
-                ...type.title,
-                color: authColors.text,
-                textAlign: "center",
-              }}
-            >
-              Administrator Access
-            </Text>
-            <Text variant="bodyMedium" style={styles.subtitle}>
-              Administrator access only. Sign in with your assigned email and
-              six-digit PIN.
-            </Text>
-          </View>
-
-          <View style={styles.form}>
-            {formError ? (
-              <Text selectable style={styles.error}>
-                {formError}
+          <View style={styles.card}>
+            <View style={styles.branding}>
+              <Image source={logoSource} style={styles.logo} />
+              <Kicker>Stadium F&B operations</Kicker>
+              <Text
+                style={{
+                  ...type.title,
+                  color: authColors.text,
+                  textAlign: "center",
+                }}
+              >
+                Administrator Access
               </Text>
-            ) : null}
-            <TextInput
-              label="Administrator email"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              mode="outlined"
-              outlineColor={authColors.border}
-              activeOutlineColor={authColors.primary}
-              textColor={authColors.text}
-              placeholderTextColor={authColors.muted}
-              style={styles.input}
-            />
-            <TextInput
-              label="Six-digit administrator PIN"
-              value={pin}
-              onChangeText={(value) =>
-                setPin(value.replace(/\D/g, "").slice(0, 6))
-              }
-              keyboardType="number-pad"
-              secureTextEntry
-              maxLength={6}
-              mode="outlined"
-              outlineColor={authColors.border}
-              activeOutlineColor={authColors.primary}
-              textColor={authColors.text}
-              style={styles.input}
-            />
-            <Button
-              mode="contained"
-              buttonColor={authColors.primary}
-              textColor={authColors.buttonText}
-              loading={submitting}
-              onPress={() => void submit()}
-            >
-              Enter Venue Wrangler Enterprise
-            </Button>
-          </View>
+              <Text variant="bodyMedium" style={styles.subtitle}>
+                Administrator access only. Sign in with your assigned email and
+                six-digit PIN.
+              </Text>
+            </View>
 
-          <Text selectable style={styles.help}>
-            Need administrator access or a new PIN? Contact the venue owner.
-          </Text>
+            <View style={styles.form}>
+              {formError ? (
+                <Text selectable style={styles.error}>
+                  {formError}
+                </Text>
+              ) : null}
+              <TextInput
+                label="Administrator email"
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                mode="outlined"
+                outlineColor={authColors.border}
+                activeOutlineColor={authColors.primary}
+                textColor={authColors.text}
+                placeholderTextColor={authColors.muted}
+                style={styles.input}
+              />
+              <TextInput
+                label="Six-digit administrator PIN"
+                value={pin}
+                onChangeText={(value) =>
+                  setPin(value.replace(/\D/g, "").slice(0, 6))
+                }
+                keyboardType="number-pad"
+                secureTextEntry
+                maxLength={6}
+                mode="outlined"
+                outlineColor={authColors.border}
+                activeOutlineColor={authColors.primary}
+                textColor={authColors.text}
+                style={styles.input}
+              />
+              <Button
+                mode="contained"
+                buttonColor={authColors.primary}
+                textColor={authColors.buttonText}
+                loading={submitting}
+                onPress={() => void submit()}
+                style={styles.submitBtn}
+                contentStyle={{ height: 48 }}
+              >
+                Enter Venue Wrangler Enterprise
+              </Button>
+            </View>
+
+            <Text selectable style={styles.help}>
+              Need administrator access or a new PIN? Contact the venue owner.
+            </Text>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </ImageBackground>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  page: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
   content: {
     flexGrow: 1,
     justifyContent: "center",
-    gap: spacing.xl,
+    alignItems: "center",
     padding: spacing.lg,
+  },
+  card: {
+    width: "100%",
+    maxWidth: 440,
+    gap: spacing.xl,
   },
   branding: { alignItems: "center", gap: spacing.sm },
   logo: {
@@ -182,7 +193,11 @@ const styles = StyleSheet.create({
   },
   subtitle: { color: authColors.muted, textAlign: "center", maxWidth: 360 },
   form: { gap: spacing.md },
-  input: { backgroundColor: "transparent" },
+  input: { backgroundColor: "#FFFFFF" },
+  submitBtn: {
+    borderRadius: 8,
+    marginTop: spacing.xs,
+  },
   error: { color: authColors.danger, textAlign: "center" },
   help: { color: authColors.muted, fontSize: 13, textAlign: "center" },
 });
