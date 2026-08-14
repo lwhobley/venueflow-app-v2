@@ -85,6 +85,14 @@ export default function StadiumMapScreen() {
             >
               Commissary Hub
             </CommandButton>
+            <CommandButton
+              palette={palette}
+              icon="broadcast"
+              onPress={() => router.push('/stadium/pos-aggregator')}
+              style={{ flex: 1, minWidth: 150 }}
+            >
+              POS Aggregator
+            </CommandButton>
           </View>
         </View>
       </View>
