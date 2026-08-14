@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { TextInput } from 'react-native-paper';
 import { CommandButton, CommandText, StatusPill } from './FutureUI';
@@ -966,6 +966,10 @@ export function StadiumVenueMap({
   onSelectUnit?: (unit: StadiumZoneItem) => void;
 }) {
   const palette = useDesignTheme();
+  const { width: windowWidth } = useWindowDimensions();
+  const isMobile = windowWidth < 800;
+
+  const [mobileTab, setMobileTab] = useState<'map' | 'directory'>('map');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedZoneId, setSelectedZoneId] = useState<string>(initialZoneId ?? 'ALL');
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(initialSelectedUnitId ?? null);
@@ -1030,6 +1034,10 @@ export function StadiumVenueMap({
     return groups;
   }, [zonesState]);
 
+  const totalUnitsCount = useMemo(() => {
+    return zonesState.reduce((sum, z) => sum + z.units.length, 0);
+  }, [zonesState]);
+
   // Click Handler
   const handleUnitPress = (unit: StadiumZoneItem, zoneId?: string) => {
     setSelectedUnitId(unit.id);
@@ -1044,7 +1052,7 @@ export function StadiumVenueMap({
       <View style={[styles.topSearchBar, { borderBottomColor: palette.divider }]}>
         <View style={styles.searchRow}>
           <TextInput
-            placeholder="Search Suite #, Team Locker, Concourse Outlets, Bunker, BEOs, Staff..."
+            placeholder="Search Suite #, Team Locker, Concourse Outlets, Bunker, BEOs..."
             value={searchQuery}
             onChangeText={setSearchQuery}
             mode="outlined"
@@ -1075,7 +1083,7 @@ export function StadiumVenueMap({
                 variant="caption"
                 style={{ color: viewPerspective === '3d_isometric' ? '#FFFFFF' : '#17643B', fontWeight: '800' }}
               >
-                3D BOWL
+                3D
               </CommandText>
             </Pressable>
             <Pressable
@@ -1095,424 +1103,455 @@ export function StadiumVenueMap({
                 variant="caption"
                 style={{ color: viewPerspective === '2d_plan' ? '#FFFFFF' : '#17643B', fontWeight: '800' }}
               >
-                2D PLAN
+                2D
               </CommandText>
             </Pressable>
           </View>
         </View>
+
+        {/* Mobile View Switcher Tab Bar */}
+        {isMobile ? (
+          <View style={styles.mobileTabSwitcher}>
+            <Pressable
+              onPress={() => setMobileTab('map')}
+              style={[
+                styles.mobileTabBtn,
+                {
+                  backgroundColor: mobileTab === 'map' ? '#074426' : '#EEF5F0',
+                  borderColor: mobileTab === 'map' ? '#074426' : '#B6D6BE',
+                },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="stadium-variant"
+                size={16}
+                color={mobileTab === 'map' ? '#FFFFFF' : '#074426'}
+              />
+              <Text
+                style={{
+                  color: mobileTab === 'map' ? '#FFFFFF' : '#074426',
+                  fontWeight: '800',
+                  fontSize: 12,
+                }}
+              >
+                3D Stadium Map
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setMobileTab('directory')}
+              style={[
+                styles.mobileTabBtn,
+                {
+                  backgroundColor: mobileTab === 'directory' ? '#074426' : '#EEF5F0',
+                  borderColor: mobileTab === 'directory' ? '#074426' : '#B6D6BE',
+                },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="format-list-group"
+                size={16}
+                color={mobileTab === 'directory' ? '#FFFFFF' : '#074426'}
+              />
+              <Text
+                style={{
+                  color: mobileTab === 'directory' ? '#FFFFFF' : '#074426',
+                  fontWeight: '800',
+                  fontSize: 12,
+                }}
+              >
+                Sector Directory ({totalUnitsCount})
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
       </View>
 
       {/* Main Operations Split Layout */}
-      <View style={styles.mainLayout}>
-        {/* LEFT: Categorized Dropdown Navigation */}
-        <View style={[styles.sidebarList, { borderRightColor: palette.divider }]}>
-          <View style={[styles.sidebarHeader, { borderBottomColor: palette.divider }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <MaterialCommunityIcons name="format-list-group" size={18} color="#17643B" />
-              <CommandText palette={palette} variant="label" style={{ color: '#17643B', fontWeight: '800' }}>
-                SPATIAL SECTOR DIRECTORY
+      <View style={[styles.mainLayout, { flexDirection: isMobile ? 'column' : 'row' }]}>
+        {/* LEFT / TAB 1: Categorized Dropdown Directory */}
+        {(!isMobile || mobileTab === 'directory') && (
+          <View
+            style={[
+              styles.sidebarList,
+              {
+                width: isMobile ? '100%' : 330,
+                borderRightWidth: isMobile ? 0 : 1,
+                borderRightColor: palette.divider,
+                borderBottomWidth: isMobile ? 1 : 0,
+                borderBottomColor: palette.divider,
+              },
+            ]}
+          >
+            <View style={[styles.sidebarHeader, { borderBottomColor: palette.divider }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialCommunityIcons name="format-list-group" size={18} color="#17643B" />
+                <CommandText palette={palette} variant="label" style={{ color: '#17643B', fontWeight: '800' }}>
+                  SPATIAL SECTOR DIRECTORY
+                </CommandText>
+              </View>
+              <CommandText palette={palette} variant="caption" style={{ color: '#68706A' }}>
+                {isMobile ? 'Tap any space to open BEOs, staff, and view in 3D' : 'Click any unit to focus on 3D layout'}
               </CommandText>
             </View>
-            <CommandText palette={palette} variant="caption" style={{ color: '#68706A' }}>
-              Click any unit to focus on 3D layout
-            </CommandText>
-          </View>
 
-          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-            {Object.entries(categoryGroups).map(([catKey, catData]) => {
-              const isExpanded = expandedCategories[catKey] ?? true;
-              const allUnitsInCat = catData.zones.flatMap((z) => z.units);
-              const filteredInCat = searchQuery.trim()
-                ? allUnitsInCat.filter(
-                    (u) =>
-                      u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      u.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      u.suiteDetails?.suiteholder?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      u.suiteDetails?.beoPackageName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      u.standDetails?.concept?.toLowerCase().includes(searchQuery.toLowerCase()),
-                  )
-                : allUnitsInCat;
+            <ScrollView style={{ flex: 1, maxHeight: isMobile ? 480 : undefined }} showsVerticalScrollIndicator={false}>
+              {Object.entries(categoryGroups).map(([catKey, catData]) => {
+                const isExpanded = expandedCategories[catKey] ?? true;
+                const allUnitsInCat = catData.zones.flatMap((z) => z.units);
+                const filteredInCat = searchQuery.trim()
+                  ? allUnitsInCat.filter(
+                      (u) =>
+                        u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        u.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        u.suiteDetails?.suiteholder?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        u.suiteDetails?.beoPackageName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        u.standDetails?.concept?.toLowerCase().includes(searchQuery.toLowerCase()),
+                    )
+                  : allUnitsInCat;
 
-              if (searchQuery.trim() && filteredInCat.length === 0) return null;
+                if (searchQuery.trim() && filteredInCat.length === 0) return null;
 
-              return (
-                <View key={catKey} style={[styles.categoryAccordion, { borderBottomColor: palette.divider }]}>
-                  <Pressable
-                    onPress={() => toggleCategory(catKey)}
-                    style={({ pressed }) => [
-                      styles.categoryHeader,
-                      { opacity: pressed ? 0.7 : 1, backgroundColor: '#F7F7F4' },
-                    ]}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                      <MaterialCommunityIcons name={catData.icon as any} size={18} color="#17643B" />
-                      <CommandText
-                        palette={palette}
-                        variant="body"
-                        style={{ fontWeight: '700', fontSize: 13, color: '#1D2420', flex: 1 }}
-                      >
-                        {catData.label}
-                      </CommandText>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <View style={styles.countBadge}>
+                return (
+                  <View key={catKey} style={[styles.categoryAccordion, { borderBottomColor: palette.divider }]}>
+                    <Pressable
+                      onPress={() => toggleCategory(catKey)}
+                      style={({ pressed }) => [
+                        styles.categoryHeader,
+                        { opacity: pressed ? 0.7 : 1, backgroundColor: '#F7F7F4' },
+                      ]}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                        <MaterialCommunityIcons name={catData.icon as any} size={18} color="#17643B" />
                         <CommandText
                           palette={palette}
-                          variant="caption"
-                          style={{ color: '#17643B', fontWeight: '700', fontSize: 11 }}
+                          variant="body"
+                          style={{ fontWeight: '700', fontSize: 13, color: '#1D2420', flex: 1 }}
                         >
-                          {filteredInCat.length}
+                          {catData.label}
                         </CommandText>
                       </View>
-                      <MaterialCommunityIcons
-                        name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                        size={18}
-                        color="#68706A"
-                      />
-                    </View>
-                  </Pressable>
-
-                  {isExpanded ? (
-                    <View style={styles.unitsSublist}>
-                      {filteredInCat.map((unit) => {
-                        const isSelected = selectedUnitId === unit.id;
-                        const hasBeo = Boolean(unit.suiteDetails?.beoNumber);
-                        const hasInSeat = Boolean(
-                          unit.suiteDetails?.inSeatOrders?.length || unit.standDetails?.inSeatOrders?.length,
-                        );
-
-                        return (
-                          <Pressable
-                            key={unit.id}
-                            onPress={() => handleUnitPress(unit)}
-                            style={({ pressed }) => [
-                              styles.unitSidebarItem,
-                              {
-                                opacity: pressed ? 0.7 : 1,
-                                backgroundColor: isSelected ? '#EEF5F0' : '#FFFFFF',
-                                borderColor: isSelected ? '#17643B' : '#E5E8E2',
-                              },
-                            ]}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={styles.countBadge}>
+                          <CommandText
+                            palette={palette}
+                            variant="caption"
+                            style={{ color: '#17643B', fontWeight: '700', fontSize: 11 }}
                           >
-                            <View style={{ flex: 1, gap: 2 }}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            {filteredInCat.length}
+                          </CommandText>
+                        </View>
+                        <MaterialCommunityIcons
+                          name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                          size={18}
+                          color="#68706A"
+                        />
+                      </View>
+                    </Pressable>
+
+                    {isExpanded ? (
+                      <View style={styles.unitsSublist}>
+                        {filteredInCat.map((unit) => {
+                          const isSelected = selectedUnitId === unit.id;
+                          const hasBeo = Boolean(unit.suiteDetails?.beoNumber);
+                          const hasInSeat = Boolean(
+                            unit.suiteDetails?.inSeatOrders?.length || unit.standDetails?.inSeatOrders?.length,
+                          );
+
+                          return (
+                            <Pressable
+                              key={unit.id}
+                              onPress={() => handleUnitPress(unit)}
+                              style={({ pressed }) => [
+                                styles.unitSidebarItem,
+                                {
+                                  opacity: pressed ? 0.7 : 1,
+                                  backgroundColor: isSelected ? '#EEF5F0' : '#FFFFFF',
+                                  borderColor: isSelected ? '#17643B' : '#E5E8E2',
+                                },
+                              ]}
+                            >
+                              <View style={{ flex: 1, gap: 2 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                  <CommandText
+                                    palette={palette}
+                                    variant="caption"
+                                    style={{ fontWeight: '800', color: isSelected ? '#17643B' : '#1D2420' }}
+                                  >
+                                    {unit.code}
+                                  </CommandText>
+                                  <StatusPill
+                                    palette={palette}
+                                    tone={
+                                      unit.status === 'open'
+                                        ? 'good'
+                                        : unit.status === 'incident'
+                                          ? 'danger'
+                                          : 'neutral'
+                                    }
+                                  >
+                                    {unit.status.toUpperCase()}
+                                  </StatusPill>
+                                  {hasBeo ? (
+                                    <View style={styles.beoIndicator}>
+                                      <CommandText
+                                        palette={palette}
+                                        variant="caption"
+                                        style={{ color: '#8A5D23', fontSize: 10, fontWeight: '700' }}
+                                      >
+                                        BEO READY
+                                      </CommandText>
+                                    </View>
+                                  ) : null}
+                                </View>
                                 <CommandText
                                   palette={palette}
-                                  variant="caption"
-                                  style={{ fontWeight: '800', color: isSelected ? '#17643B' : '#1D2420' }}
+                                  variant="body"
+                                  style={{ fontWeight: '700', fontSize: 13, color: '#1D2420' }}
                                 >
-                                  {unit.code}
+                                  {unit.name}
                                 </CommandText>
-                                <StatusPill
-                                  palette={palette}
-                                  tone={
-                                    unit.status === 'open'
-                                      ? 'good'
-                                      : unit.status === 'incident'
-                                        ? 'danger'
-                                        : 'neutral'
-                                  }
-                                >
-                                  {unit.status.toUpperCase()}
-                                </StatusPill>
-                                {hasBeo ? (
-                                  <View style={styles.beoIndicator}>
+                                {unit.suiteDetails?.suiteholder ? (
+                                  <CommandText
+                                    palette={palette}
+                                    variant="caption"
+                                    style={{ color: '#17643B', fontWeight: '600' }}
+                                  >
+                                    Holder: {unit.suiteDetails.suiteholder}
+                                  </CommandText>
+                                ) : unit.standDetails?.concept ? (
+                                  <CommandText
+                                    palette={palette}
+                                    variant="caption"
+                                    style={{ color: '#17643B', fontWeight: '600' }}
+                                  >
+                                    {unit.standDetails.concept}
+                                  </CommandText>
+                                ) : null}
+                                {hasInSeat ? (
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                                    <MaterialCommunityIcons name="seat-passenger" size={12} color="#17643B" />
                                     <CommandText
                                       palette={palette}
                                       variant="caption"
-                                      style={{ color: '#8A5D23', fontSize: 10, fontWeight: '700' }}
+                                      style={{ color: '#17643B', fontSize: 11, fontWeight: '600' }}
                                     >
-                                      BEO READY
+                                      Active In-Seat Orders
                                     </CommandText>
                                   </View>
                                 ) : null}
                               </View>
-                              <CommandText
-                                palette={palette}
-                                variant="body"
-                                style={{ fontWeight: '700', fontSize: 13, color: '#1D2420' }}
-                              >
-                                {unit.name}
-                              </CommandText>
-                              {unit.suiteDetails?.suiteholder ? (
-                                <CommandText
-                                  palette={palette}
-                                  variant="caption"
-                                  style={{ color: '#17643B', fontWeight: '600' }}
-                                >
-                                  Holder: {unit.suiteDetails.suiteholder}
-                                </CommandText>
-                              ) : unit.standDetails?.concept ? (
-                                <CommandText
-                                  palette={palette}
-                                  variant="caption"
-                                  style={{ color: '#17643B', fontWeight: '600' }}
-                                >
-                                  {unit.standDetails.concept}
-                                </CommandText>
-                              ) : null}
-                              {hasInSeat ? (
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                                  <MaterialCommunityIcons name="seat-passenger" size={12} color="#17643B" />
-                                  <CommandText
-                                    palette={palette}
-                                    variant="caption"
-                                    style={{ color: '#17643B', fontSize: 11, fontWeight: '600' }}
-                                  >
-                                    Active In-Seat Orders
-                                  </CommandText>
-                                </View>
-                              ) : null}
-                            </View>
-                            <MaterialCommunityIcons
-                              name="chevron-right"
-                              size={18}
-                              color={isSelected ? '#17643B' : '#B8C2BA'}
-                            />
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  ) : null}
-                </View>
-              );
-            })}
-          </ScrollView>
-        </View>
-
-        {/* RIGHT: Ticketmaster-Style 3D Stadium Bowl Canvas */}
-        <View style={styles.mapCanvas}>
-          {/* Level Filter Bar */}
-          <View style={[styles.canvasHeader, { borderBottomColor: palette.divider }]}>
-            <View>
-              <CommandText palette={palette} variant="label" style={{ color: '#17643B', fontWeight: '800' }}>
-                TICKETMASTER 3D STADIUM ARCHITECTURE
-              </CommandText>
-              <CommandText palette={palette} variant="caption" style={{ color: '#68706A' }}>
-                Concourses, 2 VIP bunkers, 8 service stations, home/visiting team locker rooms, and performer aux suites
-              </CommandText>
-            </View>
-
-            {/* Level Selector Buttons */}
-            <View style={styles.levelFilterRow}>
-              {[
-                { id: 'ALL', label: '3D All Levels' },
-                { id: 'zone-field-sidelines', label: 'Field & Sidelines (0)' },
-                { id: 'zone-concourse-bunkers', label: 'VIP Bunkers (1)' },
-                { id: 'zone-concourse-service-areas', label: 'Concourse 100 (8)' },
-                { id: 'zone-locker-rooms-aux', label: 'Lockers & Aux (0)' },
-                { id: 'zone-300-suites', label: 'Suites 300' },
-                { id: 'zone-200-club', label: 'Club 200' },
-                { id: 'zone-400-upper', label: 'Upper 400' },
-              ].map((lvl) => {
-                const isActive = selectedZoneId === lvl.id;
-                return (
-                  <Pressable
-                    key={lvl.id}
-                    onPress={() => setSelectedZoneId(lvl.id)}
-                    style={[
-                      styles.levelPill,
-                      {
-                        backgroundColor: isActive ? '#17643B' : '#F7F7F4',
-                        borderColor: isActive ? '#17643B' : '#DDE1DA',
-                      },
-                    ]}
-                  >
-                    <CommandText
-                      palette={palette}
-                      variant="caption"
-                      style={{ color: isActive ? '#FFFFFF' : '#1D2420', fontWeight: '700' }}
-                    >
-                      {lvl.label}
-                    </CommandText>
-                  </Pressable>
+                              <MaterialCommunityIcons
+                                name="chevron-right"
+                                size={18}
+                                color={isSelected ? '#17643B' : '#B8C2BA'}
+                              />
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    ) : null}
+                  </View>
                 );
               })}
-            </View>
+            </ScrollView>
           </View>
+        )}
 
-          {/* 3D Visual Stadium Bowl Canvas */}
-          <ScrollView horizontal contentContainerStyle={styles.canvasScrollInner}>
-            <ScrollView contentContainerStyle={styles.stadium3DContainer}>
-              <View
-                style={[
-                  styles.stadiumPerspectiveWrapper,
-                  viewPerspective === '3d_isometric' ? styles.isometricTransform : styles.planTransform,
-                ]}
-              >
-                {/* ── OUTER RING: 400 UPPER DECK & SKYLINE BARS ── */}
-                <View style={styles.outerUpperDeckRing}>
-                  <View style={styles.ringLabelHeader}>
-                    <CommandText palette={palette} variant="caption" style={styles.tierPill}>
-                      LEVEL 400 · UPPER DECK & SKYLINE
-                    </CommandText>
-                  </View>
+        {/* RIGHT / TAB 2: Ticketmaster-Style 3D Stadium Bowl Canvas */}
+        {(!isMobile || mobileTab === 'map') && (
+          <View style={[styles.mapCanvas, { width: isMobile ? '100%' : undefined }]}>
+            {/* Level Filter Bar */}
+            <View style={[styles.canvasHeader, { borderBottomColor: palette.divider }]}>
+              <View>
+                <CommandText palette={palette} variant="label" style={{ color: '#17643B', fontWeight: '800' }}>
+                  TICKETMASTER 3D STADIUM ARCHITECTURE
+                </CommandText>
+                <CommandText palette={palette} variant="caption" style={{ color: '#68706A' }}>
+                  Concourses, 2 VIP bunkers, 8 service hubs, sidelines, endzones &amp; athlete lockers
+                </CommandText>
+              </View>
 
-                  <View style={styles.upperDeckSectors}>
-                    {zonesState
-                      .find((z) => z.id === 'zone-400-upper')
-                      ?.units.map((unit) => {
-                        const isSelected = selectedUnitId === unit.id;
-                        return (
-                          <Pressable
-                            key={unit.id}
-                            onPress={() => handleUnitPress(unit, 'zone-400-upper')}
-                            style={[
-                              styles.sectorBlock,
-                              styles.upperDeckSector,
-                              { backgroundColor: isSelected ? '#17643B' : '#EAF2EC' },
-                            ]}
-                          >
-                            <CommandText
-                              palette={palette}
-                              variant="caption"
-                              style={{ color: isSelected ? '#FFFFFF' : '#17643B', fontWeight: '800', fontSize: 11 }}
-                            >
-                              {unit.code}
-                            </CommandText>
-                            <Text
-                              numberOfLines={1}
-                              style={{ color: isSelected ? '#FFFFFF' : '#1D2420', fontSize: 10 }}
-                            >
-                              {unit.name.split('·')[1]?.trim() ?? unit.name}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                  </View>
+              {/* Level Selector Buttons */}
+              <View style={styles.levelFilterRow}>
+                {[
+                  { id: 'ALL', label: '3D All Levels' },
+                  { id: 'zone-field-sidelines', label: 'Field & Sidelines' },
+                  { id: 'zone-concourse-bunkers', label: 'VIP Bunkers (2)' },
+                  { id: 'zone-concourse-service-areas', label: 'Concourse (8)' },
+                  { id: 'zone-locker-rooms-aux', label: 'Lockers & Aux (6)' },
+                  { id: 'zone-300-suites', label: 'Suites 300' },
+                  { id: 'zone-200-club', label: 'Club 200' },
+                  { id: 'zone-400-upper', label: 'Upper 400' },
+                ].map((lvl) => {
+                  const isActive = selectedZoneId === lvl.id;
+                  return (
+                    <Pressable
+                      key={lvl.id}
+                      onPress={() => setSelectedZoneId(lvl.id)}
+                      style={[
+                        styles.levelPill,
+                        {
+                          backgroundColor: isActive ? '#17643B' : '#F7F7F4',
+                          borderColor: isActive ? '#17643B' : '#DDE1DA',
+                        },
+                      ]}
+                    >
+                      <CommandText
+                        palette={palette}
+                        variant="caption"
+                        style={{ color: isActive ? '#FFFFFF' : '#1D2420', fontWeight: '700' }}
+                      >
+                        {lvl.label}
+                      </CommandText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
 
-                  {/* ── MIDDLE RING 1: 300 LUXURY SUITES TIER ── */}
-                  <View style={styles.suitesTierRing}>
+            {/* 3D Visual Stadium Bowl Canvas */}
+            <ScrollView horizontal contentContainerStyle={styles.canvasScrollInner} showsHorizontalScrollIndicator={true}>
+              <ScrollView contentContainerStyle={styles.stadium3DContainer} showsVerticalScrollIndicator={false}>
+                <View
+                  style={[
+                    styles.stadiumPerspectiveWrapper,
+                    { width: isMobile ? Math.max(340, windowWidth - 32) : 780 },
+                    viewPerspective === '3d_isometric' ? styles.isometricTransform : styles.planTransform,
+                  ]}
+                >
+                  {/* ── OUTER RING: 400 UPPER DECK & SKYLINE BARS ── */}
+                  <View style={styles.outerUpperDeckRing}>
                     <View style={styles.ringLabelHeader}>
-                      <CommandText palette={palette} variant="caption" style={styles.tierPillGold}>
-                        LEVEL 300 · LUXURY SUITES & OWNERS BOXES
+                      <CommandText palette={palette} variant="caption" style={styles.tierPill}>
+                        LEVEL 400 · UPPER DECK &amp; SKYLINE
                       </CommandText>
                     </View>
 
-                    <View style={styles.suitesGridRing}>
+                    <View style={styles.upperDeckSectors}>
                       {zonesState
-                        .find((z) => z.id === 'zone-300-suites')
+                        .find((z) => z.id === 'zone-400-upper')
                         ?.units.map((unit) => {
                           const isSelected = selectedUnitId === unit.id;
-                          const hasBeo = Boolean(unit.suiteDetails?.beoNumber);
                           return (
                             <Pressable
                               key={unit.id}
-                              onPress={() => handleUnitPress(unit, 'zone-300-suites')}
+                              onPress={() => handleUnitPress(unit, 'zone-400-upper')}
                               style={[
                                 styles.sectorBlock,
-                                styles.suiteSectorBlock,
-                                {
-                                  backgroundColor: isSelected ? '#8A5D23' : '#FFF9F0',
-                                  borderColor: isSelected ? '#8A5D23' : '#E8D2A8',
-                                },
+                                styles.upperDeckSector,
+                                { backgroundColor: isSelected ? '#17643B' : '#EAF2EC' },
                               ]}
                             >
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                <MaterialCommunityIcons
-                                  name="glass-cocktail"
-                                  size={12}
-                                  color={isSelected ? '#FFFFFF' : '#8A5D23'}
-                                />
-                                <CommandText
-                                  palette={palette}
-                                  variant="caption"
-                                  style={{
-                                    color: isSelected ? '#FFFFFF' : '#8A5D23',
-                                    fontWeight: '800',
-                                    fontSize: 11,
-                                  }}
-                                >
-                                  {unit.code}
-                                </CommandText>
-                              </View>
+                              <CommandText
+                                palette={palette}
+                                variant="caption"
+                                style={{ color: isSelected ? '#FFFFFF' : '#17643B', fontWeight: '800', fontSize: 11 }}
+                              >
+                                {unit.code}
+                              </CommandText>
                               <Text
                                 numberOfLines={1}
-                                style={{
-                                  color: isSelected ? '#FFFFFF' : '#1D2420',
-                                  fontSize: 10,
-                                  fontWeight: '600',
-                                }}
+                                style={{ color: isSelected ? '#FFFFFF' : '#1D2420', fontSize: 10 }}
                               >
-                                {unit.suiteDetails?.suiteholder ?? unit.name}
+                                {unit.name.split('·')[1]?.trim() ?? unit.name}
                               </Text>
-                              {hasBeo ? (
-                                <View style={styles.miniBeoDot}>
-                                  <Text
-                                    style={{ color: '#FFFFFF', fontSize: 8, fontWeight: '900' }}
-                                  >
-                                    BEO
-                                  </Text>
-                                </View>
-                              ) : null}
                             </Pressable>
                           );
                         })}
                     </View>
 
-                    {/* ── MIDDLE RING 2: 200 CLUB LEVEL TIER ── */}
-                    <View style={styles.clubTierRing}>
-                      <View style={styles.clubSectorsRow}>
+                    {/* ── MIDDLE RING 1: 300 LUXURY SUITES TIER ── */}
+                    <View style={styles.suitesTierRing}>
+                      <View style={styles.ringLabelHeader}>
+                        <CommandText palette={palette} variant="caption" style={styles.tierPillGold}>
+                          LEVEL 300 · LUXURY SUITES &amp; OWNERS BOXES
+                        </CommandText>
+                      </View>
+
+                      <View style={styles.suitesGridRing}>
                         {zonesState
-                          .find((z) => z.id === 'zone-200-club')
+                          .find((z) => z.id === 'zone-300-suites')
                           ?.units.map((unit) => {
                             const isSelected = selectedUnitId === unit.id;
+                            const hasBeo = Boolean(unit.suiteDetails?.beoNumber);
                             return (
                               <Pressable
                                 key={unit.id}
-                                onPress={() => handleUnitPress(unit, 'zone-200-club')}
+                                onPress={() => handleUnitPress(unit, 'zone-300-suites')}
                                 style={[
                                   styles.sectorBlock,
-                                  styles.clubSectorBlock,
-                                  { backgroundColor: isSelected ? '#17643B' : '#E8F5E9' },
+                                  styles.suiteSectorBlock,
+                                  {
+                                    backgroundColor: isSelected ? '#8A5D23' : '#FFF9F0',
+                                    borderColor: isSelected ? '#8A5D23' : '#E8D2A8',
+                                  },
                                 ]}
                               >
-                                <MaterialCommunityIcons
-                                  name="trophy-award"
-                                  size={14}
-                                  color={isSelected ? '#FFFFFF' : '#17643B'}
-                                />
-                                <CommandText
-                                  palette={palette}
-                                  variant="caption"
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                  <MaterialCommunityIcons
+                                    name="glass-cocktail"
+                                    size={12}
+                                    color={isSelected ? '#FFFFFF' : '#8A5D23'}
+                                  />
+                                  <CommandText
+                                    palette={palette}
+                                    variant="caption"
+                                    style={{
+                                      color: isSelected ? '#FFFFFF' : '#8A5D23',
+                                      fontWeight: '800',
+                                      fontSize: 11,
+                                    }}
+                                  >
+                                    {unit.code}
+                                  </CommandText>
+                                </View>
+                                <Text
+                                  numberOfLines={1}
                                   style={{
-                                    color: isSelected ? '#FFFFFF' : '#17643B',
-                                    fontWeight: '800',
-                                    fontSize: 11,
+                                    color: isSelected ? '#FFFFFF' : '#1D2420',
+                                    fontSize: 10,
+                                    fontWeight: '600',
                                   }}
                                 >
-                                  {unit.name}
-                                </CommandText>
+                                  {unit.suiteDetails?.suiteholder ?? unit.name}
+                                </Text>
+                                {hasBeo ? (
+                                  <View style={styles.miniBeoDot}>
+                                    <Text
+                                      style={{ color: '#FFFFFF', fontSize: 8, fontWeight: '900' }}
+                                    >
+                                      BEO
+                                    </Text>
+                                  </View>
+                                ) : null}
                               </Pressable>
                             );
                           })}
                       </View>
 
-                      {/* ── CONCOURSE LEVEL 100: 8 SERVICE AREAS + 2 BUNKERS ── */}
-                      <View style={styles.concourseLevelRing}>
-                        <View style={styles.ringLabelHeader}>
-                          <CommandText palette={palette} variant="caption" style={styles.tierPillConcourse}>
-                            LEVEL 100 · CONCOURSE 8 SERVICE HUBS & 2 FIELD BUNKERS
-                          </CommandText>
-                        </View>
-
-                        {/* Top / North Concourse Outlets & North Bunker */}
-                        <View style={styles.concoursePerimeterRow}>
+                      {/* ── MIDDLE RING 2: 200 CLUB LEVEL TIER ── */}
+                      <View style={styles.clubTierRing}>
+                        <View style={styles.clubSectorsRow}>
                           {zonesState
-                            .find((z) => z.id === 'zone-concourse-service-areas')
-                            ?.units.slice(2, 4)
-                            .map((unit) => {
+                            .find((z) => z.id === 'zone-200-club')
+                            ?.units.map((unit) => {
                               const isSelected = selectedUnitId === unit.id;
                               return (
                                 <Pressable
                                   key={unit.id}
-                                  onPress={() => handleUnitPress(unit, 'zone-concourse-service-areas')}
+                                  onPress={() => handleUnitPress(unit, 'zone-200-club')}
                                   style={[
                                     styles.sectorBlock,
-                                    styles.concourseOutletBlock,
-                                    { backgroundColor: isSelected ? '#17643B' : '#F1F6F2' },
+                                    styles.clubSectorBlock,
+                                    { backgroundColor: isSelected ? '#17643B' : '#E8F5E9' },
                                   ]}
                                 >
+                                  <MaterialCommunityIcons
+                                    name="trophy-award"
+                                    size={14}
+                                    color={isSelected ? '#FFFFFF' : '#17643B'}
+                                  />
                                   <CommandText
                                     palette={palette}
                                     variant="caption"
@@ -1522,424 +1561,466 @@ export function StadiumVenueMap({
                                       fontSize: 11,
                                     }}
                                   >
-                                    {unit.code}
+                                    {unit.name}
                                   </CommandText>
-                                  <Text
-                                    numberOfLines={1}
-                                    style={{ color: isSelected ? '#FFFFFF' : '#1D2420', fontSize: 10 }}
-                                  >
-                                    {unit.name.split('·')[1]?.trim() ?? unit.name}
-                                  </Text>
                                 </Pressable>
                               );
                             })}
                         </View>
 
-                        {/* ── INNER CORE: PLAYING FIELD WITH ENDZONES, SIDELINES & BUNKERS ── */}
-                        <View style={styles.fieldAndSidelinesCore}>
-                          {/* North Endzone & North Bunker */}
-                          <View style={styles.endzoneRowWrapper}>
-                            {/* North Bunker Club */}
-                            {zonesState
-                              .find((z) => z.id === 'zone-concourse-bunkers')
-                              ?.units.filter((u) => u.id === 'u-bunker-north')
-                              .map((unit) => {
-                                const isSelected = selectedUnitId === unit.id;
-                                return (
-                                  <Pressable
-                                    key={unit.id}
-                                    onPress={() => handleUnitPress(unit, 'zone-concourse-bunkers')}
-                                    style={[
-                                      styles.bunkerBox,
-                                      {
-                                        backgroundColor: isSelected ? '#7A5A35' : '#4A341E',
-                                        borderColor: isSelected ? '#FFFFFF' : '#D4AF37',
-                                      },
-                                    ]}
-                                  >
-                                    <MaterialCommunityIcons name="shield-crown" size={14} color="#D4AF37" />
-                                    <CommandText
-                                      palette={palette}
-                                      variant="caption"
-                                      style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 11 }}
-                                    >
-                                      NORTH BUNKER VAULT
-                                    </CommandText>
-                                    <Text
-                                      style={{ color: '#E8D2A8', fontSize: 9 }}
-                                    >
-                                      Chef Carving · Bourbon Bar
-                                    </Text>
-                                  </Pressable>
-                                );
-                              })}
+                        {/* ── CONCOURSE LEVEL 100: 8 SERVICE AREAS + 2 BUNKERS ── */}
+                        <View style={styles.concourseLevelRing}>
+                          <View style={styles.ringLabelHeader}>
+                            <CommandText palette={palette} variant="caption" style={styles.tierPillConcourse}>
+                              LEVEL 100 · CONCOURSE 8 SERVICE HUBS &amp; 2 FIELD BUNKERS
+                            </CommandText>
+                          </View>
 
-                            {/* North Endzone Lounge */}
+                          {/* Top / North Concourse Outlets */}
+                          <View style={styles.concoursePerimeterRow}>
                             {zonesState
-                              .find((z) => z.id === 'zone-field-sidelines')
-                              ?.units.filter((u) => u.id === 'u-endzone-north')
+                              .find((z) => z.id === 'zone-concourse-service-areas')
+                              ?.units.slice(2, 4)
                               .map((unit) => {
                                 const isSelected = selectedUnitId === unit.id;
                                 return (
                                   <Pressable
                                     key={unit.id}
-                                    onPress={() => handleUnitPress(unit, 'zone-field-sidelines')}
+                                    onPress={() => handleUnitPress(unit, 'zone-concourse-service-areas')}
                                     style={[
-                                      styles.endzoneBlock,
-                                      { backgroundColor: isSelected ? '#17643B' : '#0F3F24' },
+                                      styles.sectorBlock,
+                                      styles.concourseOutletBlock,
+                                      { backgroundColor: isSelected ? '#17643B' : '#F1F6F2' },
                                     ]}
                                   >
                                     <CommandText
                                       palette={palette}
                                       variant="caption"
-                                      style={{ color: '#FFFFFF', fontWeight: '900', letterSpacing: 1 }}
+                                      style={{
+                                        color: isSelected ? '#FFFFFF' : '#17643B',
+                                        fontWeight: '800',
+                                        fontSize: 11,
+                                      }}
                                     >
-                                      NORTH ENDZONE
+                                      {unit.code}
                                     </CommandText>
                                     <Text
-                                      style={{ color: '#A3D9B5', fontSize: 9 }}
+                                      numberOfLines={1}
+                                      style={{ color: isSelected ? '#FFFFFF' : '#1D2420', fontSize: 10 }}
                                     >
-                                      Goalpost Lounge & Mobile Orders
+                                      {unit.name.split('·')[1]?.trim() ?? unit.name}
                                     </Text>
                                   </Pressable>
                                 );
                               })}
                           </View>
 
-                          {/* Center Field + Sidelines Split */}
-                          <View style={styles.centerFieldAndSidelinesRow}>
-                            {/* West / Home Sideline Service Area */}
-                            {zonesState
-                              .find((z) => z.id === 'zone-field-sidelines')
-                              ?.units.filter((u) => u.id === 'u-side-home')
-                              .map((unit) => {
-                                const isSelected = selectedUnitId === unit.id;
-                                return (
-                                  <Pressable
-                                    key={unit.id}
-                                    onPress={() => handleUnitPress(unit, 'zone-field-sidelines')}
-                                    style={[
-                                      styles.sidelineStrip,
-                                      {
-                                        backgroundColor: isSelected ? '#17643B' : '#0B331D',
-                                        borderLeftColor: isSelected ? '#FFFFFF' : '#4CAF50',
-                                      },
-                                    ]}
-                                  >
-                                    <CommandText
-                                      palette={palette}
-                                      variant="caption"
-                                      style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 10 }}
+                          {/* ── INNER CORE: PLAYING FIELD WITH ENDZONES, SIDELINES & BUNKERS ── */}
+                          <View style={styles.fieldAndSidelinesCore}>
+                            {/* North Endzone & North Bunker */}
+                            <View style={styles.endzoneRowWrapper}>
+                              {/* North Bunker Club */}
+                              {zonesState
+                                .find((z) => z.id === 'zone-concourse-bunkers')
+                                ?.units.filter((u) => u.id === 'u-bunker-north')
+                                .map((unit) => {
+                                  const isSelected = selectedUnitId === unit.id;
+                                  return (
+                                    <Pressable
+                                      key={unit.id}
+                                      onPress={() => handleUnitPress(unit, 'zone-concourse-bunkers')}
+                                      style={[
+                                        styles.bunkerBox,
+                                        {
+                                          backgroundColor: isSelected ? '#7A5A35' : '#4A341E',
+                                          borderColor: isSelected ? '#FFFFFF' : '#D4AF37',
+                                        },
+                                      ]}
                                     >
-                                      HOME SIDELINE
-                                    </CommandText>
-                                    <Text
-                                      style={{ color: '#A3D9B5', fontSize: 8 }}
-                                    >
-                                      Hydration & VIP Passes
-                                    </Text>
-                                  </Pressable>
-                                );
-                              })}
+                                      <MaterialCommunityIcons name="shield-crown" size={14} color="#D4AF37" />
+                                      <CommandText
+                                        palette={palette}
+                                        variant="caption"
+                                        style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 11 }}
+                                      >
+                                        NORTH BUNKER
+                                      </CommandText>
+                                      <Text
+                                        style={{ color: '#E8D2A8', fontSize: 9 }}
+                                      >
+                                        Chef Carving Vault
+                                      </Text>
+                                    </Pressable>
+                                  );
+                                })}
 
-                            {/* 3D Playing Field */}
-                            <View style={styles.actualPlayingField}>
-                              <View style={styles.fieldHashmarks}>
-                                <View style={styles.yardNumText}>
-                                  <Text
-                                    style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '800' }}
-                                  >
-                                    10
-                                  </Text>
-                                </View>
-                                <View style={styles.yardNumText}>
-                                  <Text
-                                    style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '800' }}
-                                  >
-                                    30
-                                  </Text>
-                                </View>
-                                <View style={styles.yardNumText}>
-                                  <Text
-                                    style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '900' }}
-                                  >
-                                    50
-                                  </Text>
-                                </View>
-                                <View style={styles.yardNumText}>
-                                  <Text
-                                    style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '800' }}
-                                  >
-                                    30
-                                  </Text>
-                                </View>
-                                <View style={styles.yardNumText}>
-                                  <Text
-                                    style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '800' }}
-                                  >
-                                    10
-                                  </Text>
-                                </View>
-                              </View>
-                              <View style={styles.midfieldLogoCircle}>
-                                <MaterialCommunityIcons name="shield-star" size={28} color="#FFFFFF" />
-                                <CommandText
-                                  palette={palette}
-                                  variant="caption"
-                                  style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 10, letterSpacing: 1 }}
-                                >
-                                  VENUE WRANGLER
-                                </CommandText>
-                              </View>
+                              {/* North Endzone Lounge */}
+                              {zonesState
+                                .find((z) => z.id === 'zone-field-sidelines')
+                                ?.units.filter((u) => u.id === 'u-endzone-north')
+                                .map((unit) => {
+                                  const isSelected = selectedUnitId === unit.id;
+                                  return (
+                                    <Pressable
+                                      key={unit.id}
+                                      onPress={() => handleUnitPress(unit, 'zone-field-sidelines')}
+                                      style={[
+                                        styles.endzoneBlock,
+                                        { backgroundColor: isSelected ? '#17643B' : '#0F3F24' },
+                                      ]}
+                                    >
+                                      <CommandText
+                                        palette={palette}
+                                        variant="caption"
+                                        style={{ color: '#FFFFFF', fontWeight: '900', letterSpacing: 1 }}
+                                      >
+                                        NORTH ENDZONE
+                                      </CommandText>
+                                      <Text
+                                        style={{ color: '#A3D9B5', fontSize: 9 }}
+                                      >
+                                        Goalpost Lounge
+                                      </Text>
+                                    </Pressable>
+                                  );
+                                })}
                             </View>
 
-                            {/* East / Visiting Sideline Service Area */}
-                            {zonesState
-                              .find((z) => z.id === 'zone-field-sidelines')
-                              ?.units.filter((u) => u.id === 'u-side-visiting')
-                              .map((unit) => {
-                                const isSelected = selectedUnitId === unit.id;
-                                return (
-                                  <Pressable
-                                    key={unit.id}
-                                    onPress={() => handleUnitPress(unit, 'zone-field-sidelines')}
-                                    style={[
-                                      styles.sidelineStrip,
-                                      {
-                                        backgroundColor: isSelected ? '#17643B' : '#0B331D',
-                                        borderRightColor: isSelected ? '#FFFFFF' : '#4CAF50',
-                                      },
-                                    ]}
-                                  >
-                                    <CommandText
-                                      palette={palette}
-                                      variant="caption"
-                                      style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 10 }}
+                            {/* Center Field + Sidelines Split */}
+                            <View style={styles.centerFieldAndSidelinesRow}>
+                              {/* West / Home Sideline Service Area */}
+                              {zonesState
+                                .find((z) => z.id === 'zone-field-sidelines')
+                                ?.units.filter((u) => u.id === 'u-side-home')
+                                .map((unit) => {
+                                  const isSelected = selectedUnitId === unit.id;
+                                  return (
+                                    <Pressable
+                                      key={unit.id}
+                                      onPress={() => handleUnitPress(unit, 'zone-field-sidelines')}
+                                      style={[
+                                        styles.sidelineStrip,
+                                        {
+                                          backgroundColor: isSelected ? '#17643B' : '#0B331D',
+                                          borderLeftColor: isSelected ? '#FFFFFF' : '#4CAF50',
+                                        },
+                                      ]}
                                     >
-                                      VISITOR SIDELINE
-                                    </CommandText>
-                                    <Text
-                                      style={{ color: '#A3D9B5', fontSize: 8 }}
-                                    >
-                                      Bench Support & Media
-                                    </Text>
-                                  </Pressable>
-                                );
-                              })}
-                          </View>
+                                      <CommandText
+                                        palette={palette}
+                                        variant="caption"
+                                        style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 10 }}
+                                      >
+                                        HOME SIDE
+                                      </CommandText>
+                                      <Text
+                                        style={{ color: '#A3D9B5', fontSize: 8 }}
+                                      >
+                                        Hydration / VIP
+                                      </Text>
+                                    </Pressable>
+                                  );
+                                })}
 
-                          {/* South Endzone & South Bunker */}
-                          <View style={styles.endzoneRowWrapper}>
-                            {/* South Endzone Deck */}
-                            {zonesState
-                              .find((z) => z.id === 'zone-field-sidelines')
-                              ?.units.filter((u) => u.id === 'u-endzone-south')
-                              .map((unit) => {
-                                const isSelected = selectedUnitId === unit.id;
-                                return (
-                                  <Pressable
-                                    key={unit.id}
-                                    onPress={() => handleUnitPress(unit, 'zone-field-sidelines')}
-                                    style={[
-                                      styles.endzoneBlock,
-                                      { backgroundColor: isSelected ? '#17643B' : '#0F3F24' },
-                                    ]}
-                                  >
-                                    <CommandText
-                                      palette={palette}
-                                      variant="caption"
-                                      style={{ color: '#FFFFFF', fontWeight: '900', letterSpacing: 1 }}
-                                    >
-                                      SOUTH ENDZONE
-                                    </CommandText>
+                              {/* 3D Playing Field */}
+                              <View style={styles.actualPlayingField}>
+                                <View style={styles.fieldHashmarks}>
+                                  <View style={styles.yardNumText}>
                                     <Text
-                                      style={{ color: '#A3D9B5', fontSize: 9 }}
+                                      style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '800' }}
                                     >
-                                      Touchdown Terrace & Bar
+                                      10
                                     </Text>
-                                  </Pressable>
-                                );
-                              })}
-
-                            {/* South Bunker Lounge */}
-                            {zonesState
-                              .find((z) => z.id === 'zone-concourse-bunkers')
-                              ?.units.filter((u) => u.id === 'u-bunker-south')
-                              .map((unit) => {
-                                const isSelected = selectedUnitId === unit.id;
-                                return (
-                                  <Pressable
-                                    key={unit.id}
-                                    onPress={() => handleUnitPress(unit, 'zone-concourse-bunkers')}
-                                    style={[
-                                      styles.bunkerBox,
-                                      {
-                                        backgroundColor: isSelected ? '#7A5A35' : '#4A341E',
-                                        borderColor: isSelected ? '#FFFFFF' : '#D4AF37',
-                                      },
-                                    ]}
-                                  >
-                                    <MaterialCommunityIcons name="shield-crown" size={14} color="#D4AF37" />
-                                    <CommandText
-                                      palette={palette}
-                                      variant="caption"
-                                      style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 11 }}
-                                    >
-                                      SOUTH BUNKER FOUNDERS
-                                    </CommandText>
+                                  </View>
+                                  <View style={styles.yardNumText}>
                                     <Text
-                                      style={{ color: '#E8D2A8', fontSize: 9 }}
+                                      style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '800' }}
                                     >
-                                      Smoked Brisket · Taproom
+                                      30
                                     </Text>
-                                  </Pressable>
-                                );
-                              })}
-                          </View>
-                        </View>
-
-                        {/* Bottom / South Concourse Outlets */}
-                        <View style={styles.concoursePerimeterRow}>
-                          {zonesState
-                            .find((z) => z.id === 'zone-concourse-service-areas')
-                            ?.units.slice(6, 8)
-                            .map((unit) => {
-                              const isSelected = selectedUnitId === unit.id;
-                              return (
-                                <Pressable
-                                  key={unit.id}
-                                  onPress={() => handleUnitPress(unit, 'zone-concourse-service-areas')}
-                                  style={[
-                                    styles.sectorBlock,
-                                    styles.concourseOutletBlock,
-                                    { backgroundColor: isSelected ? '#17643B' : '#F1F6F2' },
-                                  ]}
-                                >
+                                  </View>
+                                  <View style={styles.yardNumText}>
+                                    <Text
+                                      style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '900' }}
+                                    >
+                                      50
+                                    </Text>
+                                  </View>
+                                  <View style={styles.yardNumText}>
+                                    <Text
+                                      style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '800' }}
+                                    >
+                                      30
+                                    </Text>
+                                  </View>
+                                  <View style={styles.yardNumText}>
+                                    <Text
+                                      style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '800' }}
+                                    >
+                                      10
+                                    </Text>
+                                  </View>
+                                </View>
+                                <View style={styles.midfieldLogoCircle}>
+                                  <MaterialCommunityIcons name="shield-star" size={28} color="#FFFFFF" />
                                   <CommandText
                                     palette={palette}
                                     variant="caption"
-                                    style={{
-                                      color: isSelected ? '#FFFFFF' : '#17643B',
-                                      fontWeight: '800',
-                                      fontSize: 11,
-                                    }}
+                                    style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 10, letterSpacing: 1 }}
                                   >
-                                    {unit.code}
+                                    VENUE WRANGLER
                                   </CommandText>
-                                  <Text
-                                    numberOfLines={1}
-                                    style={{ color: isSelected ? '#FFFFFF' : '#1D2420', fontSize: 10 }}
+                                </View>
+                              </View>
+
+                              {/* East / Visiting Sideline Service Area */}
+                              {zonesState
+                                .find((z) => z.id === 'zone-field-sidelines')
+                                ?.units.filter((u) => u.id === 'u-side-visiting')
+                                .map((unit) => {
+                                  const isSelected = selectedUnitId === unit.id;
+                                  return (
+                                    <Pressable
+                                      key={unit.id}
+                                      onPress={() => handleUnitPress(unit, 'zone-field-sidelines')}
+                                      style={[
+                                        styles.sidelineStrip,
+                                        {
+                                          backgroundColor: isSelected ? '#17643B' : '#0B331D',
+                                          borderRightColor: isSelected ? '#FFFFFF' : '#4CAF50',
+                                        },
+                                      ]}
+                                    >
+                                      <CommandText
+                                        palette={palette}
+                                        variant="caption"
+                                        style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 10 }}
+                                      >
+                                        VISIT SIDE
+                                      </CommandText>
+                                      <Text
+                                        style={{ color: '#A3D9B5', fontSize: 8 }}
+                                      >
+                                        Bench / Media
+                                      </Text>
+                                    </Pressable>
+                                  );
+                                })}
+                            </View>
+
+                            {/* South Endzone & South Bunker */}
+                            <View style={styles.endzoneRowWrapper}>
+                              {/* South Endzone Deck */}
+                              {zonesState
+                                .find((z) => z.id === 'zone-field-sidelines')
+                                ?.units.filter((u) => u.id === 'u-endzone-south')
+                                .map((unit) => {
+                                  const isSelected = selectedUnitId === unit.id;
+                                  return (
+                                    <Pressable
+                                      key={unit.id}
+                                      onPress={() => handleUnitPress(unit, 'zone-field-sidelines')}
+                                      style={[
+                                        styles.endzoneBlock,
+                                        { backgroundColor: isSelected ? '#17643B' : '#0F3F24' },
+                                      ]}
+                                    >
+                                      <CommandText
+                                        palette={palette}
+                                        variant="caption"
+                                        style={{ color: '#FFFFFF', fontWeight: '900', letterSpacing: 1 }}
+                                      >
+                                        SOUTH ENDZONE
+                                      </CommandText>
+                                      <Text
+                                        style={{ color: '#A3D9B5', fontSize: 9 }}
+                                      >
+                                        Touchdown Terrace
+                                      </Text>
+                                    </Pressable>
+                                  );
+                                })}
+
+                              {/* South Bunker Lounge */}
+                              {zonesState
+                                .find((z) => z.id === 'zone-concourse-bunkers')
+                                ?.units.filter((u) => u.id === 'u-bunker-south')
+                                .map((unit) => {
+                                  const isSelected = selectedUnitId === unit.id;
+                                  return (
+                                    <Pressable
+                                      key={unit.id}
+                                      onPress={() => handleUnitPress(unit, 'zone-concourse-bunkers')}
+                                      style={[
+                                        styles.bunkerBox,
+                                        {
+                                          backgroundColor: isSelected ? '#7A5A35' : '#4A341E',
+                                          borderColor: isSelected ? '#FFFFFF' : '#D4AF37',
+                                        },
+                                      ]}
+                                    >
+                                      <MaterialCommunityIcons name="shield-crown" size={14} color="#D4AF37" />
+                                      <CommandText
+                                        palette={palette}
+                                        variant="caption"
+                                        style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 11 }}
+                                      >
+                                        SOUTH BUNKER
+                                      </CommandText>
+                                      <Text
+                                        style={{ color: '#E8D2A8', fontSize: 9 }}
+                                      >
+                                        Founders Taproom
+                                      </Text>
+                                    </Pressable>
+                                  );
+                                })}
+                            </View>
+                          </View>
+
+                          {/* Bottom / South Concourse Outlets */}
+                          <View style={styles.concoursePerimeterRow}>
+                            {zonesState
+                              .find((z) => z.id === 'zone-concourse-service-areas')
+                              ?.units.slice(6, 8)
+                              .map((unit) => {
+                                const isSelected = selectedUnitId === unit.id;
+                                return (
+                                  <Pressable
+                                    key={unit.id}
+                                    onPress={() => handleUnitPress(unit, 'zone-concourse-service-areas')}
+                                    style={[
+                                      styles.sectorBlock,
+                                      styles.concourseOutletBlock,
+                                      { backgroundColor: isSelected ? '#17643B' : '#F1F6F2' },
+                                    ]}
                                   >
-                                    {unit.name.split('·')[1]?.trim() ?? unit.name}
-                                  </Text>
-                                </Pressable>
-                              );
-                            })}
+                                    <CommandText
+                                      palette={palette}
+                                      variant="caption"
+                                      style={{
+                                        color: isSelected ? '#FFFFFF' : '#17643B',
+                                        fontWeight: '800',
+                                        fontSize: 11,
+                                      }}
+                                    >
+                                      {unit.code}
+                                    </CommandText>
+                                    <Text
+                                      numberOfLines={1}
+                                      style={{ color: isSelected ? '#FFFFFF' : '#1D2420', fontSize: 10 }}
+                                    >
+                                      {unit.name.split('·')[1]?.trim() ?? unit.name}
+                                    </Text>
+                                  </Pressable>
+                                );
+                              })}
+                          </View>
                         </View>
                       </View>
                     </View>
                   </View>
-                </View>
 
-                {/* ── UNDERGROUND / LEVEL 0: TEAM LOCKERS & PERFORMER AUX SUITES ── */}
-                <View style={styles.undergroundLockerCompound}>
-                  <View style={styles.ringLabelHeader}>
-                    <CommandText palette={palette} variant="caption" style={styles.tierPillUnderground}>
-                      LEVEL 0 · ATHLETE COMPOUND & PERFORMER AUX SUITES
-                    </CommandText>
-                  </View>
+                  {/* ── UNDERGROUND / LEVEL 0: TEAM LOCKERS & PERFORMER AUX SUITES ── */}
+                  <View style={styles.undergroundLockerCompound}>
+                    <View style={styles.ringLabelHeader}>
+                      <CommandText palette={palette} variant="caption" style={styles.tierPillUnderground}>
+                        LEVEL 0 · ATHLETE COMPOUND &amp; PERFORMER AUX SUITES
+                      </CommandText>
+                    </View>
 
-                  <View style={styles.lockersGridRow}>
-                    {zonesState
-                      .find((z) => z.id === 'zone-locker-rooms-aux')
-                      ?.units.map((unit) => {
-                        const isSelected = selectedUnitId === unit.id;
-                        const isHome = unit.id === 'u-lck-home';
-                        const isVisit = unit.id === 'u-lck-visiting';
-                        const isHeadliner = unit.id === 'u-aux-headliner';
+                    <View style={styles.lockersGridRow}>
+                      {zonesState
+                        .find((z) => z.id === 'zone-locker-rooms-aux')
+                        ?.units.map((unit) => {
+                          const isSelected = selectedUnitId === unit.id;
+                          const isHome = unit.id === 'u-lck-home';
+                          const isVisit = unit.id === 'u-lck-visiting';
+                          const isHeadliner = unit.id === 'u-aux-headliner';
 
-                        return (
-                          <Pressable
-                            key={unit.id}
-                            onPress={() => handleUnitPress(unit, 'zone-locker-rooms-aux')}
-                            style={[
-                              styles.lockerRoomCard,
-                              {
-                                backgroundColor: isSelected
-                                  ? '#17643B'
-                                  : isHome
-                                    ? '#E8F5E9'
-                                    : isVisit
-                                      ? '#EDE7F6'
-                                      : isHeadliner
-                                        ? '#FFF8E1'
-                                        : '#F5F5F5',
-                                borderColor: isSelected
-                                  ? '#17643B'
-                                  : isHome
-                                    ? '#4CAF50'
-                                    : isVisit
-                                      ? '#9575CD'
-                                      : isHeadliner
-                                        ? '#FFB300'
-                                        : '#DDE1DA',
-                              },
-                            ]}
-                          >
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                              <MaterialCommunityIcons
-                                name={
-                                  isHome || isVisit
-                                    ? 'shield-account'
-                                    : isHeadliner
-                                      ? 'star-face'
-                                      : 'account-group'
-                                }
-                                size={16}
-                                color={isSelected ? '#FFFFFF' : '#1D2420'}
-                              />
-                              <CommandText
-                                palette={palette}
-                                variant="caption"
-                                style={{
-                                  color: isSelected ? '#FFFFFF' : '#1D2420',
-                                  fontWeight: '800',
-                                  fontSize: 11,
-                                }}
-                              >
-                                {unit.code}
-                              </CommandText>
-                            </View>
-                            <Text
-                              numberOfLines={1}
-                              style={{
-                                color: isSelected ? '#FFFFFF' : '#1D2420',
-                                fontWeight: '700',
-                                fontSize: 11,
-                              }}
+                          return (
+                            <Pressable
+                              key={unit.id}
+                              onPress={() => handleUnitPress(unit, 'zone-locker-rooms-aux')}
+                              style={[
+                                styles.lockerRoomCard,
+                                {
+                                  backgroundColor: isSelected
+                                    ? '#17643B'
+                                    : isHome
+                                      ? '#E8F5E9'
+                                      : isVisit
+                                        ? '#EDE7F6'
+                                        : isHeadliner
+                                          ? '#FFF8E1'
+                                          : '#F5F5F5',
+                                  borderColor: isSelected
+                                    ? '#17643B'
+                                    : isHome
+                                      ? '#4CAF50'
+                                      : isVisit
+                                        ? '#9575CD'
+                                        : isHeadliner
+                                          ? '#FFB300'
+                                          : '#DDE1DA',
+                                },
+                              ]}
                             >
-                              {unit.name}
-                            </Text>
-                            {unit.suiteDetails?.beoPackageName ? (
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <MaterialCommunityIcons
+                                  name={
+                                    isHome || isVisit
+                                      ? 'shield-account'
+                                      : isHeadliner
+                                        ? 'star-face'
+                                        : 'account-group'
+                                  }
+                                  size={16}
+                                  color={isSelected ? '#FFFFFF' : '#1D2420'}
+                                />
+                                <CommandText
+                                  palette={palette}
+                                  variant="caption"
+                                  style={{
+                                    color: isSelected ? '#FFFFFF' : '#1D2420',
+                                    fontWeight: '800',
+                                    fontSize: 11,
+                                  }}
+                                >
+                                  {unit.code}
+                                </CommandText>
+                              </View>
                               <Text
                                 numberOfLines={1}
                                 style={{
-                                  color: isSelected ? '#FFFFFF' : '#17643B',
-                                  fontSize: 10,
+                                  color: isSelected ? '#FFFFFF' : '#1D2420',
+                                  fontWeight: '700',
+                                  fontSize: 11,
                                 }}
                               >
-                                Catering: {unit.suiteDetails.beoPackageName}
+                                {unit.name}
                               </Text>
-                            ) : null}
-                          </Pressable>
-                        );
-                      })}
+                              {unit.suiteDetails?.beoPackageName ? (
+                                <Text
+                                  numberOfLines={1}
+                                  style={{
+                                    color: isSelected ? '#FFFFFF' : '#17643B',
+                                    fontSize: 10,
+                                  }}
+                                >
+                                  Catering: {unit.suiteDetails.beoPackageName}
+                                </Text>
+                              ) : null}
+                            </Pressable>
+                          );
+                        })}
+                    </View>
                   </View>
                 </View>
-              </View>
+              </ScrollView>
             </ScrollView>
-          </ScrollView>
-        </View>
+          </View>
+        )}
       </View>
 
       {/* Unit Detail Modal Drawer */}
@@ -1964,6 +2045,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
+    gap: spacing.sm,
   },
   searchRow: {
     flexDirection: 'row',
@@ -1987,17 +2069,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 8,
+  },
+  mobileTabSwitcher: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  mobileTabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 6,
+    borderWidth: 1,
   },
   mainLayout: {
     flex: 1,
-    flexDirection: 'row',
   },
   sidebarList: {
-    width: 330,
     backgroundColor: '#FFFFFF',
-    borderRightWidth: 1,
   },
   sidebarHeader: {
     paddingHorizontal: spacing.md,
@@ -2075,11 +2168,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stadium3DContainer: {
-    padding: spacing.lg,
+    padding: spacing.sm,
     alignItems: 'center',
   },
   stadiumPerspectiveWrapper: {
-    width: 780,
     alignItems: 'center',
     gap: spacing.md,
   },
@@ -2094,12 +2186,12 @@ const styles = StyleSheet.create({
   outerUpperDeckRing: {
     width: '100%',
     backgroundColor: '#FFFFFF',
-    borderRadius: 40,
+    borderRadius: 36,
     borderWidth: 2,
     borderColor: '#17643B',
-    padding: spacing.md,
+    padding: spacing.sm,
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.xs,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
@@ -2115,7 +2207,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 10,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4,
   },
@@ -2124,7 +2216,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 10,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4,
   },
@@ -2133,7 +2225,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 10,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4,
   },
@@ -2142,7 +2234,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 10,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4,
   },
@@ -2150,97 +2242,97 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     width: '100%',
-    gap: spacing.sm,
+    gap: 4,
   },
   sectorBlock: {
     borderRadius: 6,
-    padding: spacing.sm,
+    padding: 6,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#DDE1DA',
   },
   upperDeckSector: {
     flex: 1,
-    minHeight: 48,
+    minHeight: 44,
     justifyContent: 'center',
   },
 
   suitesTierRing: {
-    width: '95%',
+    width: '96%',
     backgroundColor: '#FFFFFF',
-    borderRadius: 30,
+    borderRadius: 28,
     borderWidth: 2,
     borderColor: '#E8D2A8',
-    padding: spacing.md,
+    padding: spacing.xs,
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   suitesGridRing: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     width: '100%',
-    gap: 6,
+    gap: 4,
   },
   suiteSectorBlock: {
     flexGrow: 1,
-    flexBasis: 110,
-    minHeight: 52,
+    flexBasis: 90,
+    minHeight: 46,
     justifyContent: 'center',
     position: 'relative',
   },
   miniBeoDot: {
     position: 'absolute',
-    top: 3,
-    right: 3,
+    top: 2,
+    right: 2,
     backgroundColor: '#8A5D23',
-    paddingHorizontal: 4,
+    paddingHorizontal: 3,
     paddingVertical: 1,
     borderRadius: 3,
   },
 
   clubTierRing: {
-    width: '94%',
+    width: '95%',
     backgroundColor: '#FAFAF8',
-    borderRadius: 24,
+    borderRadius: 22,
     borderWidth: 1.5,
     borderColor: '#B6D6BE',
-    padding: spacing.sm,
+    padding: 6,
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   clubSectorsRow: {
     flexDirection: 'row',
     width: '100%',
-    gap: spacing.sm,
+    gap: 4,
   },
   clubSectorBlock: {
     flex: 1,
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 8,
-    minHeight: 42,
+    gap: 6,
+    minHeight: 38,
   },
 
   concourseLevelRing: {
     width: '98%',
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 1.5,
     borderColor: '#CBD5CD',
-    padding: spacing.sm,
+    padding: 6,
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 6,
   },
   concoursePerimeterRow: {
     flexDirection: 'row',
     width: '100%',
     justifyContent: 'space-around',
-    gap: spacing.sm,
+    gap: 4,
   },
   concourseOutletBlock: {
     flex: 1,
-    minHeight: 46,
+    minHeight: 42,
     justifyContent: 'center',
   },
 
@@ -2248,9 +2340,9 @@ const styles = StyleSheet.create({
   fieldAndSidelinesCore: {
     width: '100%',
     backgroundColor: '#072E19',
-    borderRadius: 16,
-    padding: spacing.sm,
-    gap: spacing.xs,
+    borderRadius: 14,
+    padding: 6,
+    gap: 4,
     alignItems: 'center',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 6 },
@@ -2260,20 +2352,20 @@ const styles = StyleSheet.create({
   endzoneRowWrapper: {
     flexDirection: 'row',
     width: '100%',
-    gap: spacing.xs,
+    gap: 4,
   },
   bunkerBox: {
     flex: 1,
     borderRadius: 6,
     borderWidth: 1.5,
-    padding: spacing.xs,
+    padding: 4,
     alignItems: 'center',
     justifyContent: 'center',
   },
   endzoneBlock: {
-    flex: 1.8,
+    flex: 1.6,
     borderRadius: 6,
-    padding: spacing.xs,
+    padding: 4,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -2282,13 +2374,13 @@ const styles = StyleSheet.create({
   centerFieldAndSidelinesRow: {
     flexDirection: 'row',
     width: '100%',
-    minHeight: 140,
-    gap: spacing.xs,
+    minHeight: 120,
+    gap: 4,
   },
   sidelineStrip: {
-    width: 85,
+    width: 68,
     borderRadius: 6,
-    padding: spacing.xs,
+    padding: 2,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
@@ -2309,7 +2401,7 @@ const styles = StyleSheet.create({
     width: '100%',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: 6,
   },
   yardNumText: {
     opacity: 0.75,
@@ -2319,30 +2411,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(7, 46, 25, 0.4)',
     borderRadius: 50,
-    padding: spacing.sm,
+    padding: 6,
   },
 
   /* ── Level 0 Lockers & Aux ── */
   undergroundLockerCompound: {
     width: '100%',
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1.5,
     borderColor: '#37474F',
-    padding: spacing.md,
-    gap: spacing.sm,
+    padding: spacing.sm,
+    gap: 6,
   },
   lockersGridRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: 6,
   },
   lockerRoomCard: {
     flexGrow: 1,
-    flexBasis: 220,
-    padding: spacing.sm,
+    flexBasis: 160,
+    padding: 6,
     borderRadius: 6,
     borderWidth: 1.5,
-    gap: 3,
+    gap: 2,
   },
 });
