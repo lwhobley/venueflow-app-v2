@@ -1548,7 +1548,7 @@ export function StadiumVenueMap({
                     <View style={styles.roofRailTrack} />
                   </View>
 
-                  {/* ── NORTH GATE: FORD GATE (North Plaza & Arrival) ── */}
+                  {/* ── NORTH GATE TOWER: FORD GATE (North Entrance Plaza) ── */}
                   <View style={styles.gateNorthWrapper}>
                     {zonesState
                       .find((z) => z.id === 'zone-stadium-gates')
@@ -1560,29 +1560,32 @@ export function StadiumVenueMap({
                             key={unit.id}
                             onPress={() => handleUnitPress(unit, 'zone-stadium-gates')}
                             style={[
-                              styles.gateNorthBanner,
-                              isSelected ? styles.serviceAreaGlowActive : null,
+                              styles.gateTowerStructure,
+                              styles.gateNorthTower,
+                              isSelected ? styles.gateTowerActive : null,
                             ]}
                           >
-                            <View style={styles.gateFordBadge}>
-                              <Text style={styles.gateFordText}>Ford</Text>
-                              <Text style={styles.gateBadgeSub}>GATE</Text>
+                            <View style={styles.gatePylonPillarLeft} />
+                            <View style={styles.gateTowerCenterHub}>
+                              <View style={styles.gateFordBadge}>
+                                <Text style={styles.gateFordText}>Ford</Text>
+                                <Text style={styles.gateBadgeSub}>GATE PORTAL</Text>
+                              </View>
+                              <View style={{ alignItems: 'center' }}>
+                                <Text style={styles.gateTowerTitle}>
+                                  NORTH ARRIVAL PLAZA · TURNSTILES & VIP PORTAL
+                                </Text>
+                                <View style={styles.turnstileBayRow}>
+                                  <View style={styles.turnstileCanopy} />
+                                  <Text style={styles.turnstileMetaText}>16 Electronic Scanning Gates · Fast-Track VIP</Text>
+                                  <View style={styles.turnstileCanopy} />
+                                </View>
+                              </View>
                             </View>
-                            <View style={{ alignItems: 'center' }}>
-                              <CommandText
-                                palette={palette}
-                                variant="caption"
-                                style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 11, letterSpacing: 0.5 }}
-                              >
-                                NORTH PLAZA · VIP ARRIVAL & EXPEDITION
-                              </CommandText>
-                              <Text style={{ color: '#B0C4DE', fontSize: 9 }}>
-                                16 Turnstiles · Ticket Scanning · Concierge Hospitality
-                              </Text>
-                            </View>
+                            <View style={styles.gatePylonPillarRight} />
                             {isSelected ? (
-                              <View style={styles.activeGlowBeacon}>
-                                <Text style={styles.activeGlowBeaconText}>★ ACTIVE SERVICE AREA</Text>
+                              <View style={styles.architecturalActiveBadge}>
+                                <Text style={styles.architecturalActiveBadgeText}>★ SELECTED GATE PORTAL</Text>
                               </View>
                             ) : null}
                           </Pressable>
@@ -1598,14 +1601,18 @@ export function StadiumVenueMap({
                     </View>
                   </View>
 
-                  {/* ── LEVEL 500/600 UPPER BOWL (TEXANS ICONIC RED DECK) ── */}
+                  {/* ── LEVEL 500/600 UPPER BOWL (TEXANS RED GRANDSTAND TIERS) ── */}
                   <View style={styles.outerUpperDeckRingRed}>
                     <View style={styles.ringLabelHeader}>
-                      <CommandText palette={palette} variant="caption" style={styles.tierPillRed}>
-                        LEVEL 500 / 600 · UPPER BOWL (TEXANS RED DECK)
-                      </CommandText>
+                      <View style={styles.stadiumTierBadgeRed}>
+                        <MaterialCommunityIcons name="stairs-up" size={12} color="#FFFFFF" />
+                        <Text style={styles.tierPillRedText}>
+                          LEVEL 500 / 600 · UPPER BOWL (RAKED SEATING GRANDSTANDS)
+                        </Text>
+                      </View>
                     </View>
 
+                    {/* Grandstand Seating Sectors with Raked Stepped Rows */}
                     <View style={styles.upperDeckSectors}>
                       {zonesState
                         .find((z) => z.id === 'zone-400-upper')
@@ -1616,27 +1623,37 @@ export function StadiumVenueMap({
                               key={unit.id}
                               onPress={() => handleUnitPress(unit, 'zone-400-upper')}
                               style={[
-                                styles.sectorBlock,
-                                styles.upperDeckSectorRed,
-                                isSelected ? styles.serviceAreaGlowActive : null,
+                                styles.grandstandSeatingSection,
+                                isSelected ? styles.grandstandSectionActive : null,
                               ]}
                             >
-                              <CommandText
-                                palette={palette}
-                                variant="caption"
-                                style={{ color: isSelected ? '#FFFFFF' : '#FFEBEB', fontWeight: '900', fontSize: 11 }}
-                              >
-                                {unit.code}
-                              </CommandText>
-                              <Text
-                                numberOfLines={1}
-                                style={{ color: isSelected ? '#FFFFFF' : '#FFCDD2', fontSize: 10, fontWeight: '600' }}
-                              >
-                                {unit.name.split('·')[1]?.trim() ?? unit.name}
-                              </Text>
+                              {/* Stadium Floodlight Top Beacon */}
+                              <View style={styles.grandstandFloodlightRow}>
+                                <View style={[styles.floodlightDot, isSelected ? styles.floodlightDotActive : null]} />
+                                <Text style={styles.grandstandSectionCode}>{unit.code}</Text>
+                                <View style={[styles.floodlightDot, isSelected ? styles.floodlightDotActive : null]} />
+                              </View>
+
+                              {/* Stepped Physical Seat Rows */}
+                              <View style={styles.steppedSeatsContainer}>
+                                <View style={[styles.seatRowLine, { opacity: 0.9 }]} />
+                                <View style={[styles.seatRowLine, { opacity: 0.75 }]} />
+                                <View style={[styles.seatRowLine, { opacity: 0.6 }]} />
+                              </View>
+
+                              {/* Section Title & Vomitory Arch */}
+                              <View style={styles.grandstandLowerDeck}>
+                                <Text numberOfLines={1} style={styles.grandstandTitleText}>
+                                  {unit.name.split('·')[1]?.trim() ?? unit.name}
+                                </Text>
+                                <View style={styles.vomitoryTunnelArch}>
+                                  <Text style={styles.vomitoryTunnelText}>GATE EXIT</Text>
+                                </View>
+                              </View>
+
                               {isSelected ? (
-                                <View style={styles.miniActiveIndicator}>
-                                  <Text style={styles.miniActiveIndicatorText}>ACTIVE</Text>
+                                <View style={styles.grandstandActiveHalo}>
+                                  <Text style={styles.grandstandActiveHaloText}>★ ACTIVE GRANDSTAND</Text>
                                 </View>
                               ) : null}
                             </Pressable>
@@ -1644,9 +1661,9 @@ export function StadiumVenueMap({
                         })}
                     </View>
 
-                    {/* ── WEST & EAST GATES WRAPPER AROUND SUITES ── */}
+                    {/* ── WEST & EAST GATE TOWERS FLANKING SUITES ── */}
                     <View style={styles.middleGatesSideRow}>
-                      {/* WEST: Phillips 66 Gate */}
+                      {/* WEST: Phillips 66 Gate Tower */}
                       {zonesState
                         .find((z) => z.id === 'zone-stadium-gates')
                         ?.units.filter((u) => u.id === 'u-gate-p66')
@@ -1657,27 +1674,38 @@ export function StadiumVenueMap({
                               key={unit.id}
                               onPress={() => handleUnitPress(unit, 'zone-stadium-gates')}
                               style={[
-                                styles.gateSidePillWest,
-                                isSelected ? styles.serviceAreaGlowActive : null,
+                                styles.sideGateTowerWest,
+                                isSelected ? styles.gateTowerActive : null,
                               ]}
                             >
                               <View style={styles.p66Badge}>
                                 <Text style={styles.p66TextTop}>PHILLIPS</Text>
                                 <Text style={styles.p66TextBottom}>66</Text>
                               </View>
-                              <Text style={styles.gateSideText}>WEST GATE · SUITEHOLDER & MEDIA</Text>
+                              <Text style={styles.sideGateTowerText}>WEST GATE TOWER</Text>
+                              <View style={styles.sideGatePylonFin} />
+                              <Text style={styles.sideGateTowerSub}>Suiteholder & Media Elevators</Text>
+                              {isSelected ? (
+                                <View style={styles.sideGateActiveIndicator}>
+                                  <Text style={styles.sideGateActiveIndicatorText}>ACTIVE</Text>
+                                </View>
+                              ) : null}
                             </Pressable>
                           );
                         })}
 
-                      {/* ── LEVEL 300 & 400 LUXURY SUITE RINGS (EXECUTIVE GLASS) ── */}
+                      {/* ── LEVEL 300 & 400 LUXURY SUITE RINGS (EXECUTIVE GLASS PAVILIONS) ── */}
                       <View style={styles.suitesTierRing}>
                         <View style={styles.ringLabelHeader}>
-                          <CommandText palette={palette} variant="caption" style={styles.tierPillGold}>
-                            LEVEL 300 / 400 · LUXURY SUITES & VIP OWNERS BOXES
-                          </CommandText>
+                          <View style={styles.stadiumTierBadgeGold}>
+                            <MaterialCommunityIcons name="glass-cocktail" size={12} color="#FFFFFF" />
+                            <Text style={styles.tierPillGoldText}>
+                              LEVEL 300 / 400 · EXECUTIVE CANTILEVERED SUITES & VIP BOXES
+                            </Text>
+                          </View>
                         </View>
 
+                        {/* Architectural Glass Suite Boxes */}
                         <View style={styles.suitesGridRing}>
                           {zonesState
                             .find((z) => z.id === 'zone-300-suites')
@@ -1689,49 +1717,45 @@ export function StadiumVenueMap({
                                   key={unit.id}
                                   onPress={() => handleUnitPress(unit, 'zone-300-suites')}
                                   style={[
-                                    styles.sectorBlock,
-                                    styles.suiteSectorBlock,
-                                    isSelected ? styles.serviceAreaGlowActive : null,
+                                    styles.suitePavilionBox,
+                                    isSelected ? styles.suitePavilionActive : null,
                                   ]}
                                 >
-                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                    <MaterialCommunityIcons
-                                      name="glass-cocktail"
-                                      size={12}
-                                      color={isSelected ? '#FFFFFF' : '#8A5D23'}
-                                    />
-                                    <CommandText
-                                      palette={palette}
-                                      variant="caption"
-                                      style={{
-                                        color: isSelected ? '#FFFFFF' : '#8A5D23',
-                                        fontWeight: '800',
-                                        fontSize: 11,
-                                      }}
-                                    >
-                                      {unit.code}
-                                    </CommandText>
-                                  </View>
-                                  <Text
-                                    numberOfLines={1}
-                                    style={{
-                                      color: isSelected ? '#FFFFFF' : '#1D2420',
-                                      fontSize: 10,
-                                      fontWeight: '700',
-                                    }}
-                                  >
-                                    {unit.suiteDetails?.suiteholder ?? unit.name}
-                                  </Text>
-                                  {hasBeo ? (
-                                    <View style={styles.miniBeoDot}>
-                                      <Text style={{ color: '#FFFFFF', fontSize: 8, fontWeight: '900' }}>
-                                        BEO READY
-                                      </Text>
+                                  {/* Cantilevered Balcony Glass Facade */}
+                                  <View style={styles.suiteGlassFacade}>
+                                    <View style={styles.suiteBalconyRail} />
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', paddingHorizontal: 4 }}>
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                                        <MaterialCommunityIcons
+                                          name="glass-cocktail"
+                                          size={11}
+                                          color={isSelected ? '#FFD700' : '#8A5D23'}
+                                        />
+                                        <Text style={[styles.suiteCodeText, { color: isSelected ? '#FFFFFF' : '#8A5D23' }]}>
+                                          {unit.code}
+                                        </Text>
+                                      </View>
+                                      {hasBeo ? (
+                                        <View style={styles.suiteBeoChip}>
+                                          <Text style={styles.suiteBeoChipText}>BEO READY</Text>
+                                        </View>
+                                      ) : null}
                                     </View>
-                                  ) : null}
+                                  </View>
+
+                                  {/* Suite Interior Lounge */}
+                                  <View style={styles.suiteLoungeInterior}>
+                                    <Text numberOfLines={1} style={[styles.suiteholderText, { color: isSelected ? '#FFFFFF' : '#1D2420' }]}>
+                                      {unit.suiteDetails?.suiteholder ?? unit.name}
+                                    </Text>
+                                    <Text style={[styles.suiteTierSub, { color: isSelected ? '#E0E7FF' : '#78909C' }]}>
+                                      {unit.suiteDetails?.tier ?? 'Executive Tier'}
+                                    </Text>
+                                  </View>
+
                                   {isSelected ? (
-                                    <View style={styles.miniActiveIndicator}>
-                                      <Text style={styles.miniActiveIndicatorText}>★ ACTIVE</Text>
+                                    <View style={styles.suiteActiveBadge}>
+                                      <Text style={styles.suiteActiveBadgeText}>★ ACTIVE SUITE</Text>
                                     </View>
                                   ) : null}
                                 </Pressable>
@@ -1739,12 +1763,12 @@ export function StadiumVenueMap({
                             })}
                         </View>
 
-                        {/* ── LEVEL 200 CLUB TIER (TEXANS NAVY + 360° LED RIBBON BOARD) ── */}
+                        {/* ── LEVEL 200 CLUB TIER (CURVED TERRACE + 360° LED RIBBON BOARD) ── */}
                         <View style={styles.clubTierRing}>
-                          {/* 360 LED Ribbon Banner */}
+                          {/* 360 Dynamic LED Ribbon Banner */}
                           <View style={styles.ribbonLedDisplay}>
                             <Text style={styles.ribbonLedText}>
-                              ★ HOUSTON TEXANS · CLUB LEVEL 200 · LIVE GAMEDAY HOSPITALITY ★
+                              ★ HOUSTON TEXANS · CLUB LEVEL 200 TERRACE · 360° LED HOSPITALITY RIBBON ★
                             </Text>
                           </View>
 
@@ -1758,27 +1782,28 @@ export function StadiumVenueMap({
                                     key={unit.id}
                                     onPress={() => handleUnitPress(unit, 'zone-200-club')}
                                     style={[
-                                      styles.sectorBlock,
-                                      styles.clubSectorBlock,
-                                      isSelected ? styles.serviceAreaGlowActive : null,
+                                      styles.clubTerraceSection,
+                                      isSelected ? styles.clubTerraceActive : null,
                                     ]}
                                   >
-                                    <MaterialCommunityIcons
-                                      name="trophy-award"
-                                      size={14}
-                                      color={isSelected ? '#FFFFFF' : '#013369'}
-                                    />
-                                    <CommandText
-                                      palette={palette}
-                                      variant="caption"
-                                      style={{
-                                        color: isSelected ? '#FFFFFF' : '#013369',
-                                        fontWeight: '800',
-                                        fontSize: 11,
-                                      }}
-                                    >
-                                      {unit.name}
-                                    </CommandText>
+                                    <View style={styles.clubArmchairIndicator}>
+                                      <MaterialCommunityIcons
+                                        name="trophy-award"
+                                        size={14}
+                                        color={isSelected ? '#FFD700' : '#00E5FF'}
+                                      />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                      <Text style={[styles.clubTerraceTitle, { color: isSelected ? '#FFFFFF' : '#E0E7FF' }]}>
+                                        {unit.name}
+                                      </Text>
+                                      <Text style={styles.clubTerraceSub}>Premium Lounge & Bar Service</Text>
+                                    </View>
+                                    {isSelected ? (
+                                      <View style={styles.clubActivePill}>
+                                        <Text style={styles.clubActivePillText}>ACTIVE</Text>
+                                      </View>
+                                    ) : null}
                                   </Pressable>
                                 );
                               })}
@@ -1787,9 +1812,12 @@ export function StadiumVenueMap({
                           {/* ── LEVEL 100 MAIN CONCOURSE (8 SERVICE HUBS + 2 VIP BUNKERS) ── */}
                           <View style={styles.concourseLevelRing}>
                             <View style={styles.ringLabelHeader}>
-                              <CommandText palette={palette} variant="caption" style={styles.tierPillConcourse}>
-                                LEVEL 100 · LOWER NAVY BOWL & 8 CONCOURSE CULINARY HUBS
-                              </CommandText>
+                              <View style={styles.stadiumTierBadgeNavy}>
+                                <MaterialCommunityIcons name="storefront" size={12} color="#FFFFFF" />
+                                <Text style={styles.tierPillNavyText}>
+                                  LEVEL 100 · CONCOURSE 8 CULINARY HUBS & FIELD ENTRYWAYS
+                                </Text>
+                              </View>
                             </View>
 
                             {/* Top / North Concourse Outlets */}
@@ -1804,28 +1832,19 @@ export function StadiumVenueMap({
                                       key={unit.id}
                                       onPress={() => handleUnitPress(unit, 'zone-concourse-service-areas')}
                                       style={[
-                                        styles.sectorBlock,
-                                        styles.concourseOutletBlock,
-                                        isSelected ? styles.serviceAreaGlowActive : null,
+                                        styles.concourseHubStorefront,
+                                        isSelected ? styles.concourseHubActive : null,
                                       ]}
                                     >
-                                      <CommandText
-                                        palette={palette}
-                                        variant="caption"
-                                        style={{
-                                          color: isSelected ? '#FFFFFF' : '#013369',
-                                          fontWeight: '800',
-                                          fontSize: 11,
-                                        }}
-                                      >
-                                        {unit.code}
-                                      </CommandText>
-                                      <Text
-                                        numberOfLines={1}
-                                        style={{ color: isSelected ? '#FFFFFF' : '#1D2420', fontSize: 10 }}
-                                      >
-                                        {unit.name.split('·')[1]?.trim() ?? unit.name}
-                                      </Text>
+                                      <View style={styles.concourseAwningStripe} />
+                                      <View style={{ padding: 4, alignItems: 'center' }}>
+                                        <Text style={[styles.concourseHubCode, { color: isSelected ? '#FFFFFF' : '#013369' }]}>
+                                          {unit.code}
+                                        </Text>
+                                        <Text numberOfLines={1} style={[styles.concourseHubName, { color: isSelected ? '#FFFFFF' : '#1D2420' }]}>
+                                          {unit.name.split('·')[1]?.trim() ?? unit.name}
+                                        </Text>
+                                      </View>
                                     </Pressable>
                                   );
                                 })}
@@ -1835,7 +1854,7 @@ export function StadiumVenueMap({
                             <View style={styles.fieldAndSidelinesCore}>
                               {/* North Endzone & North Bunker */}
                               <View style={styles.endzoneRowWrapper}>
-                                {/* North Bunker Club */}
+                                {/* North Bunker Club (Underground Vault) */}
                                 {zonesState
                                   .find((z) => z.id === 'zone-concourse-bunkers')
                                   ?.units.filter((u) => u.id === 'u-bunker-north')
@@ -1846,24 +1865,25 @@ export function StadiumVenueMap({
                                         key={unit.id}
                                         onPress={() => handleUnitPress(unit, 'zone-concourse-bunkers')}
                                         style={[
-                                          styles.bunkerBox,
-                                          isSelected ? styles.serviceAreaGlowActiveGold : null,
+                                          styles.fieldBunkerVault,
+                                          isSelected ? styles.fieldBunkerVaultActive : null,
                                         ]}
                                       >
-                                        <MaterialCommunityIcons name="shield-crown" size={14} color="#D4AF37" />
-                                        <CommandText
-                                          palette={palette}
-                                          variant="caption"
-                                          style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 11 }}
-                                        >
-                                          NORTH BUNKER
-                                        </CommandText>
-                                        <Text style={{ color: '#E8D2A8', fontSize: 9 }}>Chef Carving Vault</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                          <MaterialCommunityIcons name="shield-crown" size={14} color="#D4AF37" />
+                                          <Text style={styles.fieldBunkerTitle}>NORTH BUNKER</Text>
+                                        </View>
+                                        <Text style={styles.fieldBunkerSub}>Chef Carving Vault</Text>
+                                        {isSelected ? (
+                                          <View style={styles.bunkerActiveTag}>
+                                            <Text style={styles.bunkerActiveTagText}>ACTIVE</Text>
+                                          </View>
+                                        ) : null}
                                       </Pressable>
                                     );
                                   })}
 
-                                {/* North Endzone Lounge (Texans Navy) */}
+                                {/* North Endzone Turf */}
                                 {zonesState
                                   .find((z) => z.id === 'zone-field-sidelines')
                                   ?.units.filter((u) => u.id === 'u-endzone-north')
@@ -1874,18 +1894,15 @@ export function StadiumVenueMap({
                                         key={unit.id}
                                         onPress={() => handleUnitPress(unit, 'zone-field-sidelines')}
                                         style={[
-                                          styles.endzoneBlock,
-                                          isSelected ? styles.serviceAreaGlowActive : null,
+                                          styles.endzoneTurfSection,
+                                          isSelected ? styles.fieldPartActive : null,
                                         ]}
                                       >
-                                        <CommandText
-                                          palette={palette}
-                                          variant="caption"
-                                          style={{ color: '#FFFFFF', fontWeight: '900', letterSpacing: 2 }}
-                                        >
-                                          TEXANS
-                                        </CommandText>
-                                        <Text style={{ color: '#A3D9B5', fontSize: 9 }}>North Endzone Lounge</Text>
+                                        <View style={styles.goalpostStanchion}>
+                                          <Text style={styles.goalpostIcon}>⫽</Text>
+                                        </View>
+                                        <Text style={styles.endzoneTurfText}>TEXANS</Text>
+                                        <Text style={styles.endzoneTurfSub}>North Goalpost Lounge</Text>
                                       </Pressable>
                                     );
                                   })}
@@ -1893,7 +1910,7 @@ export function StadiumVenueMap({
 
                               {/* Center Field + Sidelines Split */}
                               <View style={styles.centerFieldAndSidelinesRow}>
-                                {/* West / Home Sideline Service Area */}
+                                {/* West / Home Sideline Bench Area */}
                                 {zonesState
                                   .find((z) => z.id === 'zone-field-sidelines')
                                   ?.units.filter((u) => u.id === 'u-side-home')
@@ -1904,23 +1921,19 @@ export function StadiumVenueMap({
                                         key={unit.id}
                                         onPress={() => handleUnitPress(unit, 'zone-field-sidelines')}
                                         style={[
-                                          styles.sidelineStrip,
-                                          isSelected ? styles.serviceAreaGlowActive : null,
+                                          styles.sidelineBenchTurf,
+                                          isSelected ? styles.fieldPartActive : null,
                                         ]}
                                       >
-                                        <CommandText
-                                          palette={palette}
-                                          variant="caption"
-                                          style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 10 }}
-                                        >
-                                          HOME
-                                        </CommandText>
-                                        <Text style={{ color: '#A3D9B5', fontSize: 8 }}>Hydration</Text>
+                                        <MaterialCommunityIcons name="shield-account" size={14} color="#FFFFFF" />
+                                        <Text style={styles.sidelineBenchText}>HOME BENCH</Text>
+                                        <Text style={styles.sidelineBenchSub}>Hydration & VIP</Text>
+                                        <View style={styles.sidelineYardMarkerPylon} />
                                       </Pressable>
                                     );
                                   })}
 
-                                {/* 3D Playing Field (Regulation Gridiron) */}
+                                {/* 3D Regulation NFL Gridiron Playing Field */}
                                 <View style={styles.actualPlayingField}>
                                   {/* Yard Line Stripes */}
                                   <View style={styles.fieldYardGrid}>
@@ -1937,14 +1950,14 @@ export function StadiumVenueMap({
 
                                   {/* Midfield Houston Texans Bull Logo */}
                                   <View style={styles.midfieldLogoCircle}>
-                                    <MaterialCommunityIcons name="bullhorn" size={16} color="#FFFFFF" />
-                                    <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '900', letterSpacing: 1 }}>
+                                    <MaterialCommunityIcons name="bullhorn" size={18} color="#FFFFFF" />
+                                    <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '900', letterSpacing: 1.5 }}>
                                       TEXANS
                                     </Text>
                                   </View>
                                 </View>
 
-                                {/* East / Visiting Sideline Service Area */}
+                                {/* East / Visiting Sideline Bench Area */}
                                 {zonesState
                                   .find((z) => z.id === 'zone-field-sidelines')
                                   ?.units.filter((u) => u.id === 'u-side-visiting')
@@ -1955,18 +1968,14 @@ export function StadiumVenueMap({
                                         key={unit.id}
                                         onPress={() => handleUnitPress(unit, 'zone-field-sidelines')}
                                         style={[
-                                          styles.sidelineStrip,
-                                          isSelected ? styles.serviceAreaGlowActive : null,
+                                          styles.sidelineBenchTurf,
+                                          isSelected ? styles.fieldPartActive : null,
                                         ]}
                                       >
-                                        <CommandText
-                                          palette={palette}
-                                          variant="caption"
-                                          style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 10 }}
-                                        >
-                                          VISIT
-                                        </CommandText>
-                                        <Text style={{ color: '#A3D9B5', fontSize: 8 }}>Media Deck</Text>
+                                        <MaterialCommunityIcons name="broadcast" size={14} color="#FFFFFF" />
+                                        <Text style={styles.sidelineBenchText}>VISITING BENCH</Text>
+                                        <Text style={styles.sidelineBenchSub}>Media & VIP</Text>
+                                        <View style={styles.sidelineYardMarkerPylon} />
                                       </Pressable>
                                     );
                                   })}
@@ -1974,7 +1983,7 @@ export function StadiumVenueMap({
 
                               {/* South Endzone & South Bunker */}
                               <View style={styles.endzoneRowWrapper}>
-                                {/* South Bunker Club */}
+                                {/* South Bunker Club (Underground Vault) */}
                                 {zonesState
                                   .find((z) => z.id === 'zone-concourse-bunkers')
                                   ?.units.filter((u) => u.id === 'u-bunker-south')
@@ -1985,24 +1994,25 @@ export function StadiumVenueMap({
                                         key={unit.id}
                                         onPress={() => handleUnitPress(unit, 'zone-concourse-bunkers')}
                                         style={[
-                                          styles.bunkerBox,
-                                          isSelected ? styles.serviceAreaGlowActiveGold : null,
+                                          styles.fieldBunkerVault,
+                                          isSelected ? styles.fieldBunkerVaultActive : null,
                                         ]}
                                       >
-                                        <MaterialCommunityIcons name="shield-crown" size={14} color="#D4AF37" />
-                                        <CommandText
-                                          palette={palette}
-                                          variant="caption"
-                                          style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 11 }}
-                                        >
-                                          SOUTH BUNKER
-                                        </CommandText>
-                                        <Text style={{ color: '#E8D2A8', fontSize: 9 }}>Reserve Sommelier</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                          <MaterialCommunityIcons name="shield-crown" size={14} color="#D4AF37" />
+                                          <Text style={styles.fieldBunkerTitle}>SOUTH BUNKER</Text>
+                                        </View>
+                                        <Text style={styles.fieldBunkerSub}>Sommelier Vault</Text>
+                                        {isSelected ? (
+                                          <View style={styles.bunkerActiveTag}>
+                                            <Text style={styles.bunkerActiveTagText}>ACTIVE</Text>
+                                          </View>
+                                        ) : null}
                                       </Pressable>
                                     );
                                   })}
 
-                                {/* South Endzone Lounge (Texans Navy) */}
+                                {/* South Endzone Turf */}
                                 {zonesState
                                   .find((z) => z.id === 'zone-field-sidelines')
                                   ?.units.filter((u) => u.id === 'u-endzone-south')
@@ -2013,18 +2023,15 @@ export function StadiumVenueMap({
                                         key={unit.id}
                                         onPress={() => handleUnitPress(unit, 'zone-field-sidelines')}
                                         style={[
-                                          styles.endzoneBlock,
-                                          isSelected ? styles.serviceAreaGlowActive : null,
+                                          styles.endzoneTurfSection,
+                                          isSelected ? styles.fieldPartActive : null,
                                         ]}
                                       >
-                                        <CommandText
-                                          palette={palette}
-                                          variant="caption"
-                                          style={{ color: '#FFFFFF', fontWeight: '900', letterSpacing: 2 }}
-                                        >
-                                          TEXANS
-                                        </CommandText>
-                                        <Text style={{ color: '#A3D9B5', fontSize: 9 }}>South RedZone Depot</Text>
+                                        <View style={styles.goalpostStanchion}>
+                                          <Text style={styles.goalpostIcon}>⫽</Text>
+                                        </View>
+                                        <Text style={styles.endzoneTurfText}>TEXANS</Text>
+                                        <Text style={styles.endzoneTurfSub}>South RedZone Depot</Text>
                                       </Pressable>
                                     );
                                   })}
@@ -2046,28 +2053,19 @@ export function StadiumVenueMap({
                                       key={unit.id}
                                       onPress={() => handleUnitPress(unit, 'zone-concourse-service-areas')}
                                       style={[
-                                        styles.sectorBlock,
-                                        styles.concourseOutletBlock,
-                                        isSelected ? styles.serviceAreaGlowActive : null,
+                                        styles.concourseHubStorefront,
+                                        isSelected ? styles.concourseHubActive : null,
                                       ]}
                                     >
-                                      <CommandText
-                                        palette={palette}
-                                        variant="caption"
-                                        style={{
-                                          color: isSelected ? '#FFFFFF' : '#013369',
-                                          fontWeight: '800',
-                                          fontSize: 11,
-                                        }}
-                                      >
-                                        {unit.code}
-                                      </CommandText>
-                                      <Text
-                                        numberOfLines={1}
-                                        style={{ color: isSelected ? '#FFFFFF' : '#1D2420', fontSize: 10 }}
-                                      >
-                                        {unit.name.split('·')[1]?.trim() ?? unit.name}
-                                      </Text>
+                                      <View style={styles.concourseAwningStripe} />
+                                      <View style={{ padding: 4, alignItems: 'center' }}>
+                                        <Text style={[styles.concourseHubCode, { color: isSelected ? '#FFFFFF' : '#013369' }]}>
+                                          {unit.code}
+                                        </Text>
+                                        <Text numberOfLines={1} style={[styles.concourseHubName, { color: isSelected ? '#FFFFFF' : '#1D2420' }]}>
+                                          {unit.name.split('·')[1]?.trim() ?? unit.name}
+                                        </Text>
+                                      </View>
                                     </Pressable>
                                   );
                                 })}
@@ -2076,7 +2074,7 @@ export function StadiumVenueMap({
                         </View>
                       </View>
 
-                      {/* EAST: xfinity Gate */}
+                      {/* EAST: xfinity Gate Tower */}
                       {zonesState
                         .find((z) => z.id === 'zone-stadium-gates')
                         ?.units.filter((u) => u.id === 'u-gate-xfinity')
@@ -2087,14 +2085,21 @@ export function StadiumVenueMap({
                               key={unit.id}
                               onPress={() => handleUnitPress(unit, 'zone-stadium-gates')}
                               style={[
-                                styles.gateSidePillEast,
-                                isSelected ? styles.serviceAreaGlowActive : null,
+                                styles.sideGateTowerEast,
+                                isSelected ? styles.gateTowerActive : null,
                               ]}
                             >
                               <View style={styles.xfinityBadge}>
                                 <Text style={styles.xfinityText}>xfinity</Text>
                               </View>
-                              <Text style={styles.gateSideText}>EAST GATE · CLUB ESCALATORS</Text>
+                              <Text style={styles.sideGateTowerText}>EAST GATE TOWER</Text>
+                              <View style={styles.sideGatePylonFin} />
+                              <Text style={styles.sideGateTowerSub}>Club Level Escalators</Text>
+                              {isSelected ? (
+                                <View style={styles.sideGateActiveIndicator}>
+                                  <Text style={styles.sideGateActiveIndicatorText}>ACTIVE</Text>
+                                </View>
+                              ) : null}
                             </Pressable>
                           );
                         })}
@@ -2109,7 +2114,7 @@ export function StadiumVenueMap({
                     </View>
                   </View>
 
-                  {/* ── SOUTH GATE: KROGER GATE (South Plaza & Fan Turnstiles) ── */}
+                  {/* ── SOUTH GATE TOWER: KROGER GATE (South Plaza & Turnstiles) ── */}
                   <View style={styles.gateSouthWrapper}>
                     {zonesState
                       .find((z) => z.id === 'zone-stadium-gates')
@@ -2121,30 +2126,33 @@ export function StadiumVenueMap({
                             key={unit.id}
                             onPress={() => handleUnitPress(unit, 'zone-stadium-gates')}
                             style={[
-                              styles.gateSouthBanner,
-                              isSelected ? styles.serviceAreaGlowActive : null,
+                              styles.gateTowerStructure,
+                              styles.gateSouthTower,
+                              isSelected ? styles.gateTowerActive : null,
                             ]}
                           >
-                            <View style={styles.gateKrogerBadge}>
-                              <MaterialCommunityIcons name="cart-outline" size={12} color="#FFFFFF" />
-                              <Text style={styles.gateKrogerText}>Kroger</Text>
-                              <Text style={styles.gateBadgeSub}>GATE</Text>
+                            <View style={styles.gatePylonPillarLeft} />
+                            <View style={styles.gateTowerCenterHub}>
+                              <View style={styles.gateKrogerBadge}>
+                                <MaterialCommunityIcons name="cart-outline" size={12} color="#FFFFFF" />
+                                <Text style={styles.gateKrogerText}>Kroger</Text>
+                                <Text style={styles.gateBadgeSub}>GATE PORTAL</Text>
+                              </View>
+                              <View style={{ alignItems: 'center' }}>
+                                <Text style={styles.gateTowerTitle}>
+                                  SOUTH ENTRANCE PLAZA · HIGH-SPEED TURNSTILES
+                                </Text>
+                                <View style={styles.turnstileBayRow}>
+                                  <View style={styles.turnstileCanopy} />
+                                  <Text style={styles.turnstileMetaText}>20 Express Gates · Merch Pavilion & Ingress</Text>
+                                  <View style={styles.turnstileCanopy} />
+                                </View>
+                              </View>
                             </View>
-                            <View style={{ alignItems: 'center' }}>
-                              <CommandText
-                                palette={palette}
-                                variant="caption"
-                                style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 11, letterSpacing: 0.5 }}
-                              >
-                                SOUTH PLAZA · FAN EXPRESS & REFRESHMENT
-                              </CommandText>
-                              <Text style={{ color: '#FFCDD2', fontSize: 9 }}>
-                                20 Turnstiles · Merch Plaza · High-Volume Fan Ingress
-                              </Text>
-                            </View>
+                            <View style={styles.gatePylonPillarRight} />
                             {isSelected ? (
-                              <View style={styles.activeGlowBeacon}>
-                                <Text style={styles.activeGlowBeaconText}>★ ACTIVE SERVICE AREA</Text>
+                              <View style={styles.architecturalActiveBadge}>
+                                <Text style={styles.architecturalActiveBadgeText}>★ SELECTED GATE PORTAL</Text>
                               </View>
                             ) : null}
                           </Pressable>
@@ -2152,12 +2160,15 @@ export function StadiumVenueMap({
                       })}
                   </View>
 
-                  {/* ── UNDERGROUND / LEVEL 0: TEAM LOCKERS & PERFORMER AUX SUITES ── */}
+                  {/* ── UNDERGROUND / LEVEL 0: ATHLETE COMPOUND & PERFORMER AUX SUITES ── */}
                   <View style={styles.undergroundLockerCompound}>
                     <View style={styles.ringLabelHeader}>
-                      <CommandText palette={palette} variant="caption" style={styles.tierPillUnderground}>
-                        LEVEL 0 · ATHLETE COMPOUND & PERFORMER AUX SUITES
-                      </CommandText>
+                      <View style={styles.stadiumTierBadgeDark}>
+                        <MaterialCommunityIcons name="locker" size={12} color="#FFFFFF" />
+                        <Text style={styles.tierPillDarkText}>
+                          LEVEL 0 · ATHLETE COMPOUND & PERFORMER AUX SUITES
+                        </Text>
+                      </View>
                     </View>
 
                     <View style={styles.lockersGridRow}>
@@ -2174,18 +2185,18 @@ export function StadiumVenueMap({
                               key={unit.id}
                               onPress={() => handleUnitPress(unit, 'zone-locker-rooms-aux')}
                               style={[
-                                styles.lockerRoomCard,
-                                isSelected ? styles.serviceAreaGlowActive : null,
+                                styles.lockerRoomCompoundCard,
+                                isSelected ? styles.lockerRoomActive : null,
                                 {
                                   backgroundColor: isSelected
                                     ? '#013369'
                                     : isHome
-                                      ? '#E8F5E9'
+                                      ? '#0A2E1C'
                                       : isVisit
-                                        ? '#EDE7F6'
+                                        ? '#1E1430'
                                         : isHeadliner
-                                          ? '#FFF8E1'
-                                          : '#F5F5F5',
+                                          ? '#2A2008'
+                                          : '#1C2530',
                                 },
                               ]}
                             >
@@ -2199,30 +2210,23 @@ export function StadiumVenueMap({
                                         : 'account-group'
                                   }
                                   size={16}
-                                  color={isSelected ? '#FFFFFF' : '#1D2420'}
+                                  color={isSelected ? '#FFD700' : '#FFFFFF'}
                                 />
-                                <CommandText
-                                  palette={palette}
-                                  variant="caption"
-                                  style={{
-                                    color: isSelected ? '#FFFFFF' : '#1D2420',
-                                    fontWeight: '800',
-                                    fontSize: 11,
-                                  }}
-                                >
+                                <Text style={[styles.lockerCodeText, { color: isSelected ? '#FFFFFF' : '#E0E7FF' }]}>
                                   {unit.code}
-                                </CommandText>
+                                </Text>
                               </View>
                               <Text
                                 numberOfLines={1}
-                                style={{
-                                  color: isSelected ? '#FFFFFF' : '#1D2420',
-                                  fontWeight: '700',
-                                  fontSize: 11,
-                                }}
+                                style={[styles.lockerNameText, { color: isSelected ? '#FFFFFF' : '#CFD8DC' }]}
                               >
                                 {unit.name}
                               </Text>
+                              {isSelected ? (
+                                <View style={styles.lockerActiveDot}>
+                                  <Text style={styles.lockerActiveDotText}>ACTIVE</Text>
+                                </View>
+                              ) : null}
                             </Pressable>
                           );
                         })}
@@ -2534,71 +2538,95 @@ const styles = StyleSheet.create({
     color: '#013369',
     letterSpacing: 0.5,
   },
-
-  /* ── Gates ── */
+  ringLabelHeader: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  xfinityBadge: {
+    backgroundColor: '#8A2BE2',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  xfinityText: {
+    color: '#FFFFFF',
+    fontSize: 8,
+    fontWeight: '900',
+  },
+  /* ── 3D Gate Tower Architectural Structures ── */
   gateNorthWrapper: {
-    width: '92%',
+    width: '94%',
     alignItems: 'center',
     zIndex: 10,
   },
-  gateNorthBanner: {
+  gateSouthWrapper: {
+    width: '94%',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  gateTowerStructure: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
-    backgroundColor: '#002244',
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  gateNorthTower: {
+    backgroundColor: '#001E3D',
     borderColor: '#0055A5',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    shadowColor: '#0055A5',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
+  },
+  gateSouthTower: {
+    backgroundColor: '#38070D',
+    borderColor: '#C62828',
+  },
+  gatePylonPillarLeft: {
+    width: 8,
+    height: 36,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    borderRadius: 4,
+  },
+  gatePylonPillarRight: {
+    width: 8,
+    height: 36,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    borderRadius: 4,
+  },
+  gateTowerCenterHub: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
   },
   gateFordBadge: {
     backgroundColor: '#003366',
     borderRadius: 6,
     paddingHorizontal: 10,
-    paddingVertical: 3,
+    paddingVertical: 4,
     alignItems: 'center',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#FFFFFF',
   },
   gateFordText: {
     color: '#FFFFFF',
     fontStyle: 'italic',
     fontWeight: '900',
-    fontSize: 14,
+    fontSize: 15,
     letterSpacing: 1,
   },
   gateBadgeSub: {
     color: '#B0C4DE',
-    fontSize: 8,
+    fontSize: 7,
     fontWeight: '800',
-  },
-
-  gateSouthWrapper: {
-    width: '92%',
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  gateSouthBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    backgroundColor: '#3E0A10',
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#D50A0A',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    shadowColor: '#D50A0A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
+    letterSpacing: 0.5,
   },
   gateKrogerBadge: {
     flexDirection: 'row',
@@ -2608,13 +2636,64 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 4,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
   },
   gateKrogerText: {
     color: '#FFFFFF',
     fontWeight: '900',
-    fontSize: 13,
+    fontSize: 14,
+  },
+  gateTowerTitle: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 11,
+    letterSpacing: 0.5,
+  },
+  turnstileBayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  turnstileCanopy: {
+    width: 14,
+    height: 3,
+    backgroundColor: '#00E5FF',
+    borderRadius: 2,
+  },
+  turnstileMetaText: {
+    color: '#B0C4DE',
+    fontSize: 9,
+    fontWeight: '600',
+  },
+  gateTowerActive: {
+    borderColor: '#FFD700',
+    borderWidth: 3,
+    transform: [{ translateY: -4 }, { scale: 1.02 }],
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1.0,
+    shadowRadius: 16,
+    elevation: 16,
+  },
+  architecturalActiveBadge: {
+    position: 'absolute',
+    top: -10,
+    right: 14,
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  architecturalActiveBadgeText: {
+    color: '#013369',
+    fontSize: 8,
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
 
+  /* ── Side Gate Towers (West Phillips 66 & East Xfinity) ── */
   middleGatesSideRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2622,17 +2701,39 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: 6,
   },
-  gateSidePillWest: {
-    width: 58,
-    minHeight: 140,
-    backgroundColor: '#1E0E10',
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: '#D50A0A',
+  sideGateTowerWest: {
+    width: 64,
+    minHeight: 160,
+    backgroundColor: '#1E0C10',
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#C62828',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 4,
-    gap: 6,
+    padding: 6,
+    gap: 4,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  sideGateTowerEast: {
+    width: 64,
+    minHeight: 160,
+    backgroundColor: '#1A0B28',
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#7B1FA2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 6,
+    gap: 4,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 6,
   },
   p66Badge: {
     backgroundColor: '#D50A0A',
@@ -2652,40 +2753,41 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '900',
   },
-  gateSideText: {
+  sideGateTowerText: {
     color: '#FFFFFF',
     fontSize: 8,
-    fontWeight: '800',
+    fontWeight: '900',
     textAlign: 'center',
+    letterSpacing: 0.5,
   },
-
-  gateSidePillEast: {
-    width: 58,
-    minHeight: 140,
-    backgroundColor: '#1A0E26',
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: '#8A2BE2',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 4,
-    gap: 6,
+  sideGatePylonFin: {
+    width: '80%',
+    height: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    marginVertical: 2,
   },
-  xfinityBadge: {
-    backgroundColor: '#8A2BE2',
-    borderRadius: 4,
+  sideGateTowerSub: {
+    color: '#B0BEC5',
+    fontSize: 7,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  sideGateActiveIndicator: {
+    backgroundColor: '#FFD700',
     paddingHorizontal: 4,
-    paddingVertical: 2,
+    paddingVertical: 1,
+    borderRadius: 3,
+    marginTop: 4,
   },
-  xfinityText: {
-    color: '#FFFFFF',
-    fontSize: 8,
+  sideGateActiveIndicatorText: {
+    color: '#013369',
+    fontSize: 7,
     fontWeight: '900',
   },
 
   /* ── Jumbotrons ── */
   jumbotronDisplayBox: {
-    width: '84%',
+    width: '86%',
     alignItems: 'center',
   },
   jumboScreenNorth: {
@@ -2693,7 +2795,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#031428',
+    backgroundColor: '#021224',
     borderRadius: 6,
     borderWidth: 1.5,
     borderColor: '#00E5FF',
@@ -2710,7 +2812,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#031428',
+    backgroundColor: '#021224',
     borderRadius: 6,
     borderWidth: 1.5,
     borderColor: '#00E5FF',
@@ -2729,72 +2831,238 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 
-  /* ── Red Upper Bowl ── */
+  /* ── Level 500/600 Upper Bowl: Grandstand Seating Sectors ── */
   outerUpperDeckRingRed: {
     width: '100%',
-    backgroundColor: '#680B15',
+    backgroundColor: '#4A050D',
     borderRadius: 36,
-    borderWidth: 2.5,
-    borderColor: '#D50A0A',
+    borderWidth: 3,
+    borderColor: '#B71C1C',
     padding: spacing.sm,
     alignItems: 'center',
     gap: spacing.xs,
-    shadowColor: '#D50A0A',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 14,
+    elevation: 10,
   },
-  tierPillRed: {
-    backgroundColor: '#D50A0A',
+  stadiumTierBadgeRed: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#B71C1C',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#EF5350',
+  },
+  tierPillRedText: {
     color: '#FFFFFF',
     fontWeight: '900',
     fontSize: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 4,
     letterSpacing: 0.5,
   },
-  upperDeckSectorRed: {
+  upperDeckSectors: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+    gap: 6,
+  },
+  grandstandSeatingSection: {
     flex: 1,
-    minHeight: 46,
-    justifyContent: 'center',
-    backgroundColor: '#8E121E',
-    borderColor: '#A81826',
+    minHeight: 64,
+    backgroundColor: '#7F131D',
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#9E1C27',
+    padding: 5,
+    justifyContent: 'space-between',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
   },
-
-  /* ── Active Service Area Glowing Effect ── */
-  serviceAreaGlowActive: {
+  grandstandSectionActive: {
+    backgroundColor: '#B71C1C',
     borderColor: '#FFD700',
-    borderWidth: 3,
-    backgroundColor: '#013369',
+    borderWidth: 2.5,
+    transform: [{ translateY: -5 }, { scale: 1.04 }],
     shadowColor: '#FFD700',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 1.0,
     shadowRadius: 14,
-    elevation: 12,
+    elevation: 14,
   },
-  serviceAreaGlowActiveGold: {
-    borderColor: '#FFD700',
-    borderWidth: 3,
-    backgroundColor: '#7A5A35',
-    shadowColor: '#FFD700',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1.0,
-    shadowRadius: 14,
-    elevation: 12,
+  grandstandFloodlightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  activeGlowBeacon: {
+  floodlightDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+  },
+  floodlightDotActive: {
     backgroundColor: '#FFD700',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1.0,
+    shadowRadius: 4,
   },
-  activeGlowBeaconText: {
+  grandstandSectionCode: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 11,
+    letterSpacing: 0.5,
+  },
+  steppedSeatsContainer: {
+    gap: 2,
+    marginVertical: 2,
+  },
+  seatRowLine: {
+    height: 2,
+    backgroundColor: '#E57373',
+    borderRadius: 1,
+  },
+  grandstandLowerDeck: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 2,
+  },
+  grandstandTitleText: {
+    flex: 1,
+    color: '#FFCDD2',
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  vomitoryTunnelArch: {
+    backgroundColor: '#260307',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  vomitoryTunnelText: {
+    color: '#B0BEC5',
+    fontSize: 6,
+    fontWeight: '800',
+  },
+  grandstandActiveHalo: {
+    position: 'absolute',
+    top: -8,
+    right: 4,
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  grandstandActiveHaloText: {
     color: '#013369',
-    fontSize: 8,
+    fontSize: 7,
     fontWeight: '900',
   },
-  miniActiveIndicator: {
+
+  /* ── Level 300 & 400 Luxury Suites: Glass Cantilevered Pavilions ── */
+  suitesTierRing: {
+    flex: 1,
+    backgroundColor: '#101720',
+    borderRadius: 28,
+    borderWidth: 2,
+    borderColor: '#D4AF37',
+    padding: spacing.xs,
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  stadiumTierBadgeGold: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#7A5A1A',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#D4AF37',
+  },
+  tierPillGoldText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 10,
+    letterSpacing: 0.5,
+  },
+  suitesGridRing: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    width: '100%',
+    gap: 6,
+  },
+  suitePavilionBox: {
+    flexGrow: 1,
+    flexBasis: 100,
+    minHeight: 56,
+    backgroundColor: '#1E2835',
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#B8860B',
+    overflow: 'hidden',
+  },
+  suitePavilionActive: {
+    backgroundColor: '#2A3B4E',
+    borderColor: '#FFD700',
+    borderWidth: 2.5,
+    transform: [{ translateY: -5 }, { scale: 1.04 }],
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1.0,
+    shadowRadius: 14,
+    elevation: 14,
+  },
+  suiteGlassFacade: {
+    backgroundColor: 'rgba(0, 229, 255, 0.12)',
+    paddingVertical: 3,
+    borderBottomWidth: 1,
+    borderBottomColor: '#B8860B',
+  },
+  suiteBalconyRail: {
+    height: 2,
+    backgroundColor: '#D4AF37',
+    width: '100%',
+    marginBottom: 2,
+  },
+  suiteCodeText: {
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  suiteBeoChip: {
+    backgroundColor: '#7A5A1A',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  suiteBeoChipText: {
+    color: '#FFD700',
+    fontSize: 7,
+    fontWeight: '900',
+  },
+  suiteLoungeInterior: {
+    padding: 4,
+  },
+  suiteholderText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  suiteTierSub: {
+    fontSize: 8,
+    fontWeight: '600',
+  },
+  suiteActiveBadge: {
     position: 'absolute',
     bottom: 2,
     right: 2,
@@ -2803,75 +3071,18 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
     borderRadius: 3,
   },
-  miniActiveIndicatorText: {
+  suiteActiveBadgeText: {
     color: '#013369',
     fontSize: 7,
     fontWeight: '900',
   },
 
-  /* ── Suites Ring ── */
-  suitesTierRing: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    borderWidth: 2,
-    borderColor: '#E8D2A8',
-    padding: spacing.xs,
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  ringLabelHeader: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  tierPillGold: {
-    backgroundColor: '#8A5D23',
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
-  },
-  suitesGridRing: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    width: '100%',
-    gap: 4,
-  },
-  sectorBlock: {
-    borderRadius: 6,
-    padding: 6,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#DDE1DA',
-  },
-  suiteSectorBlock: {
-    flexGrow: 1,
-    flexBasis: 96,
-    minHeight: 48,
-    justifyContent: 'center',
-    position: 'relative',
-    backgroundColor: '#FFF9F0',
-    borderColor: '#E8D2A8',
-  },
-  miniBeoDot: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    backgroundColor: '#8A5D23',
-    paddingHorizontal: 3,
-    paddingVertical: 1,
-    borderRadius: 3,
-  },
-
-  /* ── Club Level ── */
+  /* ── Level 200 Club Level: Curved Terrace ── */
   clubTierRing: {
     width: '98%',
-    backgroundColor: '#0B1C2E',
+    backgroundColor: '#071524',
     borderRadius: 22,
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: '#1E3A5F',
     padding: 6,
     alignItems: 'center',
@@ -2879,7 +3090,7 @@ const styles = StyleSheet.create({
   },
   ribbonLedDisplay: {
     width: '100%',
-    backgroundColor: '#001428',
+    backgroundColor: '#001020',
     borderRadius: 4,
     paddingVertical: 3,
     paddingHorizontal: 8,
@@ -2896,52 +3107,127 @@ const styles = StyleSheet.create({
   clubSectorsRow: {
     flexDirection: 'row',
     width: '100%',
-    gap: 4,
+    gap: 6,
   },
-  clubSectorBlock: {
+  clubTerraceSection: {
     flex: 1,
     flexDirection: 'row',
-    justifyContent: 'center',
+    alignItems: 'center',
     gap: 6,
-    minHeight: 38,
-    backgroundColor: '#13283E',
-    borderColor: '#24486E',
+    minHeight: 42,
+    backgroundColor: '#0E2238',
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#1E4976',
+    paddingHorizontal: 8,
+  },
+  clubTerraceActive: {
+    backgroundColor: '#013369',
+    borderColor: '#FFD700',
+    borderWidth: 2.5,
+    transform: [{ translateY: -4 }, { scale: 1.03 }],
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1.0,
+    shadowRadius: 12,
+    elevation: 12,
+  },
+  clubArmchairIndicator: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 229, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clubTerraceTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  clubTerraceSub: {
+    fontSize: 8,
+    color: '#81D4FA',
+  },
+  clubActivePill: {
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  clubActivePillText: {
+    color: '#013369',
+    fontSize: 7,
+    fontWeight: '900',
   },
 
-  /* ── Concourse 100 ── */
+  /* ── Level 100 Main Concourse: Culinary Storefront Plazas ── */
   concourseLevelRing: {
     width: '98%',
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: '#CBD5CD',
     padding: 6,
     alignItems: 'center',
     gap: 6,
   },
-  tierPillConcourse: {
+  stadiumTierBadgeNavy: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     backgroundColor: '#013369',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  tierPillNavyText: {
     color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
+    letterSpacing: 0.5,
   },
   concoursePerimeterRow: {
     flexDirection: 'row',
     width: '100%',
     justifyContent: 'space-around',
-    gap: 4,
+    gap: 6,
   },
-  concourseOutletBlock: {
+  concourseHubStorefront: {
     flex: 1,
-    minHeight: 42,
+    minHeight: 46,
     justifyContent: 'center',
     backgroundColor: '#F1F6F2',
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#CBD5CD',
+    overflow: 'hidden',
+  },
+  concourseAwningStripe: {
+    height: 4,
+    backgroundColor: '#013369',
+    width: '100%',
+  },
+  concourseHubActive: {
+    backgroundColor: '#013369',
+    borderColor: '#FFD700',
+    borderWidth: 2.5,
+    transform: [{ translateY: -4 }, { scale: 1.03 }],
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1.0,
+    shadowRadius: 12,
+    elevation: 12,
+  },
+  concourseHubCode: {
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  concourseHubName: {
+    fontSize: 9,
+    fontWeight: '700',
   },
 
-  /* ── Playing Field Core ── */
+  /* ── Playing Field Core & Sideline Compounds ── */
   fieldAndSidelinesCore: {
     width: '100%',
     backgroundColor: '#01142F',
@@ -2951,50 +3237,135 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.2,
     shadowRadius: 8,
   },
   endzoneRowWrapper: {
     flexDirection: 'row',
     width: '100%',
-    gap: 4,
+    gap: 6,
   },
-  bunkerBox: {
+  fieldBunkerVault: {
     flex: 1,
     borderRadius: 6,
     borderWidth: 1.5,
     borderColor: '#D4AF37',
-    backgroundColor: '#4A341E',
-    padding: 4,
+    backgroundColor: '#382510',
+    padding: 6,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 2,
   },
-  endzoneBlock: {
+  fieldBunkerVaultActive: {
+    backgroundColor: '#7A5A1A',
+    borderColor: '#FFD700',
+    borderWidth: 2.5,
+    transform: [{ translateY: -4 }, { scale: 1.03 }],
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1.0,
+    shadowRadius: 12,
+    elevation: 12,
+  },
+  fieldBunkerTitle: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 11,
+  },
+  fieldBunkerSub: {
+    color: '#E8D2A8',
+    fontSize: 8,
+    fontWeight: '600',
+  },
+  bunkerActiveTag: {
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  bunkerActiveTagText: {
+    color: '#013369',
+    fontSize: 7,
+    fontWeight: '900',
+  },
+
+  endzoneTurfSection: {
     flex: 1.6,
     borderRadius: 6,
-    padding: 4,
+    padding: 6,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
     borderColor: '#FFFFFF',
     backgroundColor: '#00143F',
   },
+  goalpostStanchion: {
+    position: 'absolute',
+    top: 2,
+  },
+  goalpostIcon: {
+    color: '#FFD700',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  endzoneTurfText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 13,
+    letterSpacing: 2,
+  },
+  endzoneTurfSub: {
+    color: '#90CAF9',
+    fontSize: 8,
+    fontWeight: '600',
+  },
+
   centerFieldAndSidelinesRow: {
     flexDirection: 'row',
     width: '100%',
-    minHeight: 125,
-    gap: 4,
+    minHeight: 130,
+    gap: 6,
   },
-  sidelineStrip: {
-    width: 68,
+  sidelineBenchTurf: {
+    width: 72,
     borderRadius: 6,
-    padding: 2,
+    padding: 4,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
     borderColor: '#FFFFFF',
-    backgroundColor: '#001C38',
+    backgroundColor: '#001E3D',
+    gap: 2,
   },
+  sidelineBenchText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 9,
+    textAlign: 'center',
+  },
+  sidelineBenchSub: {
+    color: '#81D4FA',
+    fontSize: 7,
+    textAlign: 'center',
+  },
+  sidelineYardMarkerPylon: {
+    width: 6,
+    height: 6,
+    backgroundColor: '#FF5722',
+    borderRadius: 3,
+  },
+  fieldPartActive: {
+    borderColor: '#FFD700',
+    borderWidth: 2.5,
+    backgroundColor: '#013369',
+    transform: [{ translateY: -4 }, { scale: 1.03 }],
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1.0,
+    shadowRadius: 14,
+    elevation: 14,
+  },
+
   actualPlayingField: {
     flex: 1,
     backgroundColor: '#1E6F3B',
@@ -3002,7 +3373,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: '#FFFFFF',
   },
   fieldYardGrid: {
@@ -3028,44 +3399,75 @@ const styles = StyleSheet.create({
     borderColor: '#FFFFFF',
   },
 
-  /* ── Level 0 Lockers & Aux ── */
+  /* ── Level 0 Lockers Compound ── */
   undergroundLockerCompound: {
     width: '100%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0A121A',
     borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: '#37474F',
+    borderWidth: 2,
+    borderColor: '#263238',
     padding: spacing.sm,
     gap: 6,
   },
-  tierPillUnderground: {
-    backgroundColor: '#37474F',
+  stadiumTierBadgeDark: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#263238',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  tierPillDarkText: {
     color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
+    letterSpacing: 0.5,
   },
   lockersGridRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
   },
-  lockerRoomCard: {
+  lockerRoomCompoundCard: {
     flexGrow: 1,
     flexBasis: 160,
     padding: 6,
     borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: '#DDE1DA',
+    borderColor: '#37474F',
     gap: 2,
   },
-  upperDeckSectors: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-    gap: 4,
+  lockerRoomActive: {
+    borderColor: '#FFD700',
+    borderWidth: 2.5,
+    backgroundColor: '#013369',
+    transform: [{ translateY: -4 }, { scale: 1.03 }],
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1.0,
+    shadowRadius: 12,
+    elevation: 12,
+  },
+  lockerCodeText: {
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  lockerNameText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  lockerActiveDot: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  lockerActiveDotText: {
+    color: '#013369',
+    fontSize: 7,
+    fontWeight: '900',
   },
 
   /* ── Floating BEO & Amenities HUD Pop-Up ── */
@@ -3074,7 +3476,7 @@ const styles = StyleSheet.create({
     bottom: 16,
     left: 16,
     right: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    backgroundColor: 'rgba(255, 255, 255, 0.97)',
     borderRadius: 12,
     borderWidth: 2,
     borderColor: '#FFD700',
