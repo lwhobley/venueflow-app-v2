@@ -28,5 +28,7 @@ def validate_glb(path):
         return True
 
 if __name__ == "__main__":
-    glb_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "nrg-stadium.glb")
+    import sys
+    default_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "Meshy_AI_Isometric_Football_St_0815110828_generate.glb")
+    glb_path = sys.argv[1] if len(sys.argv) > 1 else default_path
     validate_glb(glb_path)

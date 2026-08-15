@@ -1481,7 +1481,7 @@ export function StadiumVenueMap({
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <MaterialCommunityIcons name="stadium" size={18} color="#013369" />
                   <CommandText palette={palette} variant="label" style={{ color: '#013369', fontWeight: '900', letterSpacing: 0.5 }}>
-                    NRG STADIUM · 3D SPATIAL MODEL
+                    ISOMETRIC FOOTBALL STADIUM · 3D SPATIAL MODEL
                   </CommandText>
                 </View>
                 <CommandText palette={palette} variant="caption" style={{ color: '#68706A' }}>
