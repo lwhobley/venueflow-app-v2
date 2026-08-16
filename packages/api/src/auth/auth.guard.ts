@@ -181,10 +181,8 @@ export class AuthGuard implements CanActivate {
       const [scheme, token] = header.split(' ');
       if (scheme?.toLowerCase() === 'bearer' && token) return token;
     }
-    const queryToken = request.query?.token;
-    if (typeof queryToken === 'string' && queryToken.trim()) {
-      return queryToken.trim();
-    }
+    // Intentionally do not accept tokens from query strings. Query tokens leak
+    // into access logs, Referer headers, browser history, and shared URLs.
     return null;
   }
 }
