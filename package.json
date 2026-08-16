@@ -58,6 +58,7 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-web": "^0.21.0",
+    "three": "^0.170.0",
     "undici": "^8.9.0",
     "zustand": "^4.5.7"
   },
@@ -67,6 +68,7 @@
     "@emnapi/runtime": "1.11.3",
     "@emnapi/wasi-threads": "1.2.3",
     "@types/react": "~19.2.18",
+    "@types/three": "^0.170.0",
     "@vitest/coverage-v8": "^4.1.9",
     "expo-doctor": "1.20.1",
     "typescript": "~6.0.3",
