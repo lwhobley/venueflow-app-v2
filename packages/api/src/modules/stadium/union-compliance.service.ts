@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../../prisma/prisma.service';
 import { PunchType, PunchVerification } from '@prisma/client';
 import { zonedDateBounds, zonedIsoDate } from '../../common/venue-time';
+import { applyTenantSessionSettings } from '../../prisma/tenant-transaction';
 
 export interface ShiftSummary {
   workerId: string;
@@ -174,6 +175,13 @@ export class UnionComplianceService {
       throw new BadRequestException('Supervisor overrides require a reason.');
     }
     return this.prisma.$transaction(async (tx) => {
+      // Bind app.* GUCs for a future FORCE RLS runtime role. SET LOCAL cannot
+      // leak across the connection pool because it is transaction-scoped.
+      await applyTenantSessionSettings(tx, {
+        organizationId,
+        facilityId,
+        venueId: facilityId,
+      });
       // Serialize every worker's punch stream. A repeated QR/PIN scan either
       // returns its original punch or is rejected as an invalid next state.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`shift-punch-${facilityId}-${workerId}`}))`;
