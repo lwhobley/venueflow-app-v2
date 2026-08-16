@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { AppState, Platform, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { AppState, ImageBackground, Platform, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -22,7 +22,6 @@ import { configurePurchases, logoutPurchases } from '../lib/purchases';
 import { queryClient } from '../lib/query-client';
 import { flushOfflineQueue } from '../lib/offline-queue';
 import { OfflineBanner } from '../components/OfflineBanner';
-import { SportsBrandIntro } from '../components/SportsBrandIntro';
 
 const shouldIgnoreWebError = (message: string) =>
   message.includes('ResizeObserver loop completed with undelivered notifications') ||
@@ -41,7 +40,6 @@ export default function RootLayout() {
     Fraunces_600SemiBold_Italic,
   });
   const fontsReady = Platform.OS !== 'web' || fontsLoaded || !!fontError;
-  const [introDone, setIntroDone] = useState(false);
   const authScopeKey = useAuthStore(
     (state: AuthState) => `${state.authEpoch}:${state.user?.id ?? 'anon'}:${state.venue?.id ?? 'none'}`,
   );
@@ -134,9 +132,6 @@ export default function RootLayout() {
                     </SubscriptionGate>
                   </ErrorBoundary>
                 </SafeAreaView>
-                {!introDone ? (
-                  <SportsBrandIntro onComplete={() => setIntroDone(true)} />
-                ) : null}
               </View>
             </A0PurchaseProvider>
           </PaperProvider>
