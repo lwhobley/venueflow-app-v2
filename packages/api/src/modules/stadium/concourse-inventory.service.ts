@@ -123,7 +123,8 @@ export class ConcourseInventoryService {
     const restockMap = new Map<string, number>();
     ((existing.restocks as any[]) || []).forEach(r => {
       (r.items || []).forEach((item: any) => {
-        restockMap.set(item.code, (restockMap.get(item.code) || 0) + item.quantity);
+        // Signed quantities: inbound transfers are positive, outbound are negative.
+        restockMap.set(item.code, (restockMap.get(item.code) || 0) + Number(item.quantity));
       });
     });
 
@@ -265,19 +266,65 @@ export class ConcourseInventoryService {
       const updated = await tx.inventoryTransferRequest.findUniqueOrThrow({ where: { id: transferId } });
       if (status !== 'completed') return updated;
 
-      const activeSheet = await tx.standSheet.findFirst({
-        where: { facilityId, outletId: transfer.toOutletId, ...(transfer.eventId ? { eventId: transfer.eventId } : {}), status: { in: ['count_in_recorded', 'active_event'] } },
+      const items = (transfer.items as any[]) || [];
+      const eventFilter = transfer.eventId ? { eventId: transfer.eventId } : {};
+
+      // Destination: inbound restock (positive quantities).
+      const destSheet = await tx.standSheet.findFirst({
+        where: {
+          facilityId,
+          outletId: transfer.toOutletId,
+          ...eventFilter,
+          status: { in: ['count_in_recorded', 'active_event'] },
+        },
         orderBy: { createdAt: 'desc' },
       });
-      if (!activeSheet) return updated;
-      const existingRestocks = (activeSheet.restocks as any[]) || [];
-      if (!existingRestocks.some((entry) => entry.transferId === transfer.id)) {
-        existingRestocks.push({ transferId: transfer.id, items: transfer.items, addedAt: new Date().toISOString() });
-        await tx.standSheet.update({
-          where: { id: activeSheet.id },
-          data: { restocks: existingRestocks as any, status: 'active_event' },
-        });
+      if (destSheet) {
+        const destRestocks = (destSheet.restocks as any[]) || [];
+        if (!destRestocks.some((entry) => entry.transferId === transfer.id)) {
+          destRestocks.push({
+            transferId: transfer.id,
+            direction: 'in',
+            items,
+            addedAt: new Date().toISOString(),
+          });
+          await tx.standSheet.update({
+            where: { id: destSheet.id },
+            data: { restocks: destRestocks as any, status: 'active_event' },
+          });
+        }
       }
+
+      // Source: outbound debit (negative quantities) so inventory is not created.
+      const sourceSheet = await tx.standSheet.findFirst({
+        where: {
+          facilityId,
+          outletId: transfer.fromOutletId,
+          ...eventFilter,
+          status: { in: ['count_in_recorded', 'active_event'] },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (sourceSheet) {
+        const sourceRestocks = (sourceSheet.restocks as any[]) || [];
+        if (!sourceRestocks.some((entry) => entry.transferId === transfer.id)) {
+          sourceRestocks.push({
+            transferId: transfer.id,
+            direction: 'out',
+            items: items.map((item) => ({
+              code: item.code,
+              name: item.name,
+              quantity: -Math.abs(Number(item.quantity)),
+            })),
+            addedAt: new Date().toISOString(),
+          });
+          await tx.standSheet.update({
+            where: { id: sourceSheet.id },
+            data: { restocks: sourceRestocks as any, status: 'active_event' },
+          });
+        }
+      }
+
       return updated;
     });
   }
