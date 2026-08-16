@@ -12,6 +12,9 @@ export async function applyTenantSessionSettings(
   tx: TxClient,
   context: TenantContext = getTenantContext(),
 ): Promise<void> {
+  if (typeof (tx as any)?.$executeRaw !== 'function') {
+    return;
+  }
   const userId = context.userId ?? '';
   const organizationId = context.organizationId ?? '';
   const facilityId = context.facilityId ?? context.venueId ?? '';

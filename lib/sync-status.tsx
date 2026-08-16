@@ -17,11 +17,11 @@ export function SyncStatus() {
       unsubscribe();
     };
   }, []);
-  const tone = conflicts > 0 ? 'bad' : pending ? 'warn' : 'good';
+  const tone = conflicts > 0 ? 'danger' : pending ? 'warn' : 'good';
   const label = conflicts > 0 ? `${conflicts} issue${conflicts === 1 ? '' : 's'}` : pending ? `${pending} pending` : 'Synced';
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-      <StatusPill palette={palette} tone={tone as 'bad' | 'warn' | 'good'}>
+      <StatusPill palette={palette} tone={tone}>
         {label}
       </StatusPill>
       {pending && !conflicts ? (

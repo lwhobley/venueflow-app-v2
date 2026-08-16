@@ -207,7 +207,7 @@ function replace(row: OfflineMutation) {
   notify();
 }
 
-export function subscribeOfflineQueue(listener: (snapshot: OfflineQueueSnapshot | number) => void) {
+export function subscribeOfflineQueue(listener: ((snapshot: OfflineQueueSnapshot) => void) | ((pending: number) => void)) {
   // Accept legacy number listeners used by SyncStatus while emitting snapshots.
   const wrapped = (next: OfflineQueueSnapshot) => {
     if (listener.length <= 1) {

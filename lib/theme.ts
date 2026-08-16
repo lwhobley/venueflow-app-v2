@@ -96,10 +96,10 @@ export const authInputProps = {
 };
 
 export const accents = [
-  { bg: designPalettes.light.primary, fg: "#FFFFFF" },
-  { bg: designPalettes.light.secondary, fg: "#FFFFFF" },
-  { bg: designPalettes.light.info, fg: "#FFFFFF" },
-  { bg: designPalettes.light.warning, fg: "#FFFFFF" },
+  { bg: designPalettes.light.primary, fg: "#FFFFFF", icon: designPalettes.light.primary },
+  { bg: designPalettes.light.secondary, fg: "#FFFFFF", icon: designPalettes.light.secondary },
+  { bg: designPalettes.light.info, fg: "#FFFFFF", icon: designPalettes.light.info },
+  { bg: designPalettes.light.warning, fg: "#FFFFFF", icon: designPalettes.light.warning },
 ];
 
 export const spacing = {
