@@ -6,6 +6,7 @@ import { CommandButton, CommandText, StatusPill } from './FutureUI';
 import { spacing, useDesignTheme } from '../lib/theme';
 import { useResponsive } from '../lib/responsive';
 import { StadiumUnitDetailModal, type StadiumZoneItem } from './StadiumUnitDetailModal';
+import Stadium3DModel from './Stadium3DModel';
 
 export interface StadiumZoneData {
   id: string;
@@ -1069,9 +1070,9 @@ export function StadiumVenueMap({
   onSelectUnit?: (unit: StadiumZoneItem) => void;
 }) {
   const palette = useDesignTheme();
-  const { width: windowWidth, isMobile, preferListFirst } = useResponsive();
+  const { width: windowWidth, isMobile } = useResponsive();
 
-  const [mobileTab, setMobileTab] = useState<'map' | 'directory'>(preferListFirst ? 'directory' : 'map');
+  const [mobileTab, setMobileTab] = useState<'map' | 'directory'>('map');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedZoneId, setSelectedZoneId] = useState<string>(initialZoneId ?? 'ALL');
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(initialSelectedUnitId ?? 'u-302');
@@ -1528,14 +1529,25 @@ export function StadiumVenueMap({
               </View>
             </View>
 
-            {/* 3D Visual Stadium Bowl Canvas */}
+            {/* Actual GLB renderer in 3D mode; the architectural plan remains available in 2D mode. */}
+            {viewPerspective === '3d_isometric' ? (
+              <View style={styles.interactiveModelFrame}>
+                <Stadium3DModel
+                  dom={{
+                    scrollEnabled: false,
+                    contentInsetAdjustmentBehavior: 'never',
+                    style: { width: '100%', height: '100%' },
+                  }}
+                />
+              </View>
+            ) : (
             <ScrollView horizontal contentContainerStyle={styles.canvasScrollInner} showsHorizontalScrollIndicator={true}>
               <ScrollView contentContainerStyle={styles.stadium3DContainer} showsVerticalScrollIndicator={false}>
                 <View
                   style={[
                     styles.stadiumPerspectiveWrapper,
                     { width: isMobile ? Math.max(340, windowWidth - 32) : 840 },
-                    viewPerspective === '3d_isometric' ? styles.isometricTransform : styles.planTransform,
+                    styles.planTransform,
                   ]}
                 >
                   {/* ── TOP: RETRACTABLE ROOF RAILS & STEEL ARCHES ── */}
@@ -2235,6 +2247,7 @@ export function StadiumVenueMap({
                 </View>
               </ScrollView>
             </ScrollView>
+            )}
 
             {/* ── FLOATING BEO & AMENITIES EVENT HUD POP-UP ── */}
             {activeSelectedUnit ? (
@@ -2462,6 +2475,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0A1118',
     position: 'relative',
+  },
+  interactiveModelFrame: {
+    width: '100%',
+    minHeight: 520,
+    flex: 1,
+    overflow: 'hidden',
+    backgroundColor: '#08131F',
   },
   canvasHeader: {
     flexDirection: 'row',
