@@ -19,7 +19,6 @@ export const useAppearanceStore = create<AppearanceState>((set) => ({
 export const designPalettes = {
   dark: {
     mode: "dark" as const,
-    // NFL-inspired dark: navy field, red accents, white type
     background: "#07111F",
     backgroundAlt: "#0C1A2E",
     surface: "#0F2138",
@@ -43,7 +42,6 @@ export const designPalettes = {
   },
   light: {
     mode: "light" as const,
-    // NFL logo colors: navy #013369, red #D50A0A, white
     background: "#F4F6F9",
     backgroundAlt: "#FFFFFF",
     surface: "#FFFFFF",
@@ -98,39 +96,22 @@ export const authInputProps = {
 };
 
 export const accents = [
-  { bg: "#E8EEF5", fg: "#0A1628", icon: "#013369" },
-  { bg: "#FDE8E8", fg: "#0A1628", icon: "#D50A0A" },
-  { bg: "#EEF3F7", fg: "#0A1628", icon: "#2E5A8F" },
-  { bg: "#FFF4DE", fg: "#0A1628", icon: "#C45C12" },
-  { bg: "#E8EEF5", fg: "#0A1628", icon: "#3A4A63" },
-  { bg: "#FDE8E8", fg: "#0A1628", icon: "#D50A0A" },
-] as const;
+  { bg: designPalettes.light.primary, fg: "#FFFFFF" },
+  { bg: designPalettes.light.secondary, fg: "#FFFFFF" },
+  { bg: designPalettes.light.info, fg: "#FFFFFF" },
+  { bg: designPalettes.light.warning, fg: "#FFFFFF" },
+];
 
 export const spacing = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 24,
-  xxl: 32,
-  xxxl: 48,
-  huge: 64,
+  xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, xxxl: 48, huge: 64,
 };
 
 export const radius = {
-  sharp: 6,
-  soft: 14,
-  sm: 10,
-  md: 14,
-  lg: 18,
-  xl: 24,
-  pill: 999,
+  sharp: 6, soft: 14, sm: 10, md: 14, lg: 18, xl: 24, pill: 999,
 };
 
 export const fontFamily = {
-  display: undefined,
-  displayItalic: undefined,
-  displayMedium: undefined,
+  display: undefined, displayItalic: undefined, displayMedium: undefined,
 } as const;
 
 export const type = {
@@ -146,39 +127,28 @@ export const type = {
 
 export const shadow = {
   shadowColor: designPalettes.light.shadow,
-  shadowOpacity: 0.08,
-  shadowRadius: 16,
-  shadowOffset: { width: 0, height: 6 },
-  elevation: 3,
+  shadowOpacity: 0.08, shadowRadius: 16,
+  shadowOffset: { width: 0, height: 6 }, elevation: 3,
 } as const;
 
 export const shadowSoft = {
   shadowColor: designPalettes.light.shadow,
-  shadowOpacity: 0.06,
-  shadowRadius: 10,
-  shadowOffset: { width: 0, height: 3 },
-  elevation: 2,
+  shadowOpacity: 0.06, shadowRadius: 10,
+  shadowOffset: { width: 0, height: 3 }, elevation: 2,
 } as const;
 
 export const shadowFloat = {
   shadowColor: designPalettes.light.shadow,
-  shadowOpacity: 0.12,
-  shadowRadius: 24,
-  shadowOffset: { width: 0, height: 10 },
-  elevation: 6,
+  shadowOpacity: 0.12, shadowRadius: 24,
+  shadowOffset: { width: 0, height: 10 }, elevation: 6,
 } as const;
 
 export const authCardStyle = {
-  backgroundColor: "transparent",
-  borderRadius: 16,
-  borderWidth: 0,
-  borderColor: "transparent",
+  backgroundColor: "transparent", borderRadius: 16, borderWidth: 0, borderColor: "transparent",
 } as const;
 
 export const glass = {
-  backgroundColor: "transparent",
-  borderWidth: 0,
-  borderColor: "transparent",
+  backgroundColor: "transparent", borderWidth: 0, borderColor: "transparent",
 } as const;
 
 export const makePaperTheme = (mode: ThemeMode) => {
