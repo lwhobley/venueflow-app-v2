@@ -15,6 +15,13 @@ if (!config.resolver.assetExts.includes('wasm')) {
   config.resolver.assetExts.push('wasm');
 }
 
+// 3D stadium models
+for (const ext of ['glb', 'gltf']) {
+  if (!config.resolver.assetExts.includes(ext)) {
+    config.resolver.assetExts.push(ext);
+  }
+}
+
 // zustand's ESM build (resolved via package "exports" on web in SDK 54) uses
 // `import.meta.env`, which ships a literal `import.meta` into the web bundle and
 // throws "Cannot use 'import.meta' outside a module" when the browser loads it
