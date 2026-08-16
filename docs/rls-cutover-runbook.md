@@ -12,6 +12,8 @@ Do **not** run the full policy set in production until every checklist item belo
 | AuthGuard binds live profile only | Live |
 | Request tenant context carries userId / organizationId / facilityId / venueId | Live |
 | `withTenantTransaction` + `SET LOCAL app.*` helper | Live (opt-in per write path) |
+| Write paths binding GUCs | union punches, inventory transfer complete, temp roster import, suite BEO create/status/delivery |
+| Phase-1 helpers SQL (`app_private.*`) | Staged in `packages/api/prisma/migrations/20260816_app_private_tenant_helpers.sql` |
 | Separate `stadium_migrator` vs `stadium_api` DB roles | Not cut over |
 | FORCE RLS on all tenant tables under `stadium_api` | Staged in `docs/stadium-hierarchy-rls.sql` |
 | Negative cross-tenant integration tests on runtime role | Required before cutover |
