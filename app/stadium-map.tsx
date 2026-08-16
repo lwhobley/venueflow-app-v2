@@ -29,23 +29,23 @@ export default function StadiumMapScreen() {
           Demo layout — stand sales, staff names, and in-seat orders may be simulated until live POS/roster feeds are bound.
         </CommandText>
       </View>
-      <View style={[styles.headerBanner, { backgroundColor: '#074426' }]}>
+      <View style={[styles.headerBanner, { backgroundColor: '#013369' }]}>
         <View style={styles.headerTopRow}>
           <Pressable
             onPress={() => router.back()}
             style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, flexDirection: 'row', alignItems: 'center', gap: 6 })}
           >
             <MaterialCommunityIcons name="arrow-left" size={20} color="#FFFFFF" />
-            <CommandText palette={palette} variant="label" style={{ color: '#B6D6BE' }}>BACK</CommandText>
+            <CommandText palette={palette} variant="label" style={{ color: '#A8C4E0' }}>BACK</CommandText>
           </Pressable>
           <View style={styles.liveIndicator}>
             <View style={styles.liveDot} />
             <CommandText palette={palette} variant="caption" style={{ color: '#FFFFFF', fontWeight: '800' }}>LIVE F&B MAPPING</CommandText>
           </View>
         </View>
-        <CommandText palette={palette} variant="hero" style={{ color: '#FFFFFF', marginTop: spacing.xs }}>Interactive Stadium Layout</CommandText>
-        <CommandText palette={palette} variant="body" style={{ color: '#D9EBDD', marginTop: 2 }}>
-          Click concourses, club lounges, and luxury suite corridors to inspect live stand sheets, BEO orders, and stock pars.
+        <CommandText palette={palette} variant="hero" style={{ color: '#FFFFFF', marginTop: spacing.xs }}>3D Stadium Model</CommandText>
+        <CommandText palette={palette} variant="body" style={{ color: '#C5D6EB', marginTop: 2 }}>
+          Orbit the live GLB stadium. Select a zone from the areas list to glow that region — then open a unit for stand sheets, BEOs, and staffing.
         </CommandText>
       </View>
       <View style={{ padding: spacing.md, gap: spacing.md }}>

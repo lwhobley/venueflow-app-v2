@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { applyTenantSessionSettings } from '../../prisma/tenant-transaction';
 import { SuiteHospitalityGateway } from './suite-hospitality.gateway';
 import { EnterpriseWebhookService } from '../integrations/enterprise-webhook.service';
 import { SuiteBeoStatus } from '@prisma/client';
@@ -117,6 +118,11 @@ export class SuiteHospitalityService {
     }
     const totalCents = dto.totalCents ?? dto.cateringLineItems.reduce((acc, item) => acc + item.quantity * item.unitPriceCents, 0);
     const order = await this.prisma.$transaction(async (tx) => {
+      await applyTenantSessionSettings(tx, {
+        organizationId: dto.organizationId,
+        facilityId: dto.facilityId,
+        venueId: dto.facilityId,
+      });
       const created = await tx.suiteBeoOrder.create({
         data: {
           organizationId: dto.organizationId,
@@ -186,6 +192,11 @@ export class SuiteHospitalityService {
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      await applyTenantSessionSettings(tx, {
+        organizationId: existing.organizationId,
+        facilityId,
+        venueId: facilityId,
+      });
       const order = await tx.suiteBeoOrder.update({
         where: { id: beoOrderId },
         data: {
@@ -233,6 +244,11 @@ export class SuiteHospitalityService {
     if (existing.status !== 'en_route') throw new BadRequestException('Only an en-route BEO can be marked delivered.');
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      await applyTenantSessionSettings(tx, {
+        organizationId: existing.organizationId,
+        facilityId,
+        venueId: facilityId,
+      });
       const order = await tx.suiteBeoOrder.update({
         where: { id: beoOrderId },
         data: {

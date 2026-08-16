@@ -17,6 +17,7 @@ export type AuthUser = {
   profileId?: string;
   venueId?: string | null;
   venueName?: string | null;
+  organizationId?: string | null;
   allAccess?: boolean;
   trialEndsAt?: string | null;
   venueStatus?: string | null;
@@ -95,27 +96,29 @@ export class AuthGuard implements CanActivate {
       ? rawVenueHeader.trim()
       : undefined;
     const requestedVenueId = headerVenueId || payload.venueId || undefined;
+    const profileSelect = {
+      id: true,
+      email: true,
+      fullName: true,
+      role: true,
+      allAccess: true,
+      trialEndsAt: true,
+      venueId: true,
+      venue: {
+        select: {
+          name: true,
+          subscriptionStatus: true,
+          organizationId: true,
+        },
+      },
+    } as const;
     let liveProfile = await this.prisma.profile.findFirst({
       where: {
         userId: payload.sub,
         ...(requestedVenueId ? { venueId: requestedVenueId } : {}),
         OR: [{ membershipStatus: null }, { membershipStatus: 'active' }],
       },
-      select: {
-        id: true,
-        email: true,
-        fullName: true,
-        role: true,
-        allAccess: true,
-        trialEndsAt: true,
-        venueId: true,
-        venue: {
-          select: {
-            name: true,
-            subscriptionStatus: true,
-          },
-        },
-      },
+      select: profileSelect,
       orderBy: { createdAt: 'asc' },
     });
     if (!liveProfile && headerVenueId) {
@@ -131,16 +134,7 @@ export class AuthGuard implements CanActivate {
           venueId: { not: null },
           OR: [{ membershipStatus: null }, { membershipStatus: 'active' }],
         },
-        select: {
-          id: true,
-          email: true,
-          fullName: true,
-          role: true,
-          allAccess: true,
-          trialEndsAt: true,
-          venueId: true,
-          venue: { select: { name: true, subscriptionStatus: true } },
-        },
+        select: profileSelect,
         orderBy: { createdAt: 'asc' },
       });
     }
@@ -157,6 +151,7 @@ export class AuthGuard implements CanActivate {
       trialEndsAt: liveProfile?.trialEndsAt?.toISOString() ?? null,
       venueId: liveProfile?.venueId ?? null,
       venueName: liveProfile?.venue?.name ?? null,
+      organizationId: liveProfile?.venue?.organizationId ?? null,
       venueStatus: liveProfile?.venue?.subscriptionStatus ?? null,
     };
 
@@ -169,7 +164,12 @@ export class AuthGuard implements CanActivate {
     // from the live membership row loaded above.
     const tenantVenueId = resolvedUser.venueId;
     if (tenantIsolationEnforced() && tenantVenueId) {
-      enterTenant(tenantVenueId);
+      enterTenant({
+        venueId: tenantVenueId,
+        facilityId: tenantVenueId,
+        organizationId: resolvedUser.organizationId ?? undefined,
+        userId: resolvedUser.sub,
+      });
     }
 
     return true;
@@ -181,10 +181,8 @@ export class AuthGuard implements CanActivate {
       const [scheme, token] = header.split(' ');
       if (scheme?.toLowerCase() === 'bearer' && token) return token;
     }
-    const queryToken = request.query?.token;
-    if (typeof queryToken === 'string' && queryToken.trim()) {
-      return queryToken.trim();
-    }
+    // Intentionally do not accept tokens from query strings. Query tokens leak
+    // into access logs, Referer headers, browser history, and shared URLs.
     return null;
   }
 }

@@ -14,11 +14,15 @@ describe('Mass Temp Staffing & Union Compliance Services', () => {
       unionRuleConfig: {
         findFirst: vi.fn(),
       },
+      facility: {
+        findFirst: vi.fn().mockResolvedValue({ timezone: 'UTC' }),
+      },
       workerProfile: {
         findUnique: vi.fn(),
         findFirst: vi.fn(),
         create: vi.fn(),
         count: vi.fn().mockResolvedValue(0),
+        groupBy: vi.fn().mockResolvedValue([]),
       },
       shiftPunch: {
         findMany: vi.fn(),
@@ -64,7 +68,7 @@ describe('Mass Temp Staffing & Union Compliance Services', () => {
       { id: 'p2', workerId: 'w_101', punchType: 'OUT', timestamp: endTime },
     ]);
 
-    const summary = await unionService.calculateWorkerShiftSummary('w_101', 'facility-1');
+    const summary = await unionService.calculateWorkerShiftSummary('w_101', 'facility-1', '2026-08-12');
 
     expect(summary.regularHours).toBe(8.0);
     expect(summary.overtimeHours).toBe(2.0);

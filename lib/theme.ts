@@ -96,13 +96,11 @@ export const authInputProps = {
 };
 
 export const accents = [
-  { bg: "#E8EEF5", fg: "#0A1628", icon: "#013369" },
-  { bg: "#FDE8E8", fg: "#0A1628", icon: "#D50A0A" },
-  { bg: "#EEF3F7", fg: "#0A1628", icon: "#2E5A8F" },
-  { bg: "#FFF4DE", fg: "#0A1628", icon: "#C45C12" },
-  { bg: "#E8EEF5", fg: "#0A1628", icon: "#3A4A63" },
-  { bg: "#FDE8E8", fg: "#0A1628", icon: "#D50A0A" },
-] as const;
+  { bg: designPalettes.light.primary, fg: "#FFFFFF", icon: designPalettes.light.primary },
+  { bg: designPalettes.light.secondary, fg: "#FFFFFF", icon: designPalettes.light.secondary },
+  { bg: designPalettes.light.info, fg: "#FFFFFF", icon: designPalettes.light.info },
+  { bg: designPalettes.light.warning, fg: "#FFFFFF", icon: designPalettes.light.warning },
+];
 
 export const spacing = {
   xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, xxxl: 48, huge: 64,

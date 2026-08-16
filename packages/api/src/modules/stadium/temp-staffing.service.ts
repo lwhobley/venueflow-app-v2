@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { applyTenantSessionSettings } from '../../prisma/tenant-transaction';
 import { UnionComplianceService } from './union-compliance.service';
 import { IsBoolean, IsDateString, IsOptional, IsString } from 'class-validator';
 import { createHmac, pbkdf2, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
@@ -93,32 +94,39 @@ export class TempStaffingService {
     }
 
     const prepared = await Promise.all(rows.map(async (row) => ({ row, credential: await this.credentialsFor(facilityId) })));
-    const created = await this.prisma.$transaction(async (tx) => Promise.all(prepared.map(async ({ row, credential }) => {
-      const worker = await tx.workerProfile.create({
-        data: {
-          organizationId,
-          facilityId,
-          agencyId: agency!.id,
-          unionMemberId: row.unionMemberId?.trim() || `TEMP-${randomBytes(8).toString('hex').toUpperCase()}`,
-          firstName: row.firstName.trim(),
-          lastName: row.lastName.trim(),
-          pinLookupTag: credential.pinLookupTag,
-          pinSalt: credential.pinSalt,
-          pinHash: credential.pinHash,
-          qrLookupTag: credential.qrLookupTag,
-          qrSalt: credential.qrSalt,
-          qrHash: credential.qrHash,
-          credentialsIssuedAt: new Date(),
-          // Missing certifications are never assumed true.
-          certFoodSafety: row.certFoodSafety === true,
-          certAlcohol: row.certAlcohol === true,
-          certAlcoholExpiry: row.certAlcoholExpiry ? new Date(row.certAlcoholExpiry) : null,
-          active: true,
-        },
-        select: { id: true },
+    const created = await this.prisma.$transaction(async (tx) => {
+      await applyTenantSessionSettings(tx, {
+        organizationId,
+        facilityId,
+        venueId: facilityId,
       });
-      return { worker, credential };
-    })));
+      return Promise.all(prepared.map(async ({ row, credential }) => {
+        const worker = await tx.workerProfile.create({
+          data: {
+            organizationId,
+            facilityId,
+            agencyId: agency!.id,
+            unionMemberId: row.unionMemberId?.trim() || `TEMP-${randomBytes(8).toString('hex').toUpperCase()}`,
+            firstName: row.firstName.trim(),
+            lastName: row.lastName.trim(),
+            pinLookupTag: credential.pinLookupTag,
+            pinSalt: credential.pinSalt,
+            pinHash: credential.pinHash,
+            qrLookupTag: credential.qrLookupTag,
+            qrSalt: credential.qrSalt,
+            qrHash: credential.qrHash,
+            credentialsIssuedAt: new Date(),
+            // Missing certifications are never assumed true.
+            certFoodSafety: row.certFoodSafety === true,
+            certAlcohol: row.certAlcohol === true,
+            certAlcoholExpiry: row.certAlcoholExpiry ? new Date(row.certAlcoholExpiry) : null,
+            active: true,
+          },
+          select: { id: true },
+        });
+        return { worker, credential };
+      }));
+    });
 
     // Raw credentials are returned only in this provisioning response. They are
     // not stored, logged, or present in later roster responses.

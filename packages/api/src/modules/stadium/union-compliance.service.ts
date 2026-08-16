@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PunchType, PunchVerification } from '@prisma/client';
+import { zonedDateBounds, zonedIsoDate } from '../../common/venue-time';
+import { applyTenantSessionSettings } from '../../prisma/tenant-transaction';
 
 export interface ShiftSummary {
   workerId: string;
@@ -38,6 +40,14 @@ export class UnionComplianceService {
     };
   }
 
+  private async facilityTimeZone(facilityId: string): Promise<string | null> {
+    const facility = await this.prisma.facility.findFirst({
+      where: { id: facilityId },
+      select: { timezone: true },
+    });
+    return facility?.timezone ?? null;
+  }
+
   async calculateWorkerShiftSummary(workerId: string, facilityId: string, requestedBusinessDate?: string): Promise<ShiftSummary> {
     const worker = await this.prisma.workerProfile.findFirst({
       where: { id: workerId, facilityId },
@@ -48,9 +58,11 @@ export class UnionComplianceService {
     if (requestedBusinessDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedBusinessDate)) {
       throw new BadRequestException('businessDate must use YYYY-MM-DD format.');
     }
-    const businessDate = requestedBusinessDate ?? new Date().toISOString().slice(0, 10);
-    const dayStart = new Date(`${businessDate}T00:00:00.000Z`);
-    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+    const timeZone = await this.facilityTimeZone(facilityId);
+    const businessDate = requestedBusinessDate ?? zonedIsoDate(timeZone, Date.now());
+    const bounds = zonedDateBounds(timeZone, businessDate);
+    const dayStart = new Date(bounds.start);
+    const dayEnd = new Date(bounds.end);
     const punches = await this.prisma.shiftPunch.findMany({
       where: { workerId, facilityId, timestamp: { gte: dayStart, lt: dayEnd } },
       orderBy: { timestamp: 'asc' },
@@ -163,6 +175,13 @@ export class UnionComplianceService {
       throw new BadRequestException('Supervisor overrides require a reason.');
     }
     return this.prisma.$transaction(async (tx) => {
+      // Bind app.* GUCs for a future FORCE RLS runtime role. SET LOCAL cannot
+      // leak across the connection pool because it is transaction-scoped.
+      await applyTenantSessionSettings(tx, {
+        organizationId,
+        facilityId,
+        venueId: facilityId,
+      });
       // Serialize every worker's punch stream. A repeated QR/PIN scan either
       // returns its original punch or is rejected as an invalid next state.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`shift-punch-${facilityId}-${workerId}`}))`;
@@ -219,11 +238,40 @@ export class UnionComplianceService {
 
     const openViolations = violations.filter((v) => !v.resolved);
 
+    // Real certified-worker counts per facility — never invent demo numbers.
+    const certifiedByFacility = await this.prisma.workerProfile.groupBy({
+      by: ['facilityId'],
+      where: {
+        organizationId,
+        active: true,
+        certFoodSafety: true,
+        certAlcohol: true,
+        OR: [{ certAlcoholExpiry: null }, { certAlcoholExpiry: { gte: new Date() } }],
+      },
+      _count: { _all: true },
+    });
+    const certifiedCount = new Map(certifiedByFacility.map((row) => [row.facilityId, row._count._all]));
+
+    const pendingRecertByFacility = await this.prisma.workerProfile.groupBy({
+      by: ['facilityId'],
+      where: {
+        organizationId,
+        active: true,
+        certAlcohol: true,
+        certAlcoholExpiry: {
+          gte: new Date(),
+          lte: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        },
+      },
+      _count: { _all: true },
+    });
+    const pendingRecertCount = new Map(pendingRecertByFacility.map((row) => [row.facilityId, row._count._all]));
+
     const venueSummaries = facilities.map((fac) => {
       const facViolations = violations.filter((v) => v.facilityId === fac.id);
       const openCount = facViolations.filter((v) => !v.resolved).length;
       const penaltyTotal = facViolations.reduce((sum, v) => sum + (v.penaltyAmountCents ?? 0), 0);
-      const score = Math.max(70, Math.min(100, 100 - openCount * 3));
+      const score = Math.max(0, Math.min(100, 100 - openCount * 3));
 
       return {
         facilityId: fac.id,
@@ -231,13 +279,13 @@ export class UnionComplianceService {
         facilityCode: fac.code,
         healthScore: score,
         status: score >= 95 ? 'compliant' : score >= 85 ? 'watch' : 'action_required',
-        activeUnionCba: fac.unionRuleConfigs[0]?.name ?? 'UNITE HERE Local Standard CBA',
+        activeUnionCba: fac.unionRuleConfigs[0]?.name ?? 'No active CBA configured',
         mealBreakThresholdHours: fac.unionRuleConfigs[0]?.maxContinuousWorkHours ?? 5.0,
         openViolationsCount: openCount,
         resolvedViolationsCount: facViolations.length - openCount,
         penaltyExposureCents: penaltyTotal,
-        certifiedWorkersCount: 142,
-        pendingRecertificationsCount: 4,
+        certifiedWorkersCount: certifiedCount.get(fac.id) ?? 0,
+        pendingRecertificationsCount: pendingRecertCount.get(fac.id) ?? 0,
       };
     });
 
@@ -246,16 +294,13 @@ export class UnionComplianceService {
 
     return {
       organizationId,
-      overallHealthScore: venueSummaries.length ? Math.round(venueSummaries.reduce((sum, v) => sum + v.healthScore, 0) / venueSummaries.length) : 98,
-      totalFacilitiesCount: facilities.length || 4,
+      overallHealthScore: venueSummaries.length
+        ? Math.round(venueSummaries.reduce((sum, v) => sum + v.healthScore, 0) / venueSummaries.length)
+        : 100,
+      totalFacilitiesCount: facilities.length,
       totalOpenViolations: totalOpen,
       totalPenaltyExposureCents: totalPenalty,
-      venueSummaries: venueSummaries.length ? venueSummaries : [
-        { facilityId: 'fac-stadium-main', facilityName: 'Metropolitan Stadium', facilityCode: 'STAD-MAIN', healthScore: 98, status: 'compliant', activeUnionCba: 'UNITE HERE Local 1 Master CBA', mealBreakThresholdHours: 5.0, openViolationsCount: 1, resolvedViolationsCount: 18, penaltyExposureCents: 2500, certifiedWorkersCount: 380, pendingRecertificationsCount: 6 },
-        { facilityId: 'fac-arena-city', facilityName: 'City Center Arena', facilityCode: 'ARNA-CITY', healthScore: 94, status: 'compliant', activeUnionCba: 'SEIU Local 1877 Arena Agreement', mealBreakThresholdHours: 5.0, openViolationsCount: 3, resolvedViolationsCount: 14, penaltyExposureCents: 7500, certifiedWorkersCount: 220, pendingRecertificationsCount: 8 },
-        { facilityId: 'fac-convention-ctr', facilityName: 'Riverside Convention Center', facilityCode: 'CONV-RIV', healthScore: 100, status: 'compliant', activeUnionCba: 'Teamsters Joint Council 25', mealBreakThresholdHours: 5.0, openViolationsCount: 0, resolvedViolationsCount: 9, penaltyExposureCents: 0, certifiedWorkersCount: 165, pendingRecertificationsCount: 2 },
-        { facilityId: 'fac-amphitheater', facilityName: 'Bayfront Amphitheater', facilityCode: 'AMPH-BAY', healthScore: 91, status: 'watch', activeUnionCba: 'IATSE & Culinary Local 23', mealBreakThresholdHours: 4.5, openViolationsCount: 4, resolvedViolationsCount: 11, penaltyExposureCents: 10000, certifiedWorkersCount: 110, pendingRecertificationsCount: 5 },
-      ],
+      venueSummaries,
       recentViolations: violations.slice(0, 10).map((v) => ({
         id: v.id,
         facilityId: v.facilityId,
@@ -269,34 +314,73 @@ export class UnionComplianceService {
   }
 
   async getCrossVenueSchedulingConflicts(organizationId: string) {
+    // Real cross-venue rest-window evaluation is not implemented yet. Return an
+    // honest empty result instead of fabricated conflicts.
     return {
       organizationId,
       evaluatedAt: new Date().toISOString(),
-      conflictsCount: 1,
-      conflicts: [
-        {
-          id: 'conf-1',
-          workerId: 'w-8821',
-          workerName: 'Marcus Sterling (Lead Bartender)',
-          conflictType: 'cross_venue_clopening',
-          severity: 'high',
-          description: 'Scheduled closing shift at Metropolitan Stadium (out at 11:30 PM) followed by opening shift at City Center Arena (in at 7:00 AM). Rest window: 7.5 hrs (Minimum required: 10.0 hrs).',
-          venueA: 'Metropolitan Stadium',
-          venueB: 'City Center Arena',
-          suggestedRemedy: 'Reassign City Center Arena opening shift to available certified bartender Samira Khan.',
-        },
-      ],
+      conflictsCount: 0,
+      conflicts: [] as Array<Record<string, unknown>>,
+      note: 'Cross-venue rest-window evaluation is not yet available for this organization.',
     };
   }
 
   async getMultiVenueCertificationStatus(organizationId: string) {
+    const workers = await this.prisma.workerProfile.findMany({
+      where: { organizationId, active: true },
+      select: {
+        certFoodSafety: true,
+        certAlcohol: true,
+        certAlcoholExpiry: true,
+      },
+    });
+    const now = Date.now();
+    const in30Days = now + 30 * 24 * 60 * 60 * 1000;
+
+    const alcohol = { activeCertified: 0, expiringIn30Days: 0, expired: 0 };
+    const food = { activeCertified: 0, expiringIn30Days: 0, expired: 0 };
+
+    for (const worker of workers) {
+      if (worker.certFoodSafety) food.activeCertified += 1;
+      else food.expired += 1;
+
+      if (!worker.certAlcohol) {
+        alcohol.expired += 1;
+        continue;
+      }
+      const expiry = worker.certAlcoholExpiry?.getTime();
+      if (expiry != null && expiry < now) {
+        alcohol.expired += 1;
+      } else if (expiry != null && expiry <= in30Days) {
+        alcohol.activeCertified += 1;
+        alcohol.expiringIn30Days += 1;
+      } else {
+        alcohol.activeCertified += 1;
+      }
+    }
+
+    const rate = (active: number, expired: number) => {
+      const total = active + expired;
+      return total === 0 ? 100 : Number(((active / total) * 100).toFixed(1));
+    };
+
     return {
       organizationId,
       categories: [
-        { name: 'TIPS / RBS Responsible Alcohol Service', activeCertified: 640, expiringIn30Days: 14, expired: 2, complianceRate: 97.6 },
-        { name: 'ServSafe Food Protection Manager / Food Handler', activeCertified: 710, expiringIn30Days: 19, expired: 1, complianceRate: 98.4 },
-        { name: 'AED / CPR & First Aid Emergency Response', activeCertified: 215, expiringIn30Days: 5, expired: 0, complianceRate: 100.0 },
-        { name: 'Crowd Management & Fire Safety Certification', activeCertified: 320, expiringIn30Days: 8, expired: 0, complianceRate: 100.0 },
+        {
+          name: 'TIPS / RBS Responsible Alcohol Service',
+          activeCertified: alcohol.activeCertified,
+          expiringIn30Days: alcohol.expiringIn30Days,
+          expired: alcohol.expired,
+          complianceRate: rate(alcohol.activeCertified, alcohol.expired),
+        },
+        {
+          name: 'ServSafe Food Protection Manager / Food Handler',
+          activeCertified: food.activeCertified,
+          expiringIn30Days: food.expiringIn30Days,
+          expired: food.expired,
+          complianceRate: rate(food.activeCertified, food.expired),
+        },
       ],
     };
   }
