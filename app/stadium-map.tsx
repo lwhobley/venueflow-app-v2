@@ -45,7 +45,7 @@ export default function StadiumMapScreen() {
         </View>
         <CommandText palette={palette} variant="hero" style={{ color: '#FFFFFF', marginTop: spacing.xs }}>3D Stadium Model</CommandText>
         <CommandText palette={palette} variant="body" style={{ color: '#C5D6EB', marginTop: 2 }}>
-          Orbit the live GLB stadium. Select a zone from the areas list to glow that region — then open a unit for stand sheets, BEOs, and staffing.
+          Orbit the live GLB stadium with touch or mouse controls. Use the areas list to open a unit for stand sheets, BEOs, and staffing.
         </CommandText>
       </View>
       <View style={{ padding: spacing.md, gap: spacing.md }}>
