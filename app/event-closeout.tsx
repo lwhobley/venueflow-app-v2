@@ -102,36 +102,20 @@ export default function EventCloseoutScreen() {
   };
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: 'transparent' }}
-      contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl }}
-    >
-      <Button mode="text" textColor={palette.primary} onPress={() => router.back()}>
-        Back to command center
-      </Button>
-
+    <ScrollView style={{ flex: 1, backgroundColor: 'transparent' }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl }}>
+      <Button mode="text" textColor={palette.primary} onPress={() => router.back()}>Back to command center</Button>
       <CommandSurface palette={palette} strong style={{ gap: spacing.sm }}>
         <CommandText palette={palette} variant="label">Post-event closeout</CommandText>
         <CommandText palette={palette} variant="hero">Forecast vs actual</CommandText>
-        <CommandText palette={palette} variant="caption">
-          Capture the canonical event result once POS, labor, and inventory counts are reconciled.
-        </CommandText>
-        <CommandText palette={palette} variant="body" style={{ fontWeight: '700' }}>
-          Status: {closeout?.status ?? 'none'} · Version: {closeout?.currentVersion ?? 1}
-        </CommandText>
+        <CommandText palette={palette} variant="caption">Capture the canonical event result once POS, labor, and inventory counts are reconciled.</CommandText>
+        <CommandText palette={palette} variant="body" style={{ fontWeight: '700' }}>Status: {closeout?.status ?? 'none'} · Version: {closeout?.currentVersion ?? 1}</CommandText>
         {locked ? (
           <CommandText palette={palette} variant="caption" style={{ color: palette.warning, fontWeight: '700' }}>
             Finalized data is locked. Further changes create immutable revisions and require a reason.
           </CommandText>
         ) : null}
       </CommandSurface>
-
-      {message ? (
-        <CommandSurface palette={palette}>
-          <CommandText palette={palette} variant="body">{message}</CommandText>
-        </CommandSurface>
-      ) : null}
-
+      {message ? <CommandSurface palette={palette}><CommandText palette={palette} variant="body">{message}</CommandText></CommandSurface> : null}
       <CommandSurface palette={palette} style={{ gap: spacing.sm }}>
         <TextInput mode="outlined" label="Actual attendance" keyboardType="numeric" value={attendance} onChangeText={setAttendance} />
         <TextInput mode="outlined" label="Actual sales (cents)" keyboardType="numeric" value={sales} onChangeText={setSales} />
@@ -141,50 +125,29 @@ export default function EventCloseoutScreen() {
         <TextInput mode="outlined" label="Inventory variance (cents)" keyboardType="numeric" value={inventoryVariance} onChangeText={setInventoryVariance} />
         <TextInput mode="outlined" label="Closeout notes" multiline value={notes} onChangeText={setNotes} />
         {locked ? (
-          <TextInput
-            mode="outlined"
-            label="Adjustment reason (required)"
-            multiline
-            value={adjustmentReason}
-            onChangeText={setAdjustmentReason}
-          />
+          <TextInput mode="outlined" label="Adjustment reason (required)" multiline value={adjustmentReason} onChangeText={setAdjustmentReason} />
         ) : null}
-
         <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' }}>
           {!locked ? (
             <>
-              <Button style={{ flex: 1, minWidth: 120 }} mode="outlined" textColor={palette.primary} disabled={saving} onPress={() => void submit('draft')}>
-                Save draft
-              </Button>
-              <Button style={{ flex: 1, minWidth: 120 }} mode="contained" buttonColor={palette.primary} disabled={saving} onPress={() => void submit('finalized')}>
-                Finalize closeout
-              </Button>
+              <Button style={{ flex: 1, minWidth: 120 }} mode="outlined" textColor={palette.primary} disabled={saving} onPress={() => void submit('draft')}>Save draft</Button>
+              <Button style={{ flex: 1, minWidth: 120 }} mode="contained" buttonColor={palette.primary} disabled={saving} onPress={() => void submit('finalized')}>Finalize closeout</Button>
             </>
           ) : (
-            <Button style={{ flex: 1 }} mode="contained" buttonColor={palette.primary} disabled={saving} onPress={() => void submit('adjusted')}>
-              Submit adjustment
-            </Button>
+            <Button style={{ flex: 1 }} mode="contained" buttonColor={palette.primary} disabled={saving} onPress={() => void submit('adjusted')}>Submit adjustment</Button>
           )}
         </View>
       </CommandSurface>
-
       {revisions.length > 0 ? (
         <CommandSurface palette={palette} style={{ gap: spacing.sm }}>
           <CommandText palette={palette} variant="title">Revision history</CommandText>
           {revisions.map((revision) => (
             <View key={revision.id} style={{ gap: 4, paddingVertical: spacing.xs }}>
               <CommandText palette={palette} variant="body" style={{ fontWeight: '700' }}>
-                v{revision.version}
-                {revision.approvedBy ? ' · approved' : ' · pending approval'}
+                v{revision.version}{revision.approvedBy ? ' · approved' : ' · pending approval'}
               </CommandText>
-              {revision.adjustmentReason ? (
-                <CommandText palette={palette} variant="caption">{revision.adjustmentReason}</CommandText>
-              ) : null}
-              {revision.revisionHash ? (
-                <CommandText palette={palette} variant="caption">
-                  Hash {revision.revisionHash.slice(0, 12)}…
-                </CommandText>
-              ) : null}
+              {revision.adjustmentReason ? <CommandText palette={palette} variant="caption">{revision.adjustmentReason}</CommandText> : null}
+              {revision.revisionHash ? <CommandText palette={palette} variant="caption">Hash {revision.revisionHash.slice(0, 12)}…</CommandText> : null}
             </View>
           ))}
         </CommandSurface>
