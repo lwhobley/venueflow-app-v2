@@ -6,6 +6,8 @@ describe('CORS origin allowlist', () => {
     'https://stadiumwrangler.com',
     'https://app.stadiumwrangler.com',
     'https://venuewrangler.com',
+    'https://venuewrangler.org',
+    'https://app.venuewrangler.org',
     'https://desktop-web.venue-wrangler.pages.dev',
     'https://6716c575.venue-wrangler.pages.dev',
     'https://venueflow-desktop-web.pages.dev',
