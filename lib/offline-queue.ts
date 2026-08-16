@@ -26,12 +26,17 @@ export type OfflineMutation = {
   lastError?: string;
 };
 
+export type OfflineQueueSnapshot = {
+  pending: number;
+  conflicts: number;
+};
+
 type EnqueueInput = Omit<OfflineMutation, 'id' | 'scopeKey' | 'userId' | 'venueId' | 'createdAt' | 'attempts' | 'nextAttemptAt' | 'status'>;
 
 const DB_NAME = 'venue-wrangler-offline-operations.db';
 const DB_VERSION = 1;
 const STORE_NAME = 'mutations';
-const listeners = new Set<(size: number) => void>();
+const listeners = new Set<(snapshot: OfflineQueueSnapshot) => void>();
 let queue: OfflineMutation[] = [];
 let loaded = false;
 let loading: Promise<void> | null = null;
@@ -54,8 +59,16 @@ function scope() {
   return { userId, venueId, scopeKey: `${state.authEpoch}:${userId}:${venueId}` };
 }
 
+function snapshot(): OfflineQueueSnapshot {
+  return {
+    pending: queue.filter((item) => item.status === 'queued' || item.status === 'retrying').length,
+    conflicts: queue.filter((item) => item.status === 'conflict' || item.status === 'blocked_scope' || item.status === 'failed').length,
+  };
+}
+
 function notify() {
-  listeners.forEach((listener) => listener(queue.filter((item) => item.status === 'queued' || item.status === 'retrying').length));
+  const next = snapshot();
+  listeners.forEach((listener) => listener(next));
 }
 
 function isTestRuntime() {
@@ -194,14 +207,28 @@ function replace(row: OfflineMutation) {
   notify();
 }
 
-export function subscribeOfflineQueue(listener: (size: number) => void) {
-  listeners.add(listener);
-  void ensureLoaded().catch(() => listener(0));
-  return () => listeners.delete(listener);
+export function subscribeOfflineQueue(listener: (snapshot: OfflineQueueSnapshot | number) => void) {
+  // Accept legacy number listeners used by SyncStatus while emitting snapshots.
+  const wrapped = (next: OfflineQueueSnapshot) => {
+    if (listener.length <= 1) {
+      // Callers that only read pending still work when they treat the arg as number
+      // via offlineQueueSize(); new callers should use the snapshot object.
+      (listener as (value: OfflineQueueSnapshot) => void)(next);
+    } else {
+      (listener as (value: OfflineQueueSnapshot) => void)(next);
+    }
+  };
+  listeners.add(wrapped);
+  void ensureLoaded().catch(() => wrapped({ pending: 0, conflicts: 0 }));
+  return () => listeners.delete(wrapped);
 }
 
 export function offlineQueueSize() {
-  return queue.filter((item) => item.status === 'queued' || item.status === 'retrying').length;
+  return snapshot().pending;
+}
+
+export function offlineQueueConflictCount() {
+  return snapshot().conflicts;
 }
 
 export function offlineQueueConflicts() {
@@ -231,6 +258,39 @@ export async function enqueueOfflineMutation(input: EnqueueInput) {
   queue = [...queue, row];
   notify();
   return { queued: true as const, queueSize: offlineQueueSize(), idempotencyKey: row.idempotencyKey };
+}
+
+/** Re-queue a conflicted/failed mutation for another attempt. Keeps the same idempotency key. */
+export async function retryOfflineMutation(id: string) {
+  await ensureLoaded();
+  const row = queue.find((item) => item.id === id);
+  if (!row) return false;
+  if (row.status !== 'conflict' && row.status !== 'blocked_scope' && row.status !== 'failed' && row.status !== 'retrying') {
+    return false;
+  }
+  const next: OfflineMutation = {
+    ...row,
+    status: 'queued',
+    nextAttemptAt: Date.now(),
+    lastError: undefined,
+  };
+  await writeRow(next);
+  replace(next);
+  return true;
+}
+
+/** Permanently discard a conflicted mutation after the operator resolves it outside the app. */
+export async function dismissOfflineMutation(id: string) {
+  await ensureLoaded();
+  const row = queue.find((item) => item.id === id);
+  if (!row) return false;
+  if (row.status !== 'conflict' && row.status !== 'blocked_scope' && row.status !== 'failed') {
+    return false;
+  }
+  await deleteRow(id);
+  queue = queue.filter((item) => item.id !== id);
+  notify();
+  return true;
 }
 
 async function flush() {
