@@ -1,24 +1,34 @@
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { CommandButton, CommandSurface, CommandText } from '../../components/FutureUI';
-import { spacing, useDesignTheme } from '../../lib/theme';
 import { useAuthStore } from '../../lib/auth-store';
+import { spacing, useDesignTheme } from '../../lib/theme';
 
-export default function BillingSettingsScreen() {
+export default function BillingScreen() {
   const palette = useDesignTheme();
-  const venue = useAuthStore((s) => s.venue);
-  const user = useAuthStore((s) => s.user);
+  const venue = useAuthStore((state) => state.venue);
+  const user = useAuthStore((state) => state.user);
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: palette.background }} contentContainerStyle={{ padding: spacing.lg }}>
-      <CommandSurface palette={palette} strong style={{ gap: spacing.md }}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: palette.background }}
+      contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl }}
+    >
+      <View style={{ gap: spacing.xs, paddingTop: spacing.md }}>
+        <CommandText palette={palette} variant="hero">Enterprise Agreement</CommandText>
+        <CommandText palette={palette} variant="body" style={{ color: palette.muted }}>
+          Billing and master contract licensing are managed externally via enterprise invoice.
+        </CommandText>
+      </View>
+
+      <CommandSurface palette={palette} style={{ padding: spacing.lg, gap: spacing.md }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-          <View style={[styles.badgeIcon, { backgroundColor: '#E8EEF5' }]}>
-            <MaterialCommunityIcons name="domain" size={28} color="#013369" />
+          <View style={[styles.badgeIcon, { backgroundColor: '#E8F5E9' }]}>
+            <MaterialCommunityIcons name="domain" size={28} color="#074426" />
           </View>
           <View style={{ flex: 1 }}>
-            <CommandText palette={palette} variant="label" style={{ color: '#013369' }}>
+            <CommandText palette={palette} variant="label" style={{ color: '#074426' }}>
               ORGANIZATION PLAN
             </CommandText>
             <CommandText palette={palette} variant="title">
