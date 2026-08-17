@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { useAuthStore, type AuthState } from './auth-store';
 import { canManageBilling, canManageVenue } from './permissions';
-import { useApiQuery } from './api-client';
+import { useQuery } from './railway-hooks';
+import { api } from './railway-api';
 
 export function useAuthenticatedSession() {
   const hydrated = useAuthStore((state: AuthState) => state.hydrated);
@@ -10,7 +11,7 @@ export function useAuthenticatedSession() {
   const token = useAuthStore((state: AuthState) => state.token);
   const isReady = hydrated && Boolean(user) && Boolean(token);
 
-  const { data: me, isLoading } = useApiQuery<any | null>(['app', 'me'], '/v1/app/me', isReady);
+  const { data: me, isLoading } = useQuery(api.app.getMe, isReady ? {} : 'skip');
 
   // Hydrate the venue list from the server (getMe returns venues). This runs
   // in the always-mounted authed tree, so it covers every sign-in path and

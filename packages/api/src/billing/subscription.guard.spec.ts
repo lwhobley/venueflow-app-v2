@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SubscriptionGuard } from './subscription.guard';
 
-function makeContext(venueScope: unknown, user?: unknown) {
-  const request = { venueScope, user };
+function makeContext(user?: unknown) {
+  const request = { venueScope: undefined, user };
   return {
     switchToHttp: () => ({ getRequest: () => request }),
     getHandler: () => ({}),
@@ -11,30 +11,31 @@ function makeContext(venueScope: unknown, user?: unknown) {
 }
 
 function makeGuard() {
-  const reflector = { getAllAndOverride: vi.fn().mockReturnValue(undefined) } as any;
-  const prisma = {} as any;
-  return new SubscriptionGuard(reflector, prisma);
+  return new SubscriptionGuard();
 }
 
-const scope = (subscriptionStatus: string | null = 'active', allAccess = true) => ({
-  profileId: 'p1',
-  fullName: 'Admin',
-  venueId: 'v1',
-  venueName: 'Stadium Venue',
-  role: 'manager',
-  allAccess,
-  subscriptionStatus,
-  trialEndsAt: null,
-});
-
 describe('SubscriptionGuard', () => {
-  it('allows access to all routes for enterprise venue members', async () => {
+  it('allows authenticated enterprise venue members through', async () => {
     const guard = makeGuard();
-    await expect(guard.canActivate(makeContext(scope('active')))).resolves.toBe(true);
+    await expect(guard.canActivate(makeContext({ sub: 'u1' }))).resolves.toBe(true);
   });
 
-  it('authorizes authenticated enterprise users', async () => {
+  it('rejects unauthenticated requests', async () => {
     const guard = makeGuard();
-    await expect(guard.canActivate(makeContext(scope('active', true)))).resolves.toBe(true);
+    await expect(guard.canActivate(makeContext(undefined))).rejects.toMatchObject({
+      name: 'UnauthorizedException',
+    });
+  });
+
+  it('does not fabricate venue scope or role claims', async () => {
+    const guard = makeGuard();
+    const request = { venueScope: undefined, user: { sub: 'u1', role: 'staff', allAccess: false } };
+    const context = {
+      switchToHttp: () => ({ getRequest: () => request }),
+      getHandler: () => ({}),
+      getClass: () => ({}),
+    } as any;
+    await guard.canActivate(context);
+    expect(request.venueScope).toBeUndefined();
   });
 });

@@ -1231,16 +1231,26 @@ export class SchedulingController {
 
     let created = 0;
     const failed: Array<{ shift: string; error: string }> = [];
+    const staff = await this.prisma.profile.findMany({
+      where: { venueId, OR: ACTIVE_MEMBERSHIP },
+      select: { id: true, fullName: true },
+    });
+    const nameById = new Map(staff.map((p) => [p.id, p.fullName]));
     for (const shift of body.shifts) {
       try {
         ensureValidShiftWindow(shift.dayIndex, shift.startMinutes, shift.endMinutes);
-        const profileId = shift.profileId && availabilityCovers(availabilityByProfile.get(shift.profileId), shift)
-          ? shift.profileId
-          : undefined;
+        const proposedProfileId = shift.profileId || undefined;
+        if (proposedProfileId && !availabilityCovers(availabilityByProfile.get(proposedProfileId), shift)) {
+          failed.push({
+            shift: this.shiftLabel(shift),
+            error: `${nameById.get(proposedProfileId) ?? 'Staff member'} is unavailable for this shift.`,
+          });
+          continue;
+        }
         await this.assignments.createShift({
           venueId,
           weekStart: availabilityWeekStart,
-          profileId,
+          profileId: proposedProfileId,
           dayIndex: shift.dayIndex,
           startMinutes: shift.startMinutes,
           endMinutes: shift.endMinutes,

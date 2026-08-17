@@ -152,12 +152,10 @@ export class ReservationMutationService {
     venueId: string;
     holdId: string;
   }) {
-    const existing = await this.prisma.reservationHold.findFirst({
+    const deleted = await this.prisma.reservationHold.deleteMany({
       where: { id: args.holdId, venueId: args.venueId },
     });
-    if (!existing) throw new BadRequestException('Hold not found');
-
-    await this.prisma.reservationHold.delete({ where: { id: args.holdId } });
+    if (deleted.count === 0) throw new BadRequestException('Hold not found');
   }
 
   async removeReservation(args: {

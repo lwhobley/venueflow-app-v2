@@ -1,4 +1,4 @@
-import { BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get, Header, HttpException, HttpStatus, NotFoundException, Param, Patch, Post, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get, Header, HttpException, HttpStatus, NotFoundException, Param, Patch, Post, Query, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { IsBoolean, IsEmail, IsIn, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 import { Prisma, Role } from '@prisma/client';
 import { randomBytes, randomInt } from 'crypto';
@@ -9,15 +9,13 @@ import { CurrentUser } from '../../auth/current-user.decorator';
 import type { AuthUser } from '../../auth/auth.guard';
 import { canManageVenue, isAdminRole, isOwnerOrAdminRole } from '../../auth/roles';
 import { RequireSubscription } from '../../billing/require-subscription.decorator';
-import { assertWithinGeofence } from '../../common/geofence';
-import { unpaidBreakMs } from '../../common/break-duration';
 import { csvCell } from '../../common/csv';
 import { getClientIp } from '../../common/http';
 import { hashInviteToken } from '../../common/invite-token';
 import { assertWithinSharedRateLimit } from '../../common/rate-limit';
 import { sanitizeForEmail } from '../../common/sanitize-email-text';
 import { todayInZone, weekStartFor } from '../../common/pay-period';
-import { zonedDayOfWeek, zonedMinutesOfDay, zonedDayBounds } from '../../common/venue-time';
+import { zonedDateBounds } from '../../common/venue-time';
 import { EmailService } from '../../email/email.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { runWithoutTenant } from '../../prisma/tenant-context';
@@ -499,28 +497,66 @@ export class AppController {
     const venueId = profile.venueId;
     const weekStart = weekStartFor(todayInZone(profile.venue?.timezone));
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const [completedEntries, scheduledShifts, openRequests] = await Promise.all([
-      this.prisma.timeEntry.findMany({
-        where: { venueId, isOpen: false, clockOutAt: { gte: weekAgo } },
-        select: { clockInAt: true, clockOutAt: true },
-      }),
-      this.prisma.scheduleShift.count({ where: { venueId, weekStart, status: 'scheduled' } }),
-      this.prisma.staffRequest.count({ where: { venueId, status: 'pending' } }),
-    ]);
+    const dayAhead = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const [completedEntries, scheduledShifts, openShifts, activeClocks, clockAlerts, activeReservations, upcomingReservations, openRequests] =
+      await Promise.all([
+        this.prisma.timeEntry.findMany({
+          where: { venueId, isOpen: false, clockOutAt: { gte: weekAgo } },
+          select: { clockInAt: true, clockOutAt: true },
+        }),
+        this.prisma.scheduleShift.count({ where: { venueId, weekStart, status: 'scheduled' } }),
+        this.prisma.scheduleShift.count({ where: { venueId, weekStart, status: 'open' } }),
+        this.prisma.timeEntry.count({ where: { venueId, isOpen: true } }),
+        this.prisma.staffRequest.count({ where: { venueId, status: 'pending', kind: 'time_correction' } }),
+        this.prisma.reservation.count({
+          where: {
+            venueId,
+            deletedAt: null,
+            status: { in: ['requested', 'confirmed', 'checked_in', 'seated'] },
+          },
+        }),
+        this.prisma.reservation.count({
+          where: {
+            venueId,
+            deletedAt: null,
+            status: { notIn: ['completed', 'cancelled', 'no_show'] },
+            reservationTime: { gte: new Date(), lte: dayAhead },
+          },
+        }),
+        this.prisma.staffRequest.count({ where: { venueId, status: 'pending' } }),
+      ]);
     const laborMs = completedEntries.reduce((sum, e) => sum + (e.clockOutAt!.getTime() - e.clockInAt.getTime()), 0);
     const laborHours = Math.round((laborMs / 3600000) * 10) / 10;
-    return { laborHours, scheduledShifts, openRequests };
+    return { laborHours, scheduledShifts, openShifts, activeClocks, lateOrMissedAlerts: clockAlerts, activeReservations, upcomingReservations, pendingRequests: openRequests };
   }
 
   @UseGuards(AuthGuard)
   @Get('time-entries/csv')
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @Header('Content-Disposition', 'attachment; filename="time-entries.csv"')
-  async exportTimeEntriesCsv(@CurrentUser() user: AuthUser) {
+  async exportTimeEntriesCsv(
+    @CurrentUser() user: AuthUser,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
     const profile = await this.requireManagerProfile(user);
     const venueId = profile.venueId!;
+    const venue = await this.prisma.venue.findUnique({ where: { id: venueId }, select: { timezone: true } });
+    const where: Record<string, unknown> = { venueId };
+    if (startDate || endDate) {
+      const timeFilter: Record<string, Date> = {};
+      if (startDate) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) throw new BadRequestException('Invalid start date');
+        timeFilter['gte'] = new Date(zonedDateBounds(venue?.timezone ?? null, startDate).start);
+      }
+      if (endDate) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) throw new BadRequestException('Invalid end date');
+        timeFilter['lt'] = new Date(zonedDateBounds(venue?.timezone ?? null, endDate).end);
+      }
+      where['clockInAt'] = timeFilter;
+    }
     const entries = await this.prisma.timeEntry.findMany({
-      where: { venueId },
+      where: where as any,
       include: { profile: true },
       orderBy: { clockInAt: 'desc' },
       take: 1000,
@@ -590,209 +626,6 @@ export class AppController {
       create: { notificationId, profileId: profile.id, venueId: profile.venueId },
     });
     return { ok: true };
-  }
-
-  @UseGuards(AuthGuard)
-  @RequireSubscription()
-  @Get('clock-board')
-  async getClockBoard(@CurrentUser() user: AuthUser) {
-    const profile = await this.requireVenueProfile(user);
-    const entries = await this.prisma.timeEntry.findMany({
-      where: { venueId: profile.venueId!, isOpen: true },
-      include: { profile: true, venue: true },
-      orderBy: { clockInAt: 'desc' },
-      take: 100,
-    });
-    const openEntries = entries.map((entry) => mapClockEntry(entry, entry.profile, entry.venue));
-    return {
-      venue: mapVenue(profile.venue!),
-      activeClockEntries: canManageVenue(profile.role, profile.allAccess) ? openEntries : [],
-      employeeEntry: openEntries.find((entry) => entry.memberId === profile.id) ?? null,
-      managerAlerts: [],
-    };
-  }
-
-  @UseGuards(AuthGuard)
-  @RequireSubscription()
-  @Get('time-clock')
-  async getMyTimeClock(@CurrentUser() user: AuthUser) {
-    const profile = await this.requireVenueProfile(user);
-    const entries = await this.prisma.timeEntry.findMany({
-      where: { profileId: profile.id },
-      orderBy: { clockInAt: 'desc' },
-      take: 100,
-    });
-    const open = entries.find((entry) => entry.isOpen) ?? null;
-    const todayStart = new Date(zonedDayBounds(profile.venue?.timezone ?? null, 0).start);
-    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    const punches = entries
-      .flatMap((entry) => [
-        ...(entry.clockInAt >= todayStart ? [{ type: 'in' as const, at: entry.clockInAt.getTime() }] : []),
-        ...(entry.clockOutAt && entry.clockOutAt >= todayStart ? [{ type: 'out' as const, at: entry.clockOutAt.getTime() }] : []),
-      ])
-      .sort((a, b) => a.at - b.at);
-    const regularHours = entries.reduce((sum, entry) => {
-      if (!entry.clockOutAt || entry.clockOutAt.getTime() < weekAgo) return sum;
-      let durationMs = entry.clockOutAt.getTime() - entry.clockInAt.getTime();
-      const breaks = (entry.breaks as any[]) || [];
-      for (const b of breaks) {
-        if (b.type === 'unpaid' && b.startAt && b.endAt) {
-          durationMs -= unpaidBreakMs(b.startAt, b.endAt);
-        }
-      }
-      return sum + Math.max(0, durationMs) / 3600000;
-    }, 0);
-    const rounded = Math.round(regularHours * 10) / 10;
-    return {
-      isClockedIn: Boolean(open),
-      openSince: toMs(open?.clockInAt),
-      regularHours: rounded,
-      sickHours: profile.sickHoursAccrued,
-      ptoHours: profile.ptoHoursAccrued,
-      totalHours: rounded,
-      punches,
-    };
-  }
-
-  @UseGuards(AuthGuard)
-  @RequireSubscription()
-  @Post('clock-in')
-  async clockIn(@CurrentUser() user: AuthUser, @Body() body: ClockDto) {
-    const profile = await this.requireVenueProfile(user);
-    const venue = profile.venue;
-    if (!venue) throw new ForbiddenException('Assigned venue not found');
-    assertWithinGeofence(body.lat, body.lng, body.accuracy, body.mocked, venue);
-    const existing = await this.prisma.timeEntry.findFirst({ where: { profileId: profile.id, isOpen: true } });
-    if (existing) throw new BadRequestException('Already clocked in');
-
-    if (!canManageVenue(profile.role, profile.allAccess)) {
-      const nowMs = Date.now();
-      const today = zonedDayOfWeek(venue.timezone, nowMs);
-      const weekStart = weekStartFor(todayInZone(venue.timezone));
-      const minutesNow = zonedMinutesOfDay(venue.timezone, nowMs);
-      const shift = await this.prisma.scheduleShift.findFirst({
-        where: {
-          venueId: venue.id,
-          profileId: profile.id,
-          weekStart,
-          dayIndex: today,
-          status: { in: ['scheduled', 'covered'] },
-        },
-        orderBy: { startMinutes: 'asc' },
-      });
-      if (shift) {
-        const earlyWindow = venue.earlyClockInWindowMin ?? 10;
-        if (minutesNow < shift.startMinutes - earlyWindow) {
-          const formattedStart = minutesToTime(shift.startMinutes);
-          throw new BadRequestException(
-            `Too early to clock in. Your shift starts at ${formattedStart}. You can clock in starting ${earlyWindow} minutes prior.`
-          );
-        }
-      }
-    }
-
-    try {
-      const entry = await this.prisma.timeEntry.create({
-        data: {
-          profileId: profile.id,
-          venueId: venue.id,
-          clockInAt: new Date(),
-          clockInLat: body.lat,
-          clockInLng: body.lng,
-          clockInAccuracyM: body.accuracy,
-          clockInMocked: body.mocked,
-          isOpen: true,
-        },
-        include: { profile: true, venue: true },
-      });
-      return mapClockEntry(entry, entry.profile, entry.venue);
-    } catch (error: any) {
-      // Partial unique index (one open entry per profile): a concurrent
-      // double-tap loses the race here instead of creating a second open entry.
-      if (error?.code === 'P2002') throw new BadRequestException('Already clocked in');
-      throw error;
-    }
-  }
-
-  @UseGuards(AuthGuard)
-  @RequireSubscription()
-  @Post('clock-out')
-  async clockOut(@CurrentUser() user: AuthUser, @Body() body: ClockDto) {
-    const profile = await this.requireVenueProfile(user);
-    const venue = profile.venue;
-    if (!venue) throw new ForbiddenException('Assigned venue not found');
-    assertWithinGeofence(body.lat, body.lng, body.accuracy, body.mocked, venue);
-    const existing = await this.prisma.timeEntry.findFirst({ where: { profileId: profile.id, isOpen: true } });
-    if (!existing) throw new BadRequestException('No active clock-in found');
-    const count = await this.prisma.timeEntry.updateMany({
-      where: { id: existing.id, isOpen: true, updatedAt: existing.updatedAt },
-      data: {
-        clockOutAt: new Date(),
-        clockOutLat: body.lat,
-        clockOutLng: body.lng,
-        clockOutAccuracyM: body.accuracy,
-        clockOutMocked: body.mocked,
-        isOpen: false,
-      },
-    });
-    if (count.count === 0) throw new BadRequestException('Clock-out state changed. Refresh and try again.');
-    const entry = await this.prisma.timeEntry.findUniqueOrThrow({
-      where: { id: existing.id },
-      include: { profile: true, venue: true },
-    });
-    return mapClockEntry(entry, entry.profile, entry.venue);
-  }
-
-  @UseGuards(AuthGuard)
-  @RequireSubscription()
-  @Post('time-clock/break-start')
-  async startBreak(@CurrentUser() user: AuthUser, @Body() body: BreakStartDto) {
-    const profile = await this.requireVenueProfile(user);
-    const entry = await this.prisma.timeEntry.findFirst({
-      where: { profileId: profile.id, isOpen: true },
-      include: { profile: true, venue: true },
-    });
-    if (!entry) throw new BadRequestException('No active clock-in found');
-    const breaks = (entry.breaks as any[]) || [];
-    if (breaks.find((b: any) => b.endAt === null)) throw new BadRequestException('Already on a break');
-    const newBreaks = [...breaks, { startAt: Date.now(), endAt: null, type: body.type }];
-    const count = await this.prisma.timeEntry.updateMany({
-      where: { id: entry.id, isOpen: true, updatedAt: entry.updatedAt },
-      data: { breaks: newBreaks },
-    });
-    if (count.count === 0) throw new BadRequestException('Break state changed. Refresh and try again.');
-    const updated = await this.prisma.timeEntry.findUniqueOrThrow({
-      where: { id: entry.id },
-      include: { profile: true, venue: true },
-    });
-    return mapClockEntry(updated, updated.profile, updated.venue);
-  }
-
-  @UseGuards(AuthGuard)
-  @RequireSubscription()
-  @Post('time-clock/break-end')
-  async endBreak(@CurrentUser() user: AuthUser) {
-    const profile = await this.requireVenueProfile(user);
-    const entry = await this.prisma.timeEntry.findFirst({
-      where: { profileId: profile.id, isOpen: true },
-      include: { profile: true, venue: true },
-    });
-    if (!entry) throw new BadRequestException('No active clock-in found');
-    const breaks = (entry.breaks as any[]) || [];
-    const activeBreakIndex = breaks.findIndex((b: any) => b.endAt === null);
-    if (activeBreakIndex === -1) throw new BadRequestException('Not currently on a break');
-    const newBreaks = [...breaks];
-    newBreaks[activeBreakIndex] = { ...newBreaks[activeBreakIndex], endAt: Date.now() };
-    const count = await this.prisma.timeEntry.updateMany({
-      where: { id: entry.id, isOpen: true, updatedAt: entry.updatedAt },
-      data: { breaks: newBreaks },
-    });
-    if (count.count === 0) throw new BadRequestException('Break state changed. Refresh and try again.');
-    const updated = await this.prisma.timeEntry.findUniqueOrThrow({
-      where: { id: entry.id },
-      include: { profile: true, venue: true },
-    });
-    return mapClockEntry(updated, updated.profile, updated.venue);
   }
 
   @UseGuards(AuthGuard)

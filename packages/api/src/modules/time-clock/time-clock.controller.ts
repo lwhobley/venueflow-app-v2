@@ -297,8 +297,15 @@ export class TimeClockController {
     const active = await this.prisma.timeEntry.findFirst({
       where: { profileId: scope.profileId, isOpen: true },
     });
-    if (!active) throw new BadRequestException('No active clock-in found');
-
+    if (!active) {
+      const latest = await this.prisma.timeEntry.findFirst({
+        where: { profileId: scope.profileId },
+        orderBy: { clockOutAt: 'desc' },
+      });
+      if (!latest) throw new BadRequestException('No active clock-in found');
+      const profile = await this.prisma.profile.findUniqueOrThrow({ where: { id: scope.profileId } });
+      return mapClockEntry(latest, profile, venue);
+    }
     const profile = await this.prisma.profile.findUniqueOrThrow({ where: { id: scope.profileId } });
     const count = await this.prisma.timeEntry.updateMany({
       where: { id: active.id, isOpen: true, updatedAt: active.updatedAt },
@@ -453,6 +460,17 @@ export class TimeClockController {
 
     const newClockInAt = new Date(body.clockInAt);
     const newClockOutAt = body.clockOutAt ? new Date(body.clockOutAt) : null;
+    if (!Number.isFinite(newClockInAt.getTime())) throw new BadRequestException('Invalid clock-in time.');
+    if (newClockOutAt && !Number.isFinite(newClockOutAt.getTime())) throw new BadRequestException('Invalid clock-out time.');
+    if (newClockOutAt && newClockOutAt.getTime() <= newClockInAt.getTime()) {
+      throw new BadRequestException('Clock-out time must be after clock-in time.');
+    }
+    if (newClockOutAt === null) {
+      const otherOpen = await this.prisma.timeEntry.findFirst({
+        where: { profileId: entry.profileId, isOpen: true, id: { not: entry.id } },
+      });
+      if (otherOpen) throw new BadRequestException('This profile already has a separate open time entry.');
+    }
     const durationMinutes = newClockOutAt
       ? Math.max(0, Math.round((newClockOutAt.getTime() - newClockInAt.getTime()) / 60000))
       : null;

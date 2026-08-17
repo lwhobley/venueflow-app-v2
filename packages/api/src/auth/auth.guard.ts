@@ -2,7 +2,7 @@ import { CanActivate, ExecutionContext, ForbiddenException, Injectable, Unauthor
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
-import { createHash } from 'crypto';
+import { createHash, timingSafeEqual } from 'crypto';
 import { IS_PUBLIC_KEY } from './public.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { enterTenant } from '../prisma/tenant-context';
@@ -87,7 +87,20 @@ export class AuthGuard implements CanActivate {
     if (!session || session.userId !== payload.sub || session.expiresAt <= now) {
       throw new UnauthorizedException('Session is no longer valid. Please sign in again.');
     }
-    if (session.tokenHash && session.tokenHash !== createHash('sha256').update(token).digest('hex')) {
+    if (session.tokenHash) {
+      const provided = createHash('sha256').update(token).digest();
+      let expected: Buffer;
+      try {
+        expected = Buffer.from(session.tokenHash, 'hex');
+      } catch {
+        expected = Buffer.alloc(0);
+      }
+      if (expected.length !== provided.length || !timingSafeEqual(provided, expected)) {
+        throw new UnauthorizedException('Session is no longer valid. Please sign in again.');
+      }
+    } else {
+      // A session row without a stored token hash cannot prove token
+      // possession, so treat it as invalid rather than skipping the check.
       throw new UnauthorizedException('Session is no longer valid. Please sign in again.');
     }
 

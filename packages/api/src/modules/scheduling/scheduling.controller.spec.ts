@@ -563,16 +563,18 @@ describe('SchedulingController', () => {
       expect(assignments.createShift).toHaveBeenCalledWith(expect.objectContaining({ profileId: 'staff-1', notes: 'Created by AI schedule builder' }));
     });
 
-    it('drops the proposed profile to an open shift when an approved unavailable-days request covers it', async () => {
+    it('flags a proposed profile as failed when an approved unavailable-days request covers it instead of opening the shift', async () => {
       const { controller, prisma, assignments } = makeController();
       prisma.staffRequest.findMany.mockResolvedValue([{ profileId: 'staff-1', requestedRangeStart: '2000-01-01', requestedRangeEnd: '2099-01-01', requestedForDate: null }]);
+      prisma.profile.findMany.mockResolvedValue([{ id: 'staff-1', fullName: 'Alex' }]);
       assignments.createShift.mockResolvedValue({ id: 'shift-1' });
 
-      await controller.commitAiSchedule(managerScope, {
+      const result = await controller.commitAiSchedule(managerScope, {
         shifts: [{ dayIndex: 1, startMinutes: 600, endMinutes: 900, jobTitle: 'Server', station: 'Floor', profileId: 'staff-1' }],
       });
 
-      expect(assignments.createShift).toHaveBeenCalledWith(expect.objectContaining({ profileId: undefined }));
+      expect(result).toEqual({ created: 0, failed: [{ shift: expect.any(String), error: expect.stringContaining('is unavailable') }] });
+      expect(assignments.createShift).not.toHaveBeenCalled();
     });
 
     it('collects an invalid shift window into failed without calling the assignment service', async () => {

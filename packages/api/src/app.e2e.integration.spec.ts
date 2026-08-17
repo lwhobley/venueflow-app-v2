@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import type { INestApplication } from '@nestjs/common';
 import type { JwtService } from '@nestjs/jwt';
 import type { PrismaService } from './prisma/prisma.service';
@@ -19,7 +19,7 @@ describe('e2e smoke: auth, billing, scheduling', () => {
   let teardown: () => Promise<void> = async () => {};
   let venueIds: string[] = [];
 
-  let sessionUser: { userId: string; sid: string; venueId: string } | undefined;
+  let sessionUser: { userId: string; sid: string; venueId: string; token: string } | undefined;
 
   beforeAll(async () => {
     const boot = await bootstrapE2eApp();
@@ -62,7 +62,12 @@ describe('e2e smoke: auth, billing, scheduling', () => {
     const session = await prisma.session.create({
       data: { userId: user.id, expiresAt },
     });
-    sessionUser = { userId: user.id, sid: session.id, venueId: venue.id };
+    const token = signTestToken(jwt, { sub: user.id, sid: session.id });
+    await prisma.session.update({
+      where: { id: session.id },
+      data: { tokenHash: createHash('sha256').update(token).digest('hex') },
+    });
+    sessionUser = { userId: user.id, sid: session.id, venueId: venue.id, token };
   }, 60_000);
 
   afterAll(async () => {
@@ -100,7 +105,7 @@ describe('e2e smoke: auth, billing, scheduling', () => {
     });
 
     it('accepts a valid token backed by a real Session row', async () => {
-      const token = signTestToken(jwt, { sub: sessionUser!.userId, sid: sessionUser!.sid });
+      const token = sessionUser!.token;
       const res = await request(app.getHttpServer())
         .get('/api/v1/app/me')
         .set('Authorization', `Bearer ${token}`)
@@ -112,7 +117,7 @@ describe('e2e smoke: auth, billing, scheduling', () => {
 
   describe('enterprise billing & scheduling access', () => {
     it('returns active enterprise subscription metadata without paywalls', async () => {
-      const token = signTestToken(jwt, { sub: sessionUser!.userId, sid: sessionUser!.sid });
+      const token = sessionUser!.token;
       const res = await request(app.getHttpServer())
         .get('/api/v1/app/billing')
         .set('Authorization', `Bearer ${token}`)
@@ -122,7 +127,7 @@ describe('e2e smoke: auth, billing, scheduling', () => {
     });
 
     it('allows route access under enterprise licensing', async () => {
-      const token = signTestToken(jwt, { sub: sessionUser!.userId, sid: sessionUser!.sid });
+      const token = sessionUser!.token;
       await request(app.getHttpServer())
         .get('/api/v1/scheduling/me')
         .set('Authorization', `Bearer ${token}`)
@@ -132,7 +137,7 @@ describe('e2e smoke: auth, billing, scheduling', () => {
 
   describe('validation', () => {
     it('rejects a request body with unknown fields (whitelist: true, forbidNonWhitelisted: true)', async () => {
-      const token = signTestToken(jwt, { sub: sessionUser!.userId, sid: sessionUser!.sid });
+      const token = sessionUser!.token;
       await request(app.getHttpServer())
         .patch('/api/v1/app/venue')
         .set('Authorization', `Bearer ${token}`)

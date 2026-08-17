@@ -52,24 +52,25 @@ export type ScheduleShift = {
 };
 
 export type ClockEntry = {
-  id: string;
-  member_id: string;
-  member_name: string;
+  _id: string;
+  memberId: string;
+  memberName: string;
   role: Role;
-  job_title: string;
-  venue_id: string;
-  venue_name: string;
-  clock_in_at: number;
-  clock_out_at: number | null;
-  clock_in_lat: number;
-  clock_in_lng: number;
-  clock_in_accuracy_m: number;
-  clock_in_mocked: boolean;
-  clock_out_lat: number | null;
-  clock_out_lng: number | null;
-  clock_out_accuracy_m: number | null;
-  clock_out_mocked: boolean | null;
-  is_open: boolean;
+  jobTitle: string;
+  venueId: string;
+  venueName: string;
+  clockInAt: number;
+  clockOutAt: number | null;
+  clockInLat: number | null;
+  clockInLng: number | null;
+  clockInAccuracyM: number | null;
+  clockInMocked: boolean | null;
+  clockOutLat: number | null;
+  clockOutLng: number | null;
+  clockOutAccuracyM: number | null;
+  clockOutMocked: boolean | null;
+  isOpen: boolean;
+  breaks: unknown[] | null;
 };
 
 export type AvailabilityBlock = {
@@ -83,23 +84,23 @@ export type StaffRequestKind = 'add_shift' | 'drop_shift' | 'time_off' | 'sick_l
 export type StaffRequestStatus = 'pending' | 'approved' | 'denied' | 'cancelled';
 
 export type StaffRequest = {
-  id: string;
-  venue_id: string;
-  profile_id: string;
+  _id: string;
+  venueId: string;
+  profileId: string;
   kind: StaffRequestKind;
   status: StaffRequestStatus;
   title: string;
   details: string;
-  requested_for_date: string | null;
-  requested_shift_id: string | null;
-  requested_range_start: string | null;
-  requested_range_end: string | null;
+  requestedForDate: string | null;
+  requestedShiftId: string | null;
+  requestedRangeStart: string | null;
+  requestedRangeEnd: string | null;
   availability: AvailabilityBlock[] | null;
-  reviewer_id: string | null;
-  reviewed_at: number | null;
-  response_notes: string | null;
-  created_at: number;
-  updated_at: number;
+  reviewerId: string | null;
+  reviewedAt: number | null;
+  responseNotes: string | null;
+  createdAt: number;
+  updatedAt: number;
 };
 
 export type TimeEntry = ClockEntry;

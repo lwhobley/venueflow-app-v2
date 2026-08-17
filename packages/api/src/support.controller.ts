@@ -64,7 +64,9 @@ export class SupportController {
     const name = body.name.trim();
     const email = body.email.trim().toLowerCase();
     const businessName = body.businessName?.trim() || 'Not provided';
-    const topic = body.topic?.trim() || 'General support';
+    // Topics reach the email subject line; strip control characters so a
+    // crafted topic cannot smuggle extra headers (CRLF injection) into it.
+    const topic = (body.topic ?? '').replace(/[\u0000-\u001F\u007F]/g, '').trim() || 'General support';
     const message = body.message.trim();
 
     await this.email.sendOrThrow({

@@ -1,16 +1,40 @@
-import { describe, expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { BillingController } from './billing.controller';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 
-describe('BillingController', () => {
-  it('returns enterprise response for revenuecat webhook', async () => {
-    const controller = new BillingController({} as any);
-    const res = await controller.handleRevenueCatWebhook({}, {});
-    expect(res).toEqual({ received: true, mode: 'enterprise' });
-  });
+function makeController(secret?: string) {
+  const config = { get: vi.fn().mockReturnValue(secret) } as any;
+  return new BillingController({} as any, config);
+}
 
-  it('returns enterprise response for stripe webhook', async () => {
-    const controller = new BillingController({} as any);
-    const res = await controller.handleStripeWebhook({}, {});
-    expect(res).toEqual({ received: true, mode: 'enterprise' });
-  });
+it('returns enterprise response for revenuecat webhook without a configured secret', async () => {
+  const controller = makeController(undefined);
+  const res = await controller.handleRevenueCatWebhook({}, {});
+  expect(res).toEqual({ received: true, mode: 'enterprise' });
+});
+
+it('returns enterprise response for stripe webhook without a configured secret', async () => {
+  const controller = makeController(undefined);
+  const res = await controller.handleStripeWebhook({}, {}, { rawBody: Buffer.from('{}') } as any);
+  expect(res).toEqual({ received: true, mode: 'enterprise' });
+});
+
+it('rejects a revenuecat webhook with an invalid bearer secret', async () => {
+  const controller = makeController('expected-secret');
+  await expect(controller.handleRevenueCatWebhook({}, { authorization: 'Bearer wrong' })).rejects.toBeInstanceOf(
+    UnauthorizedException,
+  );
+});
+
+it('rejects a stripe webhook with an invalid signature', async () => {
+  const controller = makeController('expected-secret');
+  await expect(
+    controller.handleStripeWebhook({}, { 'stripe-signature': 't=1,v1=deadbeef' }, { rawBody: Buffer.from('{}') } as any),
+  ).rejects.toBeInstanceOf(BadRequestException);
+});
+
+it('accepts a revenuecat webhook with a matching bearer secret', async () => {
+  const controller = makeController('expected-secret');
+  const res = await controller.handleRevenueCatWebhook({}, { authorization: 'Bearer expected-secret' });
+  expect(res).toEqual({ received: true, mode: 'enterprise' });
 });

@@ -240,7 +240,7 @@ describe('ReservationMutationService', () => {
   it('rejects deleting a missing hold', async () => {
     const prisma = {
       reservationHold: {
-        findFirst: vi.fn().mockResolvedValue(null),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
     };
     const service = new ReservationMutationService(prisma as any);

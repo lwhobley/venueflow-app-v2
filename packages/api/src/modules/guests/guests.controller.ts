@@ -314,7 +314,6 @@ export class GuestsController {
 
     const emails = [...new Set(normalized.map((l) => l.email).filter((e): e is string => !!e))];
     const phones = [...new Set(normalized.map((l) => l.phone).filter((p): p is string => !!p))];
-    const names = [...new Set(normalized.map((l) => l.nameLower))];
     const existingGuests = await this.prisma.guest.findMany({
       where: {
         venueId,
@@ -322,13 +321,11 @@ export class GuestsController {
         OR: [
           ...(emails.length ? [{ email: { in: emails } }] : []),
           ...(phones.length ? [{ phone: { in: phones } }] : []),
-          { nameLower: { in: names } },
         ],
       },
     });
     const byEmail = new Map(existingGuests.filter((g) => g.email).map((g) => [g.email!.toLowerCase(), g]));
     const byPhone = new Map(existingGuests.filter((g) => g.phone).map((g) => [g.phone!, g]));
-    const byName = new Map(existingGuests.map((g) => [g.nameLower ?? g.fullName.toLowerCase(), g]));
 
     await this.prisma.$transaction(async (tx) => {
       for (const lead of normalized) {
@@ -339,7 +336,6 @@ export class GuestsController {
         const existing =
           (email ? byEmail.get(email) : null) ??
           (phone ? byPhone.get(phone) : null) ??
-          byName.get(lead.nameLower) ??
           null;
 
         if (existing) {
@@ -373,7 +369,6 @@ export class GuestsController {
           });
           if (newGuest.email) byEmail.set(newGuest.email.toLowerCase(), newGuest);
           if (newGuest.phone) byPhone.set(newGuest.phone, newGuest);
-          byName.set(newGuest.nameLower ?? newGuest.fullName.toLowerCase(), newGuest);
           guestIds.push(newGuest.id);
           created++;
         }

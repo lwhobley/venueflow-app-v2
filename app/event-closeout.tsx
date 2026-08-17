@@ -38,6 +38,7 @@ export default function EventCloseoutScreen() {
   const palette = useDesignTheme();
   const query = useQueryState<Closeout>(api.stadium.getEventCloseout, eventId ? { eventId } : 'skip');
   const save = useMutation(api.stadium.upsertEventCloseout);
+  const submitRevision = useMutation(api.stadium.submitEventCloseoutRevision);
   const [attendance, setAttendance] = useState('');
   const [sales, setSales] = useState('');
   const [forecast, setForecast] = useState('');
@@ -66,16 +67,15 @@ export default function EventCloseoutScreen() {
 
   const submit = async (status: 'draft' | 'finalized' | 'adjusted') => {
     if (!eventId) return;
-    if ((status === 'adjusted' || locked) && !adjustmentReason.trim()) {
+    const isRevision = status === 'adjusted' || (locked && status !== 'draft');
+    if (isRevision && !adjustmentReason.trim()) {
       setMessage('An adjustment reason is required once closeout is finalized.');
       return;
     }
     setSaving(true);
     setMessage(null);
     try {
-      await save({
-        eventId,
-        status: locked && status !== 'draft' ? 'adjusted' : status,
+      const values = {
         actualAttendance: numberValue(attendance),
         actualSalesCents: numberValue(sales),
         forecastSalesCents: numberValue(forecast),
@@ -83,15 +83,22 @@ export default function EventCloseoutScreen() {
         laborCostCents: numberValue(laborCost),
         inventoryVarianceCents: numberValue(inventoryVariance),
         notes,
-        adjustmentReason: adjustmentReason.trim() || undefined,
-      });
-      setMessage(
-        status === 'finalized'
-          ? 'Closeout finalized and audit logged.'
-          : status === 'adjusted' || locked
-            ? 'Adjustment submitted to the revision ledger.'
-            : 'Closeout saved as draft.',
-      );
+      };
+      if (isRevision) {
+        // Finalized/adjusted closeouts are immutable — changes must go through
+        // the revision ledger endpoint (POST .../closeout/revisions).
+        await submitRevision({
+          eventId,
+          ...values,
+          adjustmentReason: adjustmentReason.trim(),
+        });
+        setMessage('Adjustment submitted to the revision ledger.');
+      } else {
+        await save({ ...values, eventId, status });
+        setMessage(
+          status === 'finalized' ? 'Closeout finalized and audit logged.' : 'Closeout saved as draft.',
+        );
+      }
       setAdjustmentReason('');
       await query.refetch?.();
     } catch (error) {
