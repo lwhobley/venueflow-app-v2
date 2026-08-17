@@ -565,7 +565,6 @@ const mutationRoutes: Record<string, Route> = {
   'crm.deleteTemplate': {
     path: (args) => `/v1/crm/templates/${args.templateId}`,
     method: 'DELETE',
-    body: () => ({}),
     invalidate: [['crm', 'listTemplates']],
   },
   'crm.renderTemplate': {

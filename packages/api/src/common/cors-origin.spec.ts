@@ -30,4 +30,17 @@ describe('CORS origin allowlist', () => {
     expect(DEFAULT_CORS_ORIGINS).toContain('http://localhost:8081');
     expect(DEFAULT_CORS_ORIGINS).toContain('https://desktop-web.venue-wrangler.pages.dev');
   });
+
+  it.each([
+    'https://attacker.example',
+    'https://www.attacker.com',
+    'https://app.venuewrangler.com.attacker.example',
+  ])('still rejects arbitrary internet origins outside production: %s', (origin) => {
+    expect(isAllowedOrigin(origin, false)).toBe(false);
+  });
+
+  it('permits loopback origins in development for local tooling', () => {
+    expect(isAllowedOrigin('http://localhost:8081', false)).toBe(true);
+    expect(isAllowedOrigin('https://localhost:8443', false)).toBe(true);
+  });
 });

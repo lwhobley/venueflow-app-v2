@@ -119,13 +119,13 @@ function SummaryTab({ venueId, days, startTs, endTs }: SalesTabProps) {
         <Card style={{ backgroundColor: colors.surface, borderRadius: radius.sharp }}>
           <Card.Content style={{ gap: spacing.sm }}>
             <Text variant="titleSmall" style={{ fontWeight: '700' }}>{t('sales.summary.tenderMix.title')}</Text>
-            {byTender.map((t, i) => (
-              <View key={t.tenderType} style={{ gap: 4 }}>
+            {byTender.map((tender, i) => (
+              <View key={tender.tenderType} style={{ gap: 4 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={{ color: colors.charcoal }}>{t.tenderType}</Text>
-                  <Text style={{ color: colors.muted, fontSize: 12 }}>{formatMoney(t.salesCents)} · {formatPct(t.salesCents, summary.salesCents)}</Text>
+                  <Text style={{ color: colors.charcoal }}>{tender.tenderType}</Text>
+                  <Text style={{ color: colors.muted, fontSize: 12 }}>{formatMoney(tender.salesCents)} · {formatPct(tender.salesCents, summary.salesCents)}</Text>
                 </View>
-                <MiniBar value={t.salesCents} max={summary.salesCents} color={accents[i % accents.length].icon} />
+                <MiniBar value={tender.salesCents} max={summary.salesCents} color={accents[i % accents.length].icon} />
               </View>
             ))}
           </Card.Content>

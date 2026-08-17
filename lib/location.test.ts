@@ -17,6 +17,13 @@ describe('haversineMeters', () => {
     const b = haversineMeters(41.0, -74.0, 40.0, -73.0);
     expect(Math.abs(a - b)).toBeLessThan(1e-6);
   });
+
+  it('returns a finite half-earth distance for antipodal points (no NaN)', () => {
+    const meters = haversineMeters(0, 0, 0, 180);
+    expect(Number.isFinite(meters)).toBe(true);
+    expect(meters).toBeGreaterThan(20_000_000);
+    expect(meters).toBeLessThan(20_100_000);
+  });
 });
 
 describe('isWithinGeofence (clock-in anti-fraud)', () => {

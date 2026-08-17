@@ -24,14 +24,20 @@ const PRODUCTION_HOSTS = ['venuewrangler.com', 'venuewrangler.org', 'stadiumwran
 
 export function isAllowedOrigin(origin: string, isProduction: boolean): boolean {
   if (!/^https?:\/\//i.test(origin)) return false;
-  if (!isProduction) return true;
   try {
     const url = new URL(origin);
     const host = url.hostname.toLowerCase();
     const isPinnedPagesDev = PAGES_DEV_ORIGINS.includes(host);
     const isProductHost = PRODUCTION_HOSTS.some((root) => host === root || host.endsWith(`.${root}`));
-    const isLocalPreview = url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(host);
-    return isPinnedPagesDev || isProductHost || isLocalPreview;
+    const isLoopback = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+    if (isPinnedPagesDev || isProductHost) return true;
+    // Loopback origins are trusted in every environment (Expo/Webpack dev
+    // servers bind localhost). In production restrict to http to match the
+    // default allowlist; in dev also permit https loopback used by local
+    // tooling. Arbitrary internet origins are always rejected, even outside
+    // production, so a non-prod deployment cannot act as a credentialed proxy.
+    if (!isLoopback) return false;
+    return isProduction ? url.protocol === 'http:' : true;
   } catch {
     return false;
   }

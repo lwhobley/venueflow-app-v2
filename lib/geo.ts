@@ -26,7 +26,7 @@ export function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: 
   const a =
     Math.sin(deltaLat / 2) ** 2 +
     Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(deltaLng / 2) ** 2;
-  return 2 * radius * Math.asin(Math.sqrt(a));
+  return 2 * radius * Math.asin(Math.sqrt(Math.min(a, 1)));
 }
 
 /**

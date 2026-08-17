@@ -19,6 +19,7 @@ export default function EventCommandCenterScreen() {
   const masterData = masterQuery.data as any;
   const generateWorkspace = useMutation(api.operations.generateExecutionWorkspace);
   const [generationState, setGenerationState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [generateAttempt, setGenerateAttempt] = useState(0);
   const workspaceQuery = useQueryState(api.operations.getCommandCenterEvent, selectedEventId ? { eventId: selectedEventId } : 'skip');
   const workspace = workspaceQuery.data as any;
   const updateTask = useMutation(api.operations.updateExecutionTask);
@@ -35,11 +36,11 @@ export default function EventCommandCenterScreen() {
     const prepare = async () => {
       setGenerationState('loading');
       try { await generateWorkspace({ eventId: selectedEventId }); if (isMounted) setGenerationState('ready'); }
-      catch { if (isMounted) setGenerationState('ready'); }
+      catch { if (isMounted) setGenerationState('error'); }
     };
     void prepare();
     return () => { isMounted = false; };
-  }, [selectedEventId]);
+  }, [selectedEventId, generateAttempt]);
 
   const runAction = async (key: string, action: () => Promise<unknown>) => {
     setPendingAction(key); setActionError(null);
@@ -49,6 +50,16 @@ export default function EventCommandCenterScreen() {
   };
 
   if (selectedEventId) {
+    if (generationState === 'error') {
+      return (
+        <View style={{ flex: 1, backgroundColor: '#FFFFFF', padding: pagePadding, justifyContent: 'center', alignItems: 'center', gap: spacing.md }}>
+          <MaterialCommunityIcons name="alert-circle-outline" size={48} color="#C5221F" />
+          <Text variant="titleLarge" style={{ fontWeight: '800', color: '#1D2420' }}>Couldn't Load Event Workspace</Text>
+          <Text style={{ color: '#1D2420', textAlign: 'center' }}>The workspace failed to synchronize. Your data is safe — try again.</Text>
+          <Button mode="contained" buttonColor="#17643B" onPress={() => { setActionError(null); setGenerateAttempt((attempt) => attempt + 1); }}>Retry</Button>
+        </View>
+      );
+    }
     if (generationState === 'loading' || (workspaceQuery.isLoading && !workspace)) {
       return (
         <View style={{ flex: 1, backgroundColor: '#FFFFFF', padding: pagePadding, justifyContent: 'center', alignItems: 'center', gap: spacing.md }}>
