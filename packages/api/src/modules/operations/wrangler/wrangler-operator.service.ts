@@ -755,7 +755,11 @@ export class WranglerOperatorService {
       const startMinutes = args.startMinutes != null ? this.minuteValue(args.startMinutes, 'startMinutes') : existing.startMinutes;
       const endMinutes = args.endMinutes != null ? this.minuteValue(args.endMinutes, 'endMinutes') : existing.endMinutes;
       if (endMinutes <= startMinutes) throw new BadRequestException('Shift end must be after shift start');
-      if (existing.profileId) await this.assertNoShiftOverlap(venueId, existing.profileId, existing.weekStart ?? weekStartFor(zonedIsoDate(timezone, Date.now())), existing.dayIndex, startMinutes, endMinutes, existing.id);
+      const weekStart = existing.weekStart ?? weekStartFor(zonedIsoDate(timezone, Date.now()));
+      if (existing.profileId) {
+        await this.assertNoShiftOverlap(venueId, existing.profileId, weekStart, existing.dayIndex, startMinutes, endMinutes, existing.id);
+        await this.assertAssignmentAllowed(venueId, existing.profileId, weekStart, existing.dayIndex, startMinutes, endMinutes);
+      }
       const row = await this.prisma.scheduleShift.update({ where: { id }, data: { startMinutes, endMinutes, ...(args.jobTitle != null ? { jobTitle: this.requiredText(args.jobTitle, 'jobTitle') } : {}), ...(args.station != null ? { station: this.requiredText(args.station, 'station') } : {}) } });
       await this.markScheduleEdited(venueId);
       return { id: row.id, startMinutes: row.startMinutes, endMinutes: row.endMinutes, profileId: row.profileId, status: row.status };
@@ -768,7 +772,9 @@ export class WranglerOperatorService {
       if (!shift) throw new NotFoundException('Shift no longer exists');
       const profile = await this.prisma.profile.findFirst({ where: { id: profileId, venueId } });
       if (!profile) throw new NotFoundException('Staff member no longer exists');
-      await this.assertNoShiftOverlap(venueId, profile.id, shift.weekStart ?? weekStartFor(zonedIsoDate(timezone, Date.now())), shift.dayIndex, shift.startMinutes, shift.endMinutes, shift.id);
+      const weekStart = shift.weekStart ?? weekStartFor(zonedIsoDate(timezone, Date.now()));
+      await this.assertNoShiftOverlap(venueId, profile.id, weekStart, shift.dayIndex, shift.startMinutes, shift.endMinutes, shift.id);
+      await this.assertAssignmentAllowed(venueId, profile.id, weekStart, shift.dayIndex, shift.startMinutes, shift.endMinutes);
       const row = await this.prisma.scheduleShift.update({ where: { id }, data: { profileId: profile.id, status: 'scheduled' } });
       await this.markScheduleEdited(venueId);
       return { id: row.id, profileId: profile.id, staffName: profile.fullName, status: row.status };
@@ -906,6 +912,39 @@ export class WranglerOperatorService {
   private async assertNoShiftOverlap(venueId: string, profileId: string, weekStart: string, dayIndex: number, startMinutes: number, endMinutes: number, excludeShiftId?: string) {
     const conflict = await this.prisma.scheduleShift.findFirst({ where: { venueId, profileId, weekStart, dayIndex, status: { in: ['scheduled', 'covered'] }, startMinutes: { lt: endMinutes }, endMinutes: { gt: startMinutes }, ...(excludeShiftId ? { id: { not: excludeShiftId } } : {}) } });
     if (conflict) throw new ConflictException('That staff member already has an overlapping shift');
+  }
+
+  // Mirrors the scheduling module's availability gate: an approved time-off or
+  // sick-leave request blocks assignment for the covered day, so Wrangler
+  // commands cannot schedule someone into a day they are approved to be off.
+  private async assertAssignmentAllowed(venueId: string, profileId: string, weekStart: string, dayIndex: number, startMinutes: number, endMinutes: number) {
+    const weekEnd = this.dateAtOffset(weekStart, 6);
+    const requests = await this.prisma.staffRequest.findMany({
+      where: {
+        venueId,
+        profileId,
+        status: 'approved',
+        kind: { in: ['time_off', 'sick_leave'] },
+        OR: [
+          { requestedRangeStart: { lte: weekEnd }, requestedRangeEnd: { gte: weekStart } },
+          { requestedForDate: { gte: weekStart, lte: weekEnd } },
+        ],
+      },
+      select: { requestedForDate: true, requestedRangeStart: true, requestedRangeEnd: true },
+    });
+    const dayDate = this.dateAtOffset(weekStart, dayIndex);
+    const blocked = requests.some((request) => {
+      const start = request.requestedRangeStart ?? request.requestedForDate;
+      const end = request.requestedRangeEnd ?? request.requestedForDate ?? start;
+      return Boolean(start && end && dayDate >= start && dayDate <= end);
+    });
+    if (blocked) throw new BadRequestException('That staff member has approved time off covering this shift.');
+  }
+
+  private dateAtOffset(weekStart: string, dayIndex: number) {
+    const date = new Date(`${weekStart}T00:00:00.000Z`);
+    date.setUTCDate(date.getUTCDate() + dayIndex);
+    return date.toISOString().slice(0, 10);
   }
 
   private async markScheduleEdited(venueId: string) {

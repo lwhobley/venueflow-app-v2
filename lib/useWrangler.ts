@@ -47,7 +47,7 @@ export function useWranglerOperatorPlan() { return useApiMutation<{ command: str
 export function useWranglerOperatorExecute() {
   return useApiMutation<{ plan: WranglerOperatorPlan }, { ok: true; tool: string; risk: WranglerOperatorRisk; result: unknown }>(
     (body) => apiRequest('/v1/operations/wrangler/operator/execute', { method: 'POST', body }),
-    [['operations', 'wrangler'], ['operations', 'managerDashboard'], ['reservations', 'getReservationsPage'], ['scheduling', 'manager'], ['time-clock', 'board'], ['app', 'staff']],
+    [['operations', 'wrangler'], ['operations', 'getManagerDashboard'], ['reservations', 'getReservationsPage'], ['scheduling', 'getManagerSchedule'], ['app', 'getClockBoard'], ['app', 'listVenueStaff']],
   );
 }
 export function useExecuteWranglerAction() {
@@ -56,5 +56,5 @@ export function useExecuteWranglerAction() {
     | { type: 'NOTIFY_STAFF' }
     | { type: 'CREATE_FOLLOW_UP'; priorityId: string },
     { ok: true; type: string; reservationId?: string; tableId?: string; notified?: string; openShifts?: number; followUpId?: string; title?: string; existing?: boolean }
-  >((body) => apiRequest('/v1/operations/wrangler/actions', { method: 'POST', body }), [['operations', 'wrangler'], ['operations', 'managerDashboard'], ['floor', 'getActiveFloorPlan'], ['floor', 'getFloorStats'], ['reservations', 'getReservationsPage']]);
+  >((body) => apiRequest('/v1/operations/wrangler/actions', { method: 'POST', body }), [['operations', 'wrangler'], ['operations', 'getManagerDashboard'], ['floor', 'getActiveFloorPlan'], ['floor', 'getFloorStats'], ['reservations', 'getReservationsPage']]);
 }

@@ -134,6 +134,8 @@ export class EnterpriseSsoAdminController {
   async createProvider(@CurrentUser() user: AuthUser, @Body() body: ProviderDto) {
     await this.sso.assertOrganizationAdministrator(user.sub, body.organizationId);
     this.assertSafeRedirect(body.postLoginRedirectUri);
+    this.assertHttpsUrl(body.oidcIssuer, 'OIDC issuer');
+    this.assertHttpsUrl(body.samlEntryPoint, 'SAML entry point');
     return this.prisma.enterpriseSsoProvider.create({
       data: {
         ...body,
@@ -151,6 +153,8 @@ export class EnterpriseSsoAdminController {
     await this.sso.assertOrganizationAdministrator(user.sub, existing.organizationId);
     if (body.organizationId && body.organizationId !== existing.organizationId) throw new BadRequestException('An SSO provider cannot be moved between organizations.');
     this.assertSafeRedirect(body.postLoginRedirectUri);
+    this.assertHttpsUrl(body.oidcIssuer, 'OIDC issuer');
+    this.assertHttpsUrl(body.samlEntryPoint, 'SAML entry point');
     return this.prisma.enterpriseSsoProvider.update({
       where: { id: providerId },
       data: {
@@ -185,6 +189,10 @@ export class EnterpriseSsoAdminController {
     const provider = await this.prisma.enterpriseSsoProvider.findUniqueOrThrow({ where: { id: providerId } });
     await this.sso.assertOrganizationAdministrator(user.sub, provider.organizationId);
     const email = body.email.trim().toLowerCase();
+    const domain = email.includes('@') ? email.split('@')[1] ?? '' : '';
+    if (!domain || !provider.allowedEmailDomains.some((allowed) => domain === allowed || domain.endsWith(`.${allowed}`))) {
+      throw new BadRequestException(`Email domain must match one of the allowed domains for this provider.`);
+    }
     const account = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
     if (!account) throw new BadRequestException('Create the Stadium Wrangler user before linking its enterprise identity.');
     return this.prisma.enterpriseSsoIdentity.upsert({
@@ -219,6 +227,19 @@ export class EnterpriseSsoAdminController {
     const url = new URL(value);
     if (url.protocol !== 'https:' || url.username || url.password || url.port || /(^|\.)(localhost|local|internal)$/i.test(url.hostname)) {
       throw new BadRequestException('SSO post-login redirects must use an approved public HTTPS origin.');
+    }
+  }
+
+  private assertHttpsUrl(value?: string, field = 'URL') {
+    if (!value) return;
+    let url: URL;
+    try {
+      url = new URL(value);
+    } catch {
+      throw new BadRequestException(`SSO ${field} must be a valid URL.`);
+    }
+    if (url.protocol !== 'https:' || url.username || url.password) {
+      throw new BadRequestException(`SSO ${field} must use HTTPS with no embedded credentials.`);
     }
   }
 

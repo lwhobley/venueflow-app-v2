@@ -9,7 +9,6 @@ describe('CORS origin allowlist', () => {
     'https://venuewrangler.org',
     'https://app.venuewrangler.org',
     'https://desktop-web.venue-wrangler.pages.dev',
-    'https://6716c575.venue-wrangler.pages.dev',
     'https://venueflow-desktop-web.pages.dev',
     'http://localhost:8081',
     'http://127.0.0.1:8081',
@@ -20,6 +19,7 @@ describe('CORS origin allowlist', () => {
 
   it.each([
     'https://stadiumwrangler.com.attacker.example',
+    'https://6716c575.venue-wrangler.pages.dev',
     'https://attacker.example',
     'file:///tmp/index.html',
   ])('rejects an untrusted production origin: %s', (origin) => {

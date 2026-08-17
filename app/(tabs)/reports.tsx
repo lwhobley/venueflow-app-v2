@@ -42,6 +42,7 @@ type Insight = {
   activeReservations: number;
   upcomingReservations: number;
   pendingRequests: number;
+  laborHours?: number;
 };
 
 export default function ReportsScreen() {
@@ -55,10 +56,10 @@ export default function ReportsScreen() {
 
   const insights = useQuery(api.app.getManagerInsights, isReady && canManage ? {} : 'skip') as Insight | null | undefined;
   const laborForecast = useQuery(api.scheduling.getLaborForecast, isReady && canManage ? {} : 'skip') as any;
-  const timeCsv = useQuery(api.app.exportTimeEntriesCsv, isReady && canManage && showTimeCsv ? {} : 'skip') as string | null | undefined;
-  const reservationCsv = useQuery(api.reservations.exportReservationsCsv, isReady && canManage && showReservationCsv && venue?.id ? { venueId: venue.id } : 'skip') as string | null | undefined;
-  const payroll = useQuery(api.payroll.getPayrollSummary, isReady && canManage && venue?.id ? { venueId: venue.id } : 'skip') as any;
-  const payrollCsv = useQuery(api.payroll.exportPayrollCsv, isReady && canManage && showPayrollCsv && venue?.id ? { venueId: venue.id } : 'skip') as string | null | undefined;
+  const timeCsv = useQuery(api.app.exportTimeEntriesCsv, isReady && canManage && showTimeCsv ? { startDate: dateRange.startDate, endDate: dateRange.endDate } : 'skip') as string | null | undefined;
+  const reservationCsv = useQuery(api.reservations.exportReservationsCsv, isReady && canManage && showReservationCsv && venue?.id ? { venueId: venue.id, startDate: dateRange.startDate, endDate: dateRange.endDate } : 'skip') as string | null | undefined;
+  const payroll = useQuery(api.payroll.getPayrollSummary, isReady && canManage && venue?.id ? { venueId: venue.id, startDate: dateRange.startDate, endDate: dateRange.endDate } : 'skip') as any;
+  const payrollCsv = useQuery(api.payroll.exportPayrollCsv, isReady && canManage && showPayrollCsv && venue?.id ? { venueId: venue.id, startDate: dateRange.startDate, endDate: dateRange.endDate } : 'skip') as string | null | undefined;
   const recordPayrollExport = useMutation(api.payroll.recordPayrollExport);
 
 
@@ -73,8 +74,8 @@ export default function ReportsScreen() {
     { label: t('reports.metrics.pendingRequests'), value: insights?.pendingRequests ?? 0, accent: accents[1] },
   ];
 
-  const periodLabel = payroll?.periodStart && payroll?.periodEnd
-    ? `${new Date(payroll.periodStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${new Date(payroll.periodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+  const periodLabel = payroll?.totals?.periodStart && payroll?.totals?.periodEnd
+    ? `${new Date(payroll.totals.periodStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${new Date(payroll.totals.periodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
     : null;
 
   return (
@@ -222,7 +223,7 @@ export default function ReportsScreen() {
             <View style={{ flex: 1 }}>
               <Text variant="titleMedium" style={{ fontWeight: '700' }}>{t('reports.payroll.title')}</Text>
               <Text style={{ color: colors.muted }}>
-                {payroll ? t('reports.payroll.summary', { hours: payroll.totalHours, count: payroll.openEntryCount, period: periodLabel ? ` · ${periodLabel}` : '' }) : t('reports.payroll.loadingSummary')}
+                {payroll ? t('reports.payroll.summary', { hours: payroll.totals?.totalHours, count: payroll.totals?.employeeCount, period: periodLabel ? ` · ${periodLabel}` : '' }) : t('reports.payroll.loadingSummary')}
               </Text>
             </View>
             <Button
@@ -230,8 +231,15 @@ export default function ReportsScreen() {
               mode="outlined"
               textColor={colors.primary}
               onPress={() => {
-                if (venue?.id && payroll) {
-                  void recordPayrollExport({ venueId: venue.id, provider: payrollProvider, periodStart: payroll.periodStart, periodEnd: payroll.periodEnd });
+                if (venue?.id && payroll?.totals) {
+                  void recordPayrollExport({
+                    venueId: venue.id,
+                    provider: payrollProvider,
+                    periodStart: new Date(payroll.totals.periodStart).toISOString(),
+                    periodEnd: new Date(payroll.totals.periodEnd).toISOString(),
+                    rowCount: payroll.byEmployee?.length ?? 0,
+                    totalHours: payroll.totals.totalHours,
+                  });
                 }
               }}
             >

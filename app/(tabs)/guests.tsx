@@ -374,7 +374,7 @@ function GuestsScreenInner() {
         tags: splitTags(tags),
         notes: notes.trim() || undefined,
       });
-      setSelectedGuestId(saved._id);
+      setSelectedGuestId(saved.id);
       setShowForm(false);
       resetForm();
     } catch (e) {

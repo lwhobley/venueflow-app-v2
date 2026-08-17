@@ -52,7 +52,7 @@ export type AuthSessionResponse = {
   venue: ApiVenue | null;
 };
 
-function getApiBaseUrl() {
+export function getApiBaseUrl() {
   if (!configuredApiBaseUrl) {
     throw new ApiError(
       "The app is missing EXPO_PUBLIC_API_URL. Set it before signing in.",

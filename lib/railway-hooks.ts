@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation as useReactMutation, useQuery as useReactQuery, useQueryClient } from '@tanstack/react-query';
-import { apiRequest } from './api-client';
+import { apiRequest, getApiBaseUrl } from './api-client';
 import { useAuthStore } from './auth-store';
 import { enqueueOfflineMutation } from './offline-queue';
-import { createIdempotencyKey } from './idempotency';
+import { createStableIdempotencyKey, stableStringify } from './idempotency';
 import type { RailwayFunctionRef } from './railway-api';
 
 type QueryArgs = Record<string, unknown> | 'skip' | undefined;
@@ -34,7 +34,7 @@ const queryRoutes: Record<string, Route> = {
   'app.listStaffAuditLog': { path: '/v1/app/staff/audit-log' },
   'app.listStaffRequests': { path: '/v1/staff-requests' },
   'app.getManagerInsights': { path: '/v1/app/manager-insights' },
-  'app.exportTimeEntriesCsv': { path: '/v1/app/time-entries/csv' },
+  'app.exportTimeEntriesCsv': { path: (args) => `/v1/app/time-entries/csv${args?.startDate ? `?startDate=${args.startDate}&endDate=${args.endDate ?? ''}` : ''}` },
   'staffAuth.listVenueRoles': { path: '/v1/app/venue-roles' },
   'scheduling.listBlackouts': { path: '/v1/scheduling/blackouts' },
   'scheduling.getManagerSchedule': { path: (args) => `/v1/scheduling/manager${args?.weekStart ? `?weekStart=${encodeURIComponent(args.weekStart)}` : ''}` },
@@ -73,7 +73,7 @@ const queryRoutes: Record<string, Route> = {
     path: (args) => `/v1/operations/checklist?kind=${encodeURIComponent(args.kind)}${args?.date ? `&date=${encodeURIComponent(args.date)}` : ''}`,
   },
   'reservations.getReservationsPage': { path: '/v1/reservations' },
-  'reservations.exportReservationsCsv': { path: '/v1/reservations/export-csv' },
+  'reservations.exportReservationsCsv': { path: (args) => `/v1/reservations/export-csv${args?.startDate ? `?startDate=${args.startDate}&endDate=${args.endDate ?? ''}` : ''}` },
   'payroll.getPayrollSummary': { path: (args) => `/v1/payroll/summary${args.startDate ? `?startDate=${args.startDate}&endDate=${args.endDate ?? ''}` : ''}` },
   'payroll.exportPayrollCsv': { path: (args) => `/v1/payroll/export-csv${args.startDate ? `?startDate=${args.startDate}&endDate=${args.endDate ?? ''}` : ''}` },
   'barInventory.getBarStock': { path: '/v1/bar-inventory' },
@@ -193,6 +193,12 @@ const mutationRoutes: Record<string, Route> = {
     body: ({ actualAttendance, actualSalesCents, forecastSalesCents, laborHours, laborCostCents, inventoryVarianceCents, outletResults, inventoryResults, laborResults, notes, status, adjustmentReason }) => ({ actualAttendance, actualSalesCents, forecastSalesCents, laborHours, laborCostCents, inventoryVarianceCents, outletResults, inventoryResults, laborResults, notes, status, adjustmentReason }),
     invalidate: [['stadium', 'getEventCloseout'], ['stadium', 'listEventAudit'], ['stadium', 'getOverview']],
   },
+  'stadium.submitEventCloseoutRevision': {
+    path: (args) => `/v1/stadium/events/${args.eventId}/closeout/revisions`,
+    method: 'POST',
+    body: ({ actualAttendance, actualSalesCents, forecastSalesCents, laborHours, laborCostCents, inventoryVarianceCents, notes, adjustmentReason }) => ({ actualAttendance, actualSalesCents, forecastSalesCents, laborHours, laborCostCents, inventoryVarianceCents, notes, adjustmentReason }),
+    invalidate: [['stadium', 'getEventCloseout'], ['stadium', 'listEventAudit'], ['stadium', 'getOverview']],
+  },
   'stadium.upsertPartner': {
     path: '/v1/stadium/partners',
     method: 'POST',
@@ -265,6 +271,7 @@ const mutationRoutes: Record<string, Route> = {
     path: '/v1/app/invites',
     method: 'POST',
     body: ({ role, jobTitle }) => ({ role, jobTitle }),
+    invalidate: [['app', 'listVenueStaff'], ['app', 'getDashboard']],
   },
   'app.parseStaffImport': {
     path: '/v1/app/staff/import/parse',
@@ -487,7 +494,7 @@ const mutationRoutes: Record<string, Route> = {
   'pos.upsertPosConnection': { path: '/v1/pos/connections', method: 'POST', body: ({ provider, externalLocationId, status }) => ({ provider, externalLocationId, status }), invalidate: [['pos', 'getPosOverview']] },
   'pos.rotatePosConnectionSecret': { path: (args) => `/v1/pos/connections/${args.connectionId ?? args.id}/rotate-secret`, method: 'POST', body: () => ({}), invalidate: [['pos', 'getPosOverview']] },
   'pos.sync86Broadcast': { path: '/v1/pos/aggregator/sync-86', method: 'POST', body: ({ itemNames, category, reason }) => ({ itemNames, category, reason }), invalidate: [['pos', 'getMaster86List'], ['pos', 'getAggregatorStatus']] },
-  'reservationIntegrations.upsertReservationConnection': { path: '/v1/integrations/reservations', method: 'POST', body: stripVenue },
+  'reservationIntegrations.upsertReservationConnection': { path: '/v1/integrations/reservations', method: 'POST', body: stripVenue, invalidate: [['reservationIntegrations', 'getReservationIntegrationOverview'], ['reservations', 'getReservationsPage']] },
   'guests.rotateLeadsWebhookSecret': { path: '/v1/guests/rotate-webhook-secret', method: 'POST', body: () => ({}), invalidate: [['guests', 'listGuests']] },
   'operations.upsertManagerGoal': { path: '/v1/operations/manager-goal', method: 'PATCH', body: stripVenue, invalidate: [['operations', 'getManagerDashboard']] },
   'barInventory.upsertBarItem': { path: '/v1/bar-inventory', method: 'POST', body: stripVenue, invalidate: [['barInventory', 'getBarStock']] },
@@ -688,10 +695,12 @@ function getKey(ref: RailwayFunctionRef) {
   return ref.__railwayKey;
 }
 
-function requestRoute<T>(route: Route, args: any, signal?: AbortSignal): Promise<T> {
+async function requestRoute<T>(route: Route, args: any, signal?: AbortSignal): Promise<T> {
   const path = typeof route.path === 'function' ? route.path(args ?? {}) : route.path;
   const rawBody = route.method && route.method !== 'GET' && route.method !== 'DELETE' ? route.body?.(args ?? {}) ?? args ?? {} : undefined;
-  const mutationId = route.idempotent || route.offline ? createIdempotencyKey() : undefined;
+  const mutationId = route.idempotent || route.offline
+    ? await createStableIdempotencyKey(`${route.method}\n${path}\n${stableStringify(rawBody ?? null)}`)
+    : undefined;
   const body = mutationId
     && rawBody
     && typeof rawBody === 'object'
@@ -714,7 +723,7 @@ function requestRoute<T>(route: Route, args: any, signal?: AbortSignal): Promise
       path,
       method: route.method,
       body,
-      idempotencyKey: mutationId ?? createIdempotencyKey(),
+      idempotencyKey: mutationId!,
       entityKey: route.path === '/v1/stadium/events' ? 'event:create' : path,
     }) as T;
   });
@@ -816,6 +825,11 @@ export function useStadiumLiveStream(facilityId: string | null | undefined, zone
   useEffect(() => {
     if (!facilityId || !token) return;
 
+    // EventSource is not polyfilled in React Native — only native web has it.
+    if (typeof EventSource === 'undefined') {
+      return;
+    }
+
     let active = true;
     let eventSource: EventSource | null = null;
     let retryDelay = 1000;
@@ -823,32 +837,32 @@ export function useStadiumLiveStream(facilityId: string | null | undefined, zone
     async function connect() {
       if (!active || !facilityId || !token) return;
       const fId = String(facilityId);
-      const tok = String(token);
-      const baseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
-      // Prefer short-lived single-use stream ticket over long-lived JWT in query param
-      let authParam = `token=${encodeURIComponent(tok)}`;
+      // Always require a short-lived single-use stream ticket; never put the
+      // session JWT in the URL where access logs would capture it.
+      let ticket: string | undefined;
       try {
         const ticketRes = await apiRequest<{ ticket: string }>(
           `/v1/stadium/facilities/${encodeURIComponent(fId)}/ticket${zoneId ? `?zoneId=${encodeURIComponent(zoneId)}` : ''}`,
           { method: 'POST' }
         );
-        if (ticketRes?.ticket) {
-          authParam = `ticket=${encodeURIComponent(ticketRes.ticket)}`;
-        }
+        ticket = ticketRes?.ticket;
       } catch {
-        // Fallback to token if ticket endpoint is unreachable
+        // Surfaced via the disconnected state; the stream will not connect
+        // without a valid ticket.
+      }
+      if (!active) return;
+      if (!ticket) {
+        setConnected(false);
+        return;
       }
 
-      if (!active) return;
-
-      let url = `${baseUrl}/v1/stadium/facilities/${encodeURIComponent(fId)}/live-stream`;
-      const queryParams: string[] = [authParam];
+      const queryParams: string[] = [`ticket=${encodeURIComponent(ticket)}`];
       if (zoneId) queryParams.push(`zoneId=${encodeURIComponent(zoneId)}`);
       const lastId = lastEventIdRef.current;
       if (lastId) queryParams.push(`lastEventId=${encodeURIComponent(lastId)}`);
 
-      url += `?${queryParams.join('&')}`;
+      const url = `${getApiBaseUrl()}/v1/stadium/facilities/${encodeURIComponent(fId)}/live-stream?${queryParams.join('&')}`;
 
       eventSource = new EventSource(url);
 
@@ -868,9 +882,9 @@ export function useStadiumLiveStream(facilityId: string | null | undefined, zone
           if (typeof payload?.seq === 'number') {
             setLastSeq(payload.seq);
           }
-          queryClient.invalidateQueries({ queryKey: ['stadium.getOverview'] });
-          queryClient.invalidateQueries({ queryKey: ['stadium.listEventIssues'] });
-          queryClient.invalidateQueries({ queryKey: ['stadium.getPilotHealth'] });
+          queryClient.invalidateQueries({ queryKey: ['stadium', 'getOverview'] });
+          queryClient.invalidateQueries({ queryKey: ['stadium', 'listEventIssues'] });
+          queryClient.invalidateQueries({ queryKey: ['stadium', 'getPilotHealth'] });
         } catch {
           // ignore malformed frame
         }
@@ -883,18 +897,21 @@ export function useStadiumLiveStream(facilityId: string | null | undefined, zone
           eventSource.close();
           eventSource = null;
         }
-        setTimeout(() => connect(), retryDelay);
-        retryDelay = Math.min(retryDelay * 2, 30000);
+        if (active) {
+          setTimeout(() => void connect(), retryDelay);
+          retryDelay = Math.min(retryDelay * 2, 30000);
+        }
       };
     }
 
-    connect();
+    void connect();
 
     return () => {
       active = false;
       setConnected(false);
       if (eventSource) {
         eventSource.close();
+        eventSource = null;
       }
     };
   }, [facilityId, zoneId, token, queryClient]);

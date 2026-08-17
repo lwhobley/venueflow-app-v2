@@ -30,13 +30,9 @@ export class VenueScopeInterceptor implements NestInterceptor {
     if (skip) return next.handle();
 
     const request = context.switchToHttp().getRequest<VenueScopedRequest>();
-    if (request.venueScope) {
-      return bindAiUsageContext(
-        { venueId: request.venueScope.venueId, profileId: request.venueScope.profileId, prisma: this.prisma },
-        () => next.handle(),
-      );
-    }
-
+    // Always derive venue scope from the live membership row below. Never trust
+    // a venueScope that a guard or interceptor pre-populated: a fabricated scope
+    // (e.g. hardcoded allAccess: true) would flow into role gates in handlers.
     const user = request.user;
     if (!user?.sub || !user.profileId || !user.venueId) return next.handle();
     // AuthGuard already resolved this profile from the verified active

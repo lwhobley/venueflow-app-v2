@@ -1,6 +1,9 @@
+import { createHash } from 'crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { getTenantVenueId, runWithoutTenant } from '../prisma/tenant-context';
 import { AuthGuard } from './auth.guard';
+
+const TOKEN_HASH = createHash('sha256').update('token-1').digest('hex');
 
 function makeContext(token: string, venueId?: string) {
   const request = {
@@ -42,7 +45,7 @@ function makeGuard(options?: {
         options?.session ?? {
           userId: 'user-1',
           expiresAt: new Date(Date.now() + 60_000),
-          tokenHash: null,
+          tokenHash: TOKEN_HASH,
         },
       ),
     },

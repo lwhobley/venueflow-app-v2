@@ -56,7 +56,7 @@ function scope() {
   const userId = state.user?.id;
   const venueId = state.venue?.id;
   if (!userId || !venueId) throw new OfflineQueueStorageError('Sign in to an assigned venue before queueing event operations.');
-  return { userId, venueId, scopeKey: `${state.authEpoch}:${userId}:${venueId}` };
+  return { userId, venueId, scopeKey: `${userId}:${venueId}` };
 }
 
 function snapshot(): OfflineQueueSnapshot {
@@ -207,20 +207,10 @@ function replace(row: OfflineMutation) {
   notify();
 }
 
-export function subscribeOfflineQueue(listener: ((snapshot: OfflineQueueSnapshot) => void) | ((pending: number) => void)) {
-  // Accept legacy number listeners used by SyncStatus while emitting snapshots.
-  const wrapped = (next: OfflineQueueSnapshot) => {
-    if (listener.length <= 1) {
-      // Callers that only read pending still work when they treat the arg as number
-      // via offlineQueueSize(); new callers should use the snapshot object.
-      (listener as (value: OfflineQueueSnapshot) => void)(next);
-    } else {
-      (listener as (value: OfflineQueueSnapshot) => void)(next);
-    }
-  };
-  listeners.add(wrapped);
-  void ensureLoaded().catch(() => wrapped({ pending: 0, conflicts: 0 }));
-  return () => listeners.delete(wrapped);
+export function subscribeOfflineQueue(listener: (snapshot: OfflineQueueSnapshot) => void) {
+  listeners.add(listener);
+  void ensureLoaded().catch(() => listener({ pending: 0, conflicts: 0 }));
+  return () => listeners.delete(listener);
 }
 
 export function offlineQueueSize() {
@@ -300,9 +290,18 @@ async function flush() {
   const rows = [...queue].sort((a, b) => a.createdAt - b.createdAt);
 
   for (const row of rows) {
-    if (row.scopeKey !== owner.scopeKey) continue;
+    if (row.userId !== owner.userId) {
+      await deleteRow(row.id);
+      queue = queue.filter((item) => item.id !== row.id);
+      notify();
+      continue;
+    }
+    if (row.venueId !== owner.venueId) continue;
     if (row.status === 'conflict' || row.status === 'blocked_scope' || row.status === 'failed') continue;
     if (row.nextAttemptAt > Date.now() || blockedEntities.has(row.entityKey)) continue;
+
+    const current = useAuthStore.getState();
+    if (!current.user?.id || !current.venue?.id || current.user.id !== owner.userId || current.venue.id !== owner.venueId) break;
 
     try {
       await apiRequest(row.path, {
