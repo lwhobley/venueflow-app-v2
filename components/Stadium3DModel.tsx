@@ -5,11 +5,38 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
-const stadiumModel = require('../assets/nrg-stadium.glb') as string;
+let primaryStadiumAsset: any = null;
+let fallbackStadiumAsset: any = null;
+
+try {
+  primaryStadiumAsset = require('../assets/Meshy_AI_Isometric_Football_St_0815110828_generate.glb');
+} catch {
+  // Asset optional
+}
+
+try {
+  fallbackStadiumAsset = require('../assets/nrg-stadium.glb');
+} catch {
+  // Asset optional
+}
 
 type Stadium3DModelProps = {
   dom?: import('expo/dom').DOMProps;
 };
+
+function resolveAssetUri(asset: any): string | null {
+  if (!asset) return null;
+  if (typeof asset === 'string') return asset;
+  if (typeof asset === 'object') {
+    if (typeof asset.default === 'string') return asset.default;
+    if (typeof asset.uri === 'string') return asset.uri;
+    if (typeof asset.localUri === 'string') return asset.localUri;
+    if (asset.default && typeof asset.default === 'object') {
+      if (typeof asset.default.uri === 'string') return asset.default.uri;
+    }
+  }
+  return null;
+}
 
 function disposeObject(object: THREE.Object3D) {
   object.traverse((child) => {
@@ -25,9 +52,191 @@ function disposeObject(object: THREE.Object3D) {
   });
 }
 
+/**
+ * Creates an authentic procedural 3D architectural football stadium model
+ * with playing field, yardlines, endzones, goalposts, raked grandstands,
+ * luxury suite tier, 360° LED ribbon, jumbotrons, and floodlight pylons.
+ */
+function createProceduralStadium(): THREE.Group {
+  const stadiumGroup = new THREE.Group();
+  stadiumGroup.name = 'ProceduralStadium';
+
+  // 1. Field Base Turf
+  const fieldGeo = new THREE.BoxGeometry(14, 0.4, 24);
+  const fieldMat = new THREE.MeshStandardMaterial({
+    color: '#1E6F3B',
+    roughness: 0.8,
+    metalness: 0.1,
+  });
+  const fieldMesh = new THREE.Mesh(fieldGeo, fieldMat);
+  fieldMesh.position.y = 0.2;
+  fieldMesh.receiveShadow = true;
+  stadiumGroup.add(fieldMesh);
+
+  // 2. Endzones (North & South)
+  const endzoneGeo = new THREE.BoxGeometry(13.6, 0.42, 2.8);
+  const endzoneNorthMat = new THREE.MeshStandardMaterial({ color: '#00143F', roughness: 0.7 });
+  const endzoneNorth = new THREE.Mesh(endzoneGeo, endzoneNorthMat);
+  endzoneNorth.position.set(0, 0.21, -10.2);
+  stadiumGroup.add(endzoneNorth);
+
+  const endzoneSouthMat = new THREE.MeshStandardMaterial({ color: '#B71C1C', roughness: 0.7 });
+  const endzoneSouth = new THREE.Mesh(endzoneGeo, endzoneSouthMat);
+  endzoneSouth.position.set(0, 0.21, 10.2);
+  stadiumGroup.add(endzoneSouth);
+
+  // 3. Yard Line Strips
+  const lineMat = new THREE.MeshBasicMaterial({ color: '#FFFFFF' });
+  for (let z = -8; z <= 8; z += 2) {
+    const lineGeo = new THREE.BoxGeometry(13.4, 0.43, 0.08);
+    const line = new THREE.Mesh(lineGeo, lineMat);
+    line.position.set(0, 0.215, z);
+    stadiumGroup.add(line);
+  }
+
+  // 4. Goalposts (North & South)
+  const goalpostMat = new THREE.MeshStandardMaterial({ color: '#FFD700', metalness: 0.8, roughness: 0.2 });
+  [-11.5, 11.5].forEach((zPos) => {
+    const postGroup = new THREE.Group();
+    // Base post
+    const basePole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 2.2), goalpostMat);
+    basePole.position.y = 1.1;
+    postGroup.add(basePole);
+    // Crossbar
+    const crossbar = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.6), goalpostMat);
+    crossbar.rotation.z = Math.PI / 2;
+    crossbar.position.y = 2.2;
+    postGroup.add(crossbar);
+    // Uprights
+    [-1.25, 1.25].forEach((xPos) => {
+      const upright = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.6), goalpostMat);
+      upright.position.set(xPos, 3.5, 0);
+      postGroup.add(upright);
+    });
+    postGroup.position.set(0, 0.4, zPos);
+    stadiumGroup.add(postGroup);
+  });
+
+  // 5. Lower Bowl Grandstand Seating Tier (Navy)
+  const lowerBowlGeo = new THREE.CylinderGeometry(14, 11, 2.8, 48, 1, true);
+  const lowerBowlMat = new THREE.MeshStandardMaterial({
+    color: '#0A1C30',
+    roughness: 0.6,
+    metalness: 0.2,
+    side: THREE.DoubleSide,
+  });
+  const lowerBowl = new THREE.Mesh(lowerBowlGeo, lowerBowlMat);
+  lowerBowl.position.y = 1.8;
+  lowerBowl.scale.set(1.1, 1, 1.35);
+  stadiumGroup.add(lowerBowl);
+
+  // 6. Luxury Suites & 360° LED Ribbon Tier (Gold & Cyan)
+  const suitesRingGeo = new THREE.CylinderGeometry(14.8, 14.2, 0.9, 48, 1, true);
+  const suitesRingMat = new THREE.MeshStandardMaterial({
+    color: '#D4AF37',
+    roughness: 0.3,
+    metalness: 0.7,
+    side: THREE.DoubleSide,
+  });
+  const suitesRing = new THREE.Mesh(suitesRingGeo, suitesRingMat);
+  suitesRing.position.y = 3.65;
+  suitesRing.scale.set(1.12, 1, 1.37);
+  stadiumGroup.add(suitesRing);
+
+  // LED Ribbon Band
+  const ledBandGeo = new THREE.CylinderGeometry(14.9, 14.85, 0.25, 48, 1, true);
+  const ledBandMat = new THREE.MeshBasicMaterial({ color: '#00E5FF', side: THREE.DoubleSide });
+  const ledBand = new THREE.Mesh(ledBandGeo, ledBandMat);
+  ledBand.position.y = 3.3;
+  ledBand.scale.set(1.12, 1, 1.37);
+  stadiumGroup.add(ledBand);
+
+  // 7. Upper Grandstand Seating Tier (Red Bowl)
+  const upperBowlGeo = new THREE.CylinderGeometry(18, 15, 3.4, 48, 1, true);
+  const upperBowlMat = new THREE.MeshStandardMaterial({
+    color: '#7F131D',
+    roughness: 0.6,
+    metalness: 0.2,
+    side: THREE.DoubleSide,
+  });
+  const upperBowl = new THREE.Mesh(upperBowlGeo, upperBowlMat);
+  upperBowl.position.y = 5.6;
+  upperBowl.scale.set(1.14, 1, 1.39);
+  stadiumGroup.add(upperBowl);
+
+  // 8. Outer Facade Wall (Silver & Steel)
+  const facadeGeo = new THREE.CylinderGeometry(18.2, 18.2, 7.2, 48, 1, true);
+  const facadeMat = new THREE.MeshStandardMaterial({
+    color: '#37474F',
+    roughness: 0.4,
+    metalness: 0.6,
+    side: THREE.DoubleSide,
+  });
+  const facade = new THREE.Mesh(facadeGeo, facadeMat);
+  facade.position.y = 3.8;
+  facade.scale.set(1.145, 1, 1.395);
+  stadiumGroup.add(facade);
+
+  // 9. Jumbotrons (North & South Endzone Displays)
+  const jumboGeo = new THREE.BoxGeometry(6.4, 2.2, 0.4);
+  const jumboScreenMat = new THREE.MeshBasicMaterial({ color: '#00E5FF' });
+  const jumboFrameMat = new THREE.MeshStandardMaterial({ color: '#021224', metalness: 0.9 });
+
+  [-17.8, 17.8].forEach((zPos) => {
+    const jumboGroup = new THREE.Group();
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(6.8, 2.6, 0.6), jumboFrameMat);
+    const screen = new THREE.Mesh(jumboGeo, jumboScreenMat);
+    screen.position.z = zPos > 0 ? -0.2 : 0.2;
+    jumboGroup.add(frame);
+    jumboGroup.add(screen);
+    jumboGroup.position.set(0, 8.4, zPos);
+    stadiumGroup.add(jumboGroup);
+  });
+
+  // 10. Corner Floodlight Pylon Towers (4 Towers)
+  const pylonGeo = new THREE.CylinderGeometry(0.35, 0.5, 11, 12);
+  const pylonMat = new THREE.MeshStandardMaterial({ color: '#455A64', metalness: 0.8 });
+  const floodlightHeadGeo = new THREE.BoxGeometry(2, 1.2, 0.8);
+  const floodlightHeadMat = new THREE.MeshBasicMaterial({ color: '#FFF8E7' });
+
+  const cornerPositions = [
+    [-13.5, -18],
+    [13.5, -18],
+    [-13.5, 18],
+    [13.5, 18],
+  ];
+
+  cornerPositions.forEach(([xPos, zPos]) => {
+    const towerGroup = new THREE.Group();
+    const mast = new THREE.Mesh(pylonGeo, pylonMat);
+    mast.position.y = 5.5;
+    towerGroup.add(mast);
+
+    const head = new THREE.Mesh(floodlightHeadGeo, floodlightHeadMat);
+    head.position.y = 11.2;
+    head.lookAt(0, 0, 0);
+    towerGroup.add(head);
+
+    towerGroup.position.set(xPos, 0, zPos);
+    stadiumGroup.add(towerGroup);
+  });
+
+  // 11. Roof Truss Arches
+  const archGeo = new THREE.TorusGeometry(18, 0.3, 16, 64, Math.PI);
+  const archMat = new THREE.MeshStandardMaterial({ color: '#CFD8DC', metalness: 0.9, roughness: 0.2 });
+  [-8, 0, 8].forEach((zPos) => {
+    const arch = new THREE.Mesh(archGeo, archMat);
+    arch.position.set(0, 4.2, zPos);
+    arch.scale.set(1, 0.75, 1);
+    stadiumGroup.add(arch);
+  });
+
+  return stadiumGroup;
+}
+
 export default function Stadium3DModel(_props: Stadium3DModelProps) {
   const hostRef = useRef<HTMLDivElement>(null);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [status, setStatus] = useState<'loading' | 'ready' | 'fallback'>('loading');
 
   useEffect(() => {
     const host = hostRef.current;
@@ -37,13 +246,13 @@ export default function Stadium3DModel(_props: Stadium3DModelProps) {
     scene.background = new THREE.Color('#08131f');
 
     const camera = new THREE.PerspectiveCamera(42, 1, 0.01, 2000);
-    camera.position.set(8, 6, 10);
+    camera.position.set(24, 20, 32);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.15;
+    renderer.toneMappingExposure = 1.25;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.domElement.setAttribute('aria-label', 'Rotatable three-dimensional stadium model');
@@ -55,72 +264,110 @@ export default function Stadium3DModel(_props: Stadium3DModelProps) {
     controls.enableDamping = true;
     controls.dampingFactor = 0.075;
     controls.enablePan = true;
-    controls.minDistance = 2;
-    controls.maxDistance = 60;
+    controls.minDistance = 6;
+    controls.maxDistance = 120;
     controls.maxPolarAngle = Math.PI * 0.88;
 
-    scene.add(new THREE.HemisphereLight('#d7ecff', '#17251b', 2.4));
-    const keyLight = new THREE.DirectionalLight('#ffffff', 4.2);
-    keyLight.position.set(8, 14, 10);
+    // Ambient & Hemisphere Lighting
+    scene.add(new THREE.HemisphereLight('#E1F5FE', '#17251B', 2.6));
+
+    // Key Stadium Floodlight
+    const keyLight = new THREE.DirectionalLight('#FFFFFF', 4.5);
+    keyLight.position.set(20, 36, 26);
     keyLight.castShadow = true;
     scene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight('#78b7ff', 2.1);
-    fillLight.position.set(-10, 5, -7);
+    // Cyan/Blue Stadium Ambient Rim Fill
+    const fillLight = new THREE.DirectionalLight('#78B7FF', 2.8);
+    fillLight.position.set(-24, 18, -20);
     scene.add(fillLight);
 
+    // Warm Gold Field Accent
+    const goldLight = new THREE.DirectionalLight('#FFE082', 1.6);
+    goldLight.position.set(0, 28, 0);
+    scene.add(goldLight);
+
+    // Ground Plaza Base
     const ground = new THREE.Mesh(
-      new THREE.CircleGeometry(18, 96),
-      new THREE.MeshStandardMaterial({ color: '#123c24', roughness: 0.95 }),
+      new THREE.CircleGeometry(42, 96),
+      new THREE.MeshStandardMaterial({ color: '#0A1522', roughness: 0.95 }),
     );
     ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -0.03;
+    ground.position.y = -0.05;
     ground.receiveShadow = true;
     scene.add(ground);
 
-    let loadedModel: THREE.Object3D | null = null;
+    let activeModel: THREE.Object3D | null = null;
     let disposed = false;
 
-    new GLTFLoader().load(
-      stadiumModel,
-      (gltf) => {
-        if (disposed) {
-          disposeObject(gltf.scene);
-          return;
+    const finalizeLoadedModel = (model: THREE.Object3D, isFallback = false) => {
+      if (disposed) {
+        disposeObject(model);
+        return;
+      }
+      activeModel = model;
+      const bounds = new THREE.Box3().setFromObject(activeModel);
+      const center = bounds.getCenter(new THREE.Vector3());
+      const size = bounds.getSize(new THREE.Vector3());
+      activeModel.position.sub(center);
+      activeModel.position.y += size.y / 2;
+      activeModel.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
         }
+      });
+      scene.add(activeModel);
 
-        loadedModel = gltf.scene;
-        const bounds = new THREE.Box3().setFromObject(loadedModel);
-        const center = bounds.getCenter(new THREE.Vector3());
-        const size = bounds.getSize(new THREE.Vector3());
-        loadedModel.position.sub(center);
-        loadedModel.position.y += size.y / 2;
-        loadedModel.traverse((child) => {
-          if (child instanceof THREE.Mesh) {
-            child.castShadow = true;
-            child.receiveShadow = true;
-          }
-        });
-        scene.add(loadedModel);
+      const radius = Math.max(size.x, size.y, size.z) * 0.5;
+      const distance = Math.max(radius / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), 12);
+      camera.near = Math.max(distance / 1000, 0.01);
+      camera.far = distance * 100;
+      camera.position.set(distance * 0.8, distance * 0.65, distance * 1.05);
+      camera.updateProjectionMatrix();
+      controls.target.set(0, size.y * 0.2, 0);
+      controls.minDistance = distance * 0.25;
+      controls.maxDistance = distance * 3.0;
+      controls.update();
+      setStatus(isFallback ? 'fallback' : 'ready');
+    };
 
-        const radius = Math.max(size.x, size.y, size.z) * 0.5;
-        const distance = Math.max(radius / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), 4);
-        camera.near = Math.max(distance / 1000, 0.01);
-        camera.far = distance * 100;
-        camera.position.set(distance * 0.75, distance * 0.5, distance * 0.9);
-        camera.updateProjectionMatrix();
-        controls.target.set(0, size.y * 0.18, 0);
-        controls.minDistance = distance * 0.28;
-        controls.maxDistance = distance * 2.5;
-        controls.update();
-        setStatus('ready');
-      },
-      undefined,
-      (error) => {
-        console.error('Failed to load the stadium GLB model', error);
-        if (!disposed) setStatus('error');
-      },
-    );
+    const loadProceduralFallback = () => {
+      const proceduralModel = createProceduralStadium();
+      finalizeLoadedModel(proceduralModel, true);
+    };
+
+    const tryLoadGlb = (uri: string, onFail: () => void) => {
+      new GLTFLoader().load(
+        uri,
+        (gltf) => {
+          finalizeLoadedModel(gltf.scene, false);
+        },
+        undefined,
+        (err) => {
+          console.warn('GLB load failed for', uri, err);
+          onFail();
+        },
+      );
+    };
+
+    // Load Primary GLB -> Secondary GLB -> Procedural 3D Model
+    const primaryUri = resolveAssetUri(primaryStadiumAsset);
+    const fallbackUri = resolveAssetUri(fallbackStadiumAsset);
+
+    if (primaryUri) {
+      tryLoadGlb(primaryUri, () => {
+        if (fallbackUri && fallbackUri !== primaryUri) {
+          tryLoadGlb(fallbackUri, loadProceduralFallback);
+        } else {
+          loadProceduralFallback();
+        }
+      });
+    } else if (fallbackUri) {
+      tryLoadGlb(fallbackUri, loadProceduralFallback);
+    } else {
+      loadProceduralFallback();
+    }
 
     const resize = () => {
       const width = Math.max(host.clientWidth, 1);
@@ -146,7 +393,7 @@ export default function Stadium3DModel(_props: Stadium3DModelProps) {
       cancelAnimationFrame(animationFrame);
       resizeObserver.disconnect();
       controls.dispose();
-      if (loadedModel) disposeObject(loadedModel);
+      if (activeModel) disposeObject(activeModel);
       ground.geometry.dispose();
       (ground.material as THREE.Material).dispose();
       renderer.dispose();
@@ -168,9 +415,10 @@ export default function Stadium3DModel(_props: Stadium3DModelProps) {
       }}
     >
       <div ref={hostRef} style={{ position: 'absolute', inset: 0 }} />
-      {status !== 'ready' ? (
+
+      {status === 'loading' ? (
         <div
-          role={status === 'error' ? 'alert' : 'status'}
+          role="status"
           style={{
             position: 'absolute',
             inset: 0,
@@ -178,29 +426,34 @@ export default function Stadium3DModel(_props: Stadium3DModelProps) {
             placeItems: 'center',
             padding: 24,
             textAlign: 'center',
-            background: 'rgba(8, 19, 31, 0.86)',
+            background: 'rgba(8, 19, 31, 0.88)',
             fontWeight: 700,
+            fontSize: 14,
+            color: '#00E5FF',
           }}
         >
-          {status === 'error'
-            ? 'The stadium model could not be loaded. Check the network connection and reload.'
-            : 'Loading interactive stadium model…'}
+          Loading 3D Stadium Model…
         </div>
       ) : null}
+
       <div
         style={{
           position: 'absolute',
           left: 12,
           bottom: 12,
-          padding: '7px 10px',
+          padding: '7px 12px',
           borderRadius: 6,
-          background: 'rgba(1, 51, 105, 0.88)',
-          fontSize: 12,
-          fontWeight: 700,
+          background: 'rgba(1, 51, 105, 0.92)',
+          border: '1px solid #00E5FF',
+          fontSize: 11,
+          fontWeight: 800,
+          color: '#FFFFFF',
+          letterSpacing: 0.3,
           pointerEvents: 'none',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
         }}
       >
-        Drag to orbit · Pinch or scroll to zoom · Right-drag to pan
+        ✦ 3D ISOMETRIC STADIUM BOWL · Drag to orbit · Pinch / Scroll to zoom · Right-drag to pan
       </div>
     </div>
   );
