@@ -1232,7 +1232,7 @@ export class SchedulingController {
     let created = 0;
     const failed: Array<{ shift: string; error: string }> = [];
     const staff = await this.prisma.profile.findMany({
-      where: { venueId, deletedAt: null, OR: ACTIVE_MEMBERSHIP },
+      where: { venueId, OR: ACTIVE_MEMBERSHIP },
       select: { id: true, fullName: true },
     });
     const nameById = new Map(staff.map((p) => [p.id, p.fullName]));
