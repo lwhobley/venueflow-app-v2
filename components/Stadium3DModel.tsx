@@ -5,17 +5,10 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
-let primaryStadiumAsset: any = null;
-let fallbackStadiumAsset: any = null;
+let stadiumAsset: any = null;
 
 try {
-  primaryStadiumAsset = require('../assets/Meshy_AI_Isometric_Football_St_0815110828_generate.glb');
-} catch {
-  // Asset optional
-}
-
-try {
-  fallbackStadiumAsset = require('../assets/nrg-stadium.glb');
+  stadiumAsset = require('../assets/nrg-stadium.glb');
 } catch {
   // Asset optional
 }
@@ -351,20 +344,10 @@ export default function Stadium3DModel(_props: Stadium3DModelProps) {
       );
     };
 
-    // Load Primary GLB -> Secondary GLB -> Procedural 3D Model
-    const primaryUri = resolveAssetUri(primaryStadiumAsset);
-    const fallbackUri = resolveAssetUri(fallbackStadiumAsset);
-
-    if (primaryUri) {
-      tryLoadGlb(primaryUri, () => {
-        if (fallbackUri && fallbackUri !== primaryUri) {
-          tryLoadGlb(fallbackUri, loadProceduralFallback);
-        } else {
-          loadProceduralFallback();
-        }
-      });
-    } else if (fallbackUri) {
-      tryLoadGlb(fallbackUri, loadProceduralFallback);
+    // Load GLB Stadium Model -> Fallback to procedural 3D model
+    const stadiumUri = resolveAssetUri(stadiumAsset);
+    if (stadiumUri) {
+      tryLoadGlb(stadiumUri, loadProceduralFallback);
     } else {
       loadProceduralFallback();
     }
