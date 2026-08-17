@@ -678,18 +678,19 @@ export const COMPREHENSIVE_STADIUM_ZONES: StadiumZoneData[] = [
     ],
   },
 
-  // ── 5. LUXURY SUITES 300 ────────────────────────────────────────────────
+  // ── 5. LUXURY SUITES (LEVEL 300 & 400 · 80 SUITES) ─────────────────────
   {
     id: 'zone-300-suites',
-    name: '300 Luxury Suites & Owners Skyboxes',
-    code: '300-SUITES',
+    name: 'Luxury Suites & Loge Boxes (Level 300 & 400 · 80 Suites)',
+    code: 'SUITES-300-400',
     level: '3',
     department: 'premium_hospitality',
     category: 'luxury_suites',
-    unitsCount: 6,
-    openCount: 6,
+    unitsCount: 80,
+    openCount: 80,
     alertCount: 0,
     units: [
+      // ── Level 300 West Sideline Founders Suites (301–320) ──
       {
         id: 'u-301',
         code: 'SUITE-301',
@@ -715,14 +716,11 @@ export const COMPREHENSIVE_STADIUM_ZONES: StadiumZoneData[] = [
             { id: 'po-301-2', name: 'Jumbo Poached Gulf Shrimp Cocktail Platter', quantity: 2, category: 'appetizer', status: 'delivered', scheduledTime: 'Pre-Game', dietaryNotes: 'Contains Shellfish' },
             { id: 'po-301-3', name: 'Dom Pérignon Vintage Champagne (3 btls)', quantity: 3, category: 'bar', status: 'delivered', scheduledTime: 'Pre-Game' },
             { id: 'po-301-4', name: 'Artisanal Truffle Mac & Vermont White Cheddar', quantity: 2, category: 'entree', status: 'active', scheduledTime: 'Kickoff' },
-            { id: 'po-301-5', name: 'Executive Pastry Chef Grand Dessert Cart', quantity: 26, category: 'dessert', status: 'prepped', scheduledTime: 'Halftime', dietaryNotes: 'Includes Nut-Free options' },
+            { id: 'po-301-5', name: 'Executive Pastry Chef Grand Dessert Cart', quantity: 26, category: 'dessert', status: 'prepped', scheduledTime: 'Halftime' },
           ],
           inSuiteOrders: [
             { id: 'iso-301-1', orderedAt: '1:15 PM (Q1 08:42)', orderedBy: 'Suite Host Tablet', items: '2x Casamigos Reposado Carafe, 1x Extra Ice Bucket', totalCents: 24000, status: 'fulfilled' },
             { id: 'iso-301-2', orderedAt: '1:50 PM (Q2 02:15)', orderedBy: 'Attendant Alice T.', items: '1x Crispy Hot Wings Platter (30ct), 4x Diet Coke', totalCents: 9500, status: 'delivering' },
-          ],
-          inSeatOrders: [
-            { id: 'seat-301-1', seatLocation: 'Suite 301 · Seat 1A', customerName: 'Marcus Sterling', orderedAt: '1:20 PM', items: '1x Prime Smashburger, 1x Craft IPA', totalCents: 3200, status: 'delivered', runnerName: 'Runner Marcus C.' },
           ],
           hierarchy: {
             director: { name: 'Eleanor Vance', title: 'VP of Premium Hospitality', radioChannel: 'Ch 1 - Executive' },
@@ -754,13 +752,6 @@ export const COMPREHENSIVE_STADIUM_ZONES: StadiumZoneData[] = [
           beoPackageName: 'Gridiron Gourmet Feast & Craft Spirits',
           menuPackage: 'Smoked tenderloin, hot honey chicken sliders, charcuterie tower, specialty cocktails',
           attendantName: 'David Miller (Lead)',
-          hierarchy: {
-            director: { name: 'Eleanor Vance', title: 'VP of Premium Hospitality', radioChannel: 'Ch 1 - Executive' },
-            manager: { name: 'Sarah Jenkins', title: 'Suite Level 300 Floor Manager', status: 'on_duty', radioChannel: 'Ch 4 - Suites North' },
-            assignedStaff: [
-              { name: 'David Miller', role: 'Suite Attendant', status: 'on_duty', shift: '10:00 - Close', geofenceVerified: true },
-            ],
-          },
         },
       },
       {
@@ -786,26 +777,167 @@ export const COMPREHENSIVE_STADIUM_ZONES: StadiumZoneData[] = [
       {
         id: 'u-304',
         code: 'SUITE-304',
-        name: 'Suite 304 · Vanguard Tech Skybox',
+        name: 'Suite 304 · Chevron Energy Skybox',
         department: 'premium_hospitality',
         type: 'premium_suite',
-        capacity: 22,
-        stadiumZone: 'East Suite Tower Level 3',
+        capacity: 26,
+        stadiumZone: 'West Suite Tower Level 3',
         level: '3',
         status: 'open',
         suiteDetails: {
           suiteNumber: '304',
-          suiteholder: 'Vanguard Tech Corporation',
-          tier: 'Executive Luxury Suite',
-          guestCount: 20,
+          suiteholder: 'Chevron Global Energy',
+          tier: 'Founders Suite',
+          guestCount: 24,
           beoNumber: 'BEO-NFL-2026-904',
-          beoPackageName: 'Coastal Seafood & Champagne',
+          beoPackageName: 'Prime Steaks & Vintage Cellar',
         },
       },
       {
         id: 'u-305',
         code: 'SUITE-305',
-        name: 'Suite 305 · Meridian Health Skybox',
+        name: 'Suite 305 · Valero Refining Suite',
+        department: 'premium_hospitality',
+        type: 'premium_suite',
+        capacity: 22,
+        stadiumZone: 'West Suite Tower Level 3',
+        level: '3',
+        status: 'open',
+        suiteDetails: {
+          suiteNumber: '305',
+          suiteholder: 'Valero Energy Corporation',
+          tier: 'Executive Luxury Suite',
+          guestCount: 20,
+          beoNumber: 'BEO-NFL-2026-905',
+          beoPackageName: 'Texas Smokehouse & Craft Ale Bar',
+        },
+      },
+      {
+        id: 'u-306',
+        code: 'SUITE-306',
+        name: 'Suite 306 · H-E-B Culinary Skybox',
+        department: 'premium_hospitality',
+        type: 'premium_suite',
+        capacity: 30,
+        stadiumZone: 'West Suite Tower Level 3',
+        level: '3',
+        status: 'open',
+        suiteDetails: {
+          suiteNumber: '306',
+          suiteholder: 'H-E-B Food & Grocery',
+          tier: 'Founders Suite',
+          guestCount: 28,
+          beoNumber: 'BEO-NFL-2026-906',
+          beoPackageName: 'Texas Prime Brisket & Farm Fresh Tapas',
+        },
+      },
+      {
+        id: 'u-307',
+        code: 'SUITE-307',
+        name: 'Suite 307 · ConocoPhillips Energy Skybox',
+        department: 'premium_hospitality',
+        type: 'premium_suite',
+        capacity: 24,
+        stadiumZone: 'West Suite Tower Level 3',
+        level: '3',
+        status: 'open',
+        suiteDetails: {
+          suiteNumber: '307',
+          suiteholder: 'ConocoPhillips Corporation',
+          tier: 'Executive Luxury Suite',
+          guestCount: 22,
+          beoNumber: 'BEO-NFL-2026-907',
+          beoPackageName: 'Prime Tenderloin & Cabernet Reserve',
+        },
+      },
+      {
+        id: 'u-308',
+        code: 'SUITE-308',
+        name: 'Suite 308 · Sysco Corporate Dining Suite',
+        department: 'premium_hospitality',
+        type: 'premium_suite',
+        capacity: 26,
+        stadiumZone: 'West Suite Tower Level 3',
+        level: '3',
+        status: 'open',
+        suiteDetails: {
+          suiteNumber: '308',
+          suiteholder: 'Sysco Corporation',
+          tier: 'Founders Suite',
+          guestCount: 25,
+          beoNumber: 'BEO-NFL-2026-908',
+          beoPackageName: 'Artisan Chef Signature Tasting Menu',
+        },
+      },
+      {
+        id: 'u-309',
+        code: 'SUITE-309',
+        name: 'Suite 309 · Baker Hughes Technology Skybox',
+        department: 'premium_hospitality',
+        type: 'premium_suite',
+        capacity: 22,
+        stadiumZone: 'West Suite Tower Level 3',
+        level: '3',
+        status: 'open',
+        suiteDetails: {
+          suiteNumber: '309',
+          suiteholder: 'Baker Hughes',
+          tier: 'Executive Luxury Suite',
+          guestCount: 20,
+          beoNumber: 'BEO-NFL-2026-909',
+          beoPackageName: 'Gourmet Sliders & Craft Spirits',
+        },
+      },
+      {
+        id: 'u-310',
+        code: 'SUITE-310',
+        name: 'Suite 310 · Halliburton 50-Yardline Box',
+        department: 'premium_hospitality',
+        type: 'premium_suite',
+        capacity: 32,
+        stadiumZone: 'West Suite Tower Level 3',
+        level: '3',
+        status: 'open',
+        suiteDetails: {
+          suiteNumber: '310',
+          suiteholder: 'Halliburton Energy Services',
+          tier: 'Founders Midfield Box',
+          guestCount: 30,
+          beoNumber: 'BEO-NFL-2026-910',
+          beoPackageName: 'Presidential Gold Hospitality Package',
+        },
+      },
+      ...Array.from({ length: 10 }, (_, i) => {
+        const num = 311 + i;
+        const sponsors = ['Crown Castle', 'CenterPoint Energy', 'Phillips 66', 'Occidental Petroleum', 'NRG Energy', 'Woodside Energy', 'LyondellBasell', 'Houston Methodist', 'Memorial Hermann', 'MD Anderson Cancer Center'];
+        const sponsor = sponsors[i] ?? `Corporate Partner ${num}`;
+        return {
+          id: `u-${num}`,
+          code: `SUITE-${num}`,
+          name: `Suite ${num} · ${sponsor}`,
+          department: 'premium_hospitality',
+          type: 'premium_suite' as const,
+          capacity: 22,
+          stadiumZone: 'West Suite Tower Level 3',
+          level: '3',
+          status: 'open' as const,
+          suiteDetails: {
+            suiteNumber: String(num),
+            suiteholder: sponsor,
+            tier: 'Executive Luxury Suite',
+            guestCount: 20,
+            beoNumber: `BEO-NFL-2026-${num}`,
+            beoPackageName: 'Gourmet Gameday Suite Buffet',
+            menuPackage: 'Prime carving meats, artisan flatbreads, craft beverages',
+          },
+        };
+      }),
+
+      // ── Level 300 East Sideline Corporate Suites (321–340) ──
+      {
+        id: 'u-321',
+        code: 'SUITE-321',
+        name: 'Suite 321 · Vanguard Tech Skybox',
         department: 'premium_hospitality',
         type: 'premium_suite',
         capacity: 24,
@@ -813,33 +945,131 @@ export const COMPREHENSIVE_STADIUM_ZONES: StadiumZoneData[] = [
         level: '3',
         status: 'open',
         suiteDetails: {
-          suiteNumber: '305',
+          suiteNumber: '321',
+          suiteholder: 'Vanguard Tech Corporation',
+          tier: 'Executive Luxury Suite',
+          guestCount: 22,
+          beoNumber: 'BEO-NFL-2026-921',
+          beoPackageName: 'Coastal Seafood & Champagne',
+        },
+      },
+      {
+        id: 'u-322',
+        code: 'SUITE-322',
+        name: 'Suite 322 · Meridian Health Skybox',
+        department: 'premium_hospitality',
+        type: 'premium_suite',
+        capacity: 26,
+        stadiumZone: 'East Suite Tower Level 3',
+        level: '3',
+        status: 'open',
+        suiteDetails: {
+          suiteNumber: '322',
           suiteholder: 'Meridian Health Network',
           tier: 'Founders Suite',
           guestCount: 24,
-          beoNumber: 'BEO-NFL-2026-905',
+          beoNumber: 'BEO-NFL-2026-922',
           beoPackageName: 'Grand Mediterranean Tapas & Prime Tenderloin',
         },
       },
       {
-        id: 'u-306',
-        code: 'SUITE-306',
-        name: 'Suite 306 · League Commissioner Skybox',
+        id: 'u-323',
+        code: 'SUITE-323',
+        name: 'Suite 323 · NFL League Executive Box',
         department: 'premium_hospitality',
         type: 'premium_suite',
         capacity: 35,
-        stadiumZone: '50-Yardline Midfield Skybox',
+        stadiumZone: 'East Suite Tower Level 3',
         level: '3',
         status: 'open',
         suiteDetails: {
-          suiteNumber: '306',
+          suiteNumber: '323',
           suiteholder: 'NFL League Executive Office',
           tier: 'Commissioner Skybox',
           guestCount: 32,
-          beoNumber: 'BEO-NFL-2026-906',
+          beoNumber: 'BEO-NFL-2026-923',
           beoPackageName: 'Presidential Diamond Hospitality Banquet',
         },
       },
+      ...Array.from({ length: 17 }, (_, i) => {
+        const num = 324 + i;
+        const sponsors = ['Waste Management', 'Kinder Morgan', 'Enterprise Products', 'KBR Inc', 'Cheniere Energy', 'Calpine', 'Insperity', 'Prosperity Bancshares', 'Group 1 Automotive', 'Quanta Services', 'Westlake Chemical', 'Service Corporation', 'Camden Property', 'Coterra Energy', 'APA Corporation', 'Southwestern Energy', 'EOG Resources'];
+        const sponsor = sponsors[i] ?? `Corporate Partner ${num}`;
+        return {
+          id: `u-${num}`,
+          code: `SUITE-${num}`,
+          name: `Suite ${num} · ${sponsor}`,
+          department: 'premium_hospitality',
+          type: 'premium_suite' as const,
+          capacity: 22,
+          stadiumZone: 'East Suite Tower Level 3',
+          level: '3',
+          status: 'open' as const,
+          suiteDetails: {
+            suiteNumber: String(num),
+            suiteholder: sponsor,
+            tier: 'Executive Luxury Suite',
+            guestCount: 20,
+            beoNumber: `BEO-NFL-2026-${num}`,
+            beoPackageName: 'Executive Gameday Spread & Bar',
+            menuPackage: 'Gourmet slider bar, charcuterie towers, open premium bar',
+          },
+        };
+      }),
+
+      // ── Level 300 North & South Endzone Suites (341–360) ──
+      ...Array.from({ length: 20 }, (_, i) => {
+        const num = 341 + i;
+        const isNorth = i < 10;
+        const sponsors = ['Texas Medical Center', 'United Airlines', 'BMC Software', 'American Campus', 'Academy Sports', 'Kirby Corp', 'Powell Industries', 'Stewart Information', 'Comfort Systems', 'Main Street Capital', 'Stage Stores', 'Landmark Graphics', 'Weatherford', 'Nabors Industries', 'Oceaneering', 'McDermott International', 'Helix Energy', 'Noble Corp', 'Transocean', 'Diamond Offshore'];
+        const sponsor = sponsors[i] ?? `Endzone Partner ${num}`;
+        return {
+          id: `u-${num}`,
+          code: `SUITE-${num}`,
+          name: `Suite ${num} · ${sponsor}`,
+          department: 'premium_hospitality',
+          type: 'premium_suite' as const,
+          capacity: 24,
+          stadiumZone: isNorth ? 'North Endzone Suite Ring' : 'South Endzone Suite Ring',
+          level: '3',
+          status: 'open' as const,
+          suiteDetails: {
+            suiteNumber: String(num),
+            suiteholder: sponsor,
+            tier: isNorth ? 'North Touchdown Suite' : 'South Touchdown Suite',
+            guestCount: 22,
+            beoNumber: `BEO-NFL-2026-${num}`,
+            beoPackageName: 'Touchdown Terrace Buffet & Spirits',
+            menuPackage: 'BBQ ribs, Texas sausages, mac & cheese, craft beer tubs',
+          },
+        };
+      }),
+
+      // ── Level 400 Loge & Chairman Suites (401–440) ──
+      ...Array.from({ length: 40 }, (_, i) => {
+        const num = 401 + i;
+        const isWest = i < 20;
+        return {
+          id: `u-${num}`,
+          code: `SUITE-${num}`,
+          name: `Suite ${num} · ${isWest ? 'West' : 'East'} Loge Suite ${num}`,
+          department: 'premium_hospitality',
+          type: 'premium_suite' as const,
+          capacity: 18,
+          stadiumZone: isWest ? 'Level 400 West Loge' : 'Level 400 East Loge',
+          level: '4',
+          status: 'open' as const,
+          suiteDetails: {
+            suiteNumber: String(num),
+            suiteholder: `Loge Member #${num}`,
+            tier: 'Level 400 Loge Suite',
+            guestCount: 16,
+            beoNumber: `BEO-NFL-2026-${num}`,
+            beoPackageName: 'Loge Box Gameday Hospitality',
+            menuPackage: 'Artisan sandwiches, chips & dip, craft beers, wine',
+          },
+        };
+      }),
     ],
   },
 
@@ -1135,7 +1365,7 @@ export function StadiumVenueMap({
         zones: zonesState.filter((z) => z.category === 'locker_rooms_aux'),
       },
       luxury_suites: {
-        label: 'Luxury Suites 300 (6)',
+        label: 'Luxury Suites 300 & 400 (80)',
         icon: 'glass-cocktail',
         zones: zonesState.filter((z) => z.category === 'luxury_suites'),
       },
@@ -1152,6 +1382,64 @@ export function StadiumVenueMap({
     };
     return groups;
   }, [zonesState]);
+
+  // Suite Floor Selection & Dropdown State
+  const [suiteFloorTab, setSuiteFloorTab] = useState<'all' | '300_west' | '300_east' | '300_endzones' | '400_loge'>('all');
+  const [isSuiteDropdownOpen, setIsSuiteDropdownOpen] = useState(false);
+  const [suiteDropdownQuery, setSuiteDropdownQuery] = useState('');
+
+  const luxurySuitesZone = useMemo(() => {
+    return zonesState.find((z) => z.id === 'zone-300-suites');
+  }, [zonesState]);
+
+  const allSuites = useMemo(() => {
+    return luxurySuitesZone?.units ?? [];
+  }, [luxurySuitesZone]);
+
+  const filteredFloorSuites = useMemo(() => {
+    if (suiteFloorTab === 'all') return allSuites;
+    if (suiteFloorTab === '300_west') {
+      return allSuites.filter((s) => {
+        const num = parseInt(s.suiteDetails?.suiteNumber ?? '0', 10);
+        return num >= 301 && num <= 320;
+      });
+    }
+    if (suiteFloorTab === '300_east') {
+      return allSuites.filter((s) => {
+        const num = parseInt(s.suiteDetails?.suiteNumber ?? '0', 10);
+        return num >= 321 && num <= 340;
+      });
+    }
+    if (suiteFloorTab === '300_endzones') {
+      return allSuites.filter((s) => {
+        const num = parseInt(s.suiteDetails?.suiteNumber ?? '0', 10);
+        return num >= 341 && num <= 360;
+      });
+    }
+    if (suiteFloorTab === '400_loge') {
+      return allSuites.filter((s) => {
+        const num = parseInt(s.suiteDetails?.suiteNumber ?? '0', 10);
+        return num >= 401 && num <= 440;
+      });
+    }
+    return allSuites;
+  }, [allSuites, suiteFloorTab]);
+
+  const dropdownFilteredSuites = useMemo(() => {
+    let list = allSuites;
+    if (suiteFloorTab !== 'all') {
+      list = filteredFloorSuites;
+    }
+    if (!suiteDropdownQuery.trim()) return list;
+    const q = suiteDropdownQuery.toLowerCase();
+    return list.filter(
+      (s) =>
+        s.code.toLowerCase().includes(q) ||
+        s.name.toLowerCase().includes(q) ||
+        (s.suiteDetails?.suiteholder && s.suiteDetails.suiteholder.toLowerCase().includes(q)) ||
+        (s.suiteDetails?.suiteNumber && s.suiteDetails.suiteNumber.toLowerCase().includes(q))
+    );
+  }, [allSuites, filteredFloorSuites, suiteFloorTab, suiteDropdownQuery]);
 
   const totalUnitsCount = useMemo(() => {
     return zonesState.reduce((sum, z) => sum + z.units.length, 0);
@@ -1706,73 +1994,292 @@ export function StadiumVenueMap({
                           );
                         })}
 
-                      {/* ── LEVEL 300 & 400 LUXURY SUITE RINGS (EXECUTIVE GLASS PAVILIONS) ── */}
+                      {/* ── LEVEL 300 & 400 LUXURY SUITE RINGS (EXECUTIVE GLASS PAVILIONS · 80 SUITES) ── */}
                       <View style={styles.suitesTierRing}>
                         <View style={styles.ringLabelHeader}>
                           <View style={styles.stadiumTierBadgeGold}>
                             <MaterialCommunityIcons name="glass-cocktail" size={12} color="#FFFFFF" />
                             <Text style={styles.tierPillGoldText}>
-                              LEVEL 300 / 400 · EXECUTIVE CANTILEVERED SUITES & VIP BOXES
+                              LEVEL 300 / 400 · EXECUTIVE SUITES & LOGE BOXES ({allSuites.length} SUITES)
                             </Text>
                           </View>
                         </View>
 
-                        {/* Architectural Glass Suite Boxes */}
-                        <View style={styles.suitesGridRing}>
-                          {zonesState
-                            .find((z) => z.id === 'zone-300-suites')
-                            ?.units.map((unit) => {
-                              const isSelected = selectedUnitId === unit.id;
-                              const hasBeo = Boolean(unit.suiteDetails?.beoNumber);
-                              return (
-                                <Pressable
-                                  key={unit.id}
-                                  onPress={() => handleUnitPress(unit, 'zone-300-suites')}
-                                  style={[
-                                    styles.suitePavilionBox,
-                                    isSelected ? styles.suitePavilionActive : null,
-                                  ]}
-                                >
-                                  {/* Cantilevered Balcony Glass Facade */}
-                                  <View style={styles.suiteGlassFacade}>
-                                    <View style={styles.suiteBalconyRail} />
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', paddingHorizontal: 4 }}>
-                                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                                        <MaterialCommunityIcons
-                                          name="glass-cocktail"
-                                          size={11}
-                                          color={isSelected ? '#FFD700' : '#8A5D23'}
-                                        />
-                                        <Text style={[styles.suiteCodeText, { color: isSelected ? '#FFFFFF' : '#8A5D23' }]}>
-                                          {unit.code}
+                        {/* Suite Floor Quadrant Filter Tabs */}
+                        <View style={styles.suiteFloorTabsRow}>
+                          <Pressable
+                            onPress={() => setSuiteFloorTab('all')}
+                            style={[
+                              styles.suiteFloorTabBtn,
+                              suiteFloorTab === 'all' ? styles.suiteFloorTabBtnActive : null,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.suiteFloorTabText,
+                                suiteFloorTab === 'all' ? styles.suiteFloorTabTextActive : null,
+                              ]}
+                            >
+                              All Suites ({allSuites.length})
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => setSuiteFloorTab('300_west')}
+                            style={[
+                              styles.suiteFloorTabBtn,
+                              suiteFloorTab === '300_west' ? styles.suiteFloorTabBtnActive : null,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.suiteFloorTabText,
+                                suiteFloorTab === '300_west' ? styles.suiteFloorTabTextActive : null,
+                              ]}
+                            >
+                              L300 West (301-320)
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => setSuiteFloorTab('300_east')}
+                            style={[
+                              styles.suiteFloorTabBtn,
+                              suiteFloorTab === '300_east' ? styles.suiteFloorTabBtnActive : null,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.suiteFloorTabText,
+                                suiteFloorTab === '300_east' ? styles.suiteFloorTabTextActive : null,
+                              ]}
+                            >
+                              L300 East (321-340)
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => setSuiteFloorTab('300_endzones')}
+                            style={[
+                              styles.suiteFloorTabBtn,
+                              suiteFloorTab === '300_endzones' ? styles.suiteFloorTabBtnActive : null,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.suiteFloorTabText,
+                                suiteFloorTab === '300_endzones' ? styles.suiteFloorTabTextActive : null,
+                              ]}
+                            >
+                              L300 Endzones (341-360)
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => setSuiteFloorTab('400_loge')}
+                            style={[
+                              styles.suiteFloorTabBtn,
+                              suiteFloorTab === '400_loge' ? styles.suiteFloorTabBtnActive : null,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.suiteFloorTabText,
+                                suiteFloorTab === '400_loge' ? styles.suiteFloorTabTextActive : null,
+                              ]}
+                            >
+                              L400 Loge (401-440)
+                            </Text>
+                          </Pressable>
+                        </View>
+
+                        {/* Interactive Suite Floor Dropdown Bar */}
+                        <Pressable
+                          onPress={() => setIsSuiteDropdownOpen(!isSuiteDropdownOpen)}
+                          style={[
+                            styles.suiteDropdownTrigger,
+                            isSuiteDropdownOpen ? styles.suiteDropdownTriggerOpen : null,
+                          ]}
+                        >
+                          <View style={styles.suiteDropdownTriggerLeft}>
+                            <MaterialCommunityIcons
+                              name="format-list-bulleted-square"
+                              size={15}
+                              color="#8A5D23"
+                            />
+                            <Text numberOfLines={1} style={styles.suiteDropdownTriggerText}>
+                              {activeSelectedUnit?.zone.id === 'zone-300-suites'
+                                ? `Selected: ${activeSelectedUnit.unit.name} (${activeSelectedUnit.unit.suiteDetails?.beoNumber ? '★ BEO Ready' : 'Open'})`
+                                : `▾ Select Suite from Floor Dropdown (${filteredFloorSuites.length} available)...`}
+                            </Text>
+                          </View>
+                          <View style={styles.suiteDropdownTriggerRight}>
+                            <Text style={styles.suiteDropdownTriggerCount}>
+                              {filteredFloorSuites.length} Suites
+                            </Text>
+                            <MaterialCommunityIcons
+                              name={isSuiteDropdownOpen ? 'chevron-up' : 'chevron-down'}
+                              size={16}
+                              color="#8A5D23"
+                            />
+                          </View>
+                        </Pressable>
+
+                        {/* Expandable Suite Dropdown Menu Drawer */}
+                        {isSuiteDropdownOpen ? (
+                          <View style={styles.suiteDropdownMenuBox}>
+                            <View style={styles.suiteDropdownSearchRow}>
+                              <TextInput
+                                placeholder="Search Suite #, Sponsor, Tier, or BEO..."
+                                value={suiteDropdownQuery}
+                                onChangeText={setSuiteDropdownQuery}
+                                mode="outlined"
+                                outlineColor="#F0E6D2"
+                                activeOutlineColor="#8A5D23"
+                                textColor="#1D2420"
+                                placeholderTextColor="#8C7A6B"
+                                style={styles.suiteDropdownSearchInput}
+                                dense
+                                left={<TextInput.Icon icon="magnify" color="#8A5D23" />}
+                                right={
+                                  suiteDropdownQuery ? (
+                                    <TextInput.Icon
+                                      icon="close"
+                                      onPress={() => setSuiteDropdownQuery('')}
+                                    />
+                                  ) : undefined
+                                }
+                              />
+                            </View>
+
+                            <ScrollView
+                              style={styles.suiteDropdownScrollList}
+                              nestedScrollEnabled
+                              showsVerticalScrollIndicator
+                            >
+                              {dropdownFilteredSuites.map((suite) => {
+                                const isSelected = selectedUnitId === suite.id;
+                                const hasBeo = Boolean(suite.suiteDetails?.beoNumber);
+                                return (
+                                  <Pressable
+                                    key={suite.id}
+                                    onPress={() => {
+                                      handleUnitPress(suite, 'zone-300-suites');
+                                      setIsSuiteDropdownOpen(false);
+                                    }}
+                                    style={[
+                                      styles.suiteDropdownItemRow,
+                                      isSelected ? styles.suiteDropdownItemRowActive : null,
+                                    ]}
+                                  >
+                                    <View style={styles.suiteDropdownItemLeft}>
+                                      <View
+                                        style={[
+                                          styles.suiteStatusDot,
+                                          {
+                                            backgroundColor: hasBeo
+                                              ? '#2E7D32'
+                                              : isSelected
+                                                ? '#FFD700'
+                                                : '#B0BEC5',
+                                          },
+                                        ]}
+                                      />
+                                      <View>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                          <Text
+                                            style={[
+                                              styles.suiteDropdownItemNumber,
+                                              isSelected ? { color: '#013369', fontWeight: '800' } : null,
+                                            ]}
+                                          >
+                                            {suite.code}
+                                          </Text>
+                                          <Text
+                                            numberOfLines={1}
+                                            style={[
+                                              styles.suiteDropdownItemHolder,
+                                              isSelected ? { color: '#013369', fontWeight: '700' } : null,
+                                            ]}
+                                          >
+                                            {suite.suiteDetails?.suiteholder ?? suite.name}
+                                          </Text>
+                                        </View>
+                                        <Text style={styles.suiteDropdownItemTier}>
+                                          {suite.stadiumZone} · {suite.suiteDetails?.tier ?? 'Suite'} (Cap: {suite.capacity ?? 20})
                                         </Text>
                                       </View>
+                                    </View>
+                                    <View style={styles.suiteDropdownItemRight}>
                                       {hasBeo ? (
-                                        <View style={styles.suiteBeoChip}>
-                                          <Text style={styles.suiteBeoChipText}>BEO READY</Text>
+                                        <View style={styles.suiteDropdownBeoPill}>
+                                          <Text style={styles.suiteDropdownBeoPillText}>BEO READY</Text>
                                         </View>
+                                      ) : (
+                                        <Text style={styles.suiteDropdownOpenText}>OPEN</Text>
+                                      )}
+                                      {isSelected ? (
+                                        <MaterialCommunityIcons name="check-circle" size={15} color="#2E7D32" />
                                       ) : null}
                                     </View>
-                                  </View>
+                                  </Pressable>
+                                );
+                              })}
+                            </ScrollView>
+                          </View>
+                        ) : null}
 
-                                  {/* Suite Interior Lounge */}
-                                  <View style={styles.suiteLoungeInterior}>
-                                    <Text numberOfLines={1} style={[styles.suiteholderText, { color: isSelected ? '#FFFFFF' : '#1D2420' }]}>
-                                      {unit.suiteDetails?.suiteholder ?? unit.name}
-                                    </Text>
-                                    <Text style={[styles.suiteTierSub, { color: isSelected ? '#E0E7FF' : '#78909C' }]}>
-                                      {unit.suiteDetails?.tier ?? 'Executive Tier'}
-                                    </Text>
+                        {/* Architectural Micro-Suite Grid (Realistic stadium suite cells) */}
+                        <View style={styles.microSuitesGridRing}>
+                          {filteredFloorSuites.map((unit) => {
+                            const isSelected = selectedUnitId === unit.id;
+                            const hasBeo = Boolean(unit.suiteDetails?.beoNumber);
+                            const suiteNum = unit.suiteDetails?.suiteNumber ?? unit.code.replace('SUITE-', '');
+                            return (
+                              <Pressable
+                                key={unit.id}
+                                onPress={() => handleUnitPress(unit, 'zone-300-suites')}
+                                style={[
+                                  styles.microSuiteCell,
+                                  isSelected ? styles.microSuiteCellActive : null,
+                                ]}
+                              >
+                                <View style={styles.microSuiteHeader}>
+                                  <View
+                                    style={[
+                                      styles.microSuiteStatusDot,
+                                      {
+                                        backgroundColor: hasBeo
+                                          ? '#2E7D32'
+                                          : isSelected
+                                            ? '#FFD700'
+                                            : '#90A4AE',
+                                      },
+                                    ]}
+                                  />
+                                  <Text
+                                    numberOfLines={1}
+                                    style={[
+                                      styles.microSuiteNumberText,
+                                      isSelected ? styles.microSuiteNumberTextActive : null,
+                                    ]}
+                                  >
+                                    {suiteNum}
+                                  </Text>
+                                </View>
+                                <Text
+                                  numberOfLines={1}
+                                  style={[
+                                    styles.microSuiteHolderMini,
+                                    isSelected ? styles.microSuiteHolderMiniActive : null,
+                                  ]}
+                                >
+                                  {unit.suiteDetails?.suiteholder?.split(' ')[0] ?? unit.code}
+                                </Text>
+                                {isSelected ? (
+                                  <View style={styles.microSuiteActivePill}>
+                                    <Text style={styles.microSuiteActivePillText}>★</Text>
                                   </View>
-
-                                  {isSelected ? (
-                                    <View style={styles.suiteActiveBadge}>
-                                      <Text style={styles.suiteActiveBadgeText}>★ ACTIVE SUITE</Text>
-                                    </View>
-                                  ) : null}
-                                </Pressable>
-                              );
-                            })}
+                                ) : null}
+                              </Pressable>
+                            );
+                          })}
                         </View>
 
                         {/* ── LEVEL 200 CLUB TIER (CURVED TERRACE + 360° LED RIBBON BOARD) ── */}
@@ -3653,5 +4160,245 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 11,
+  },
+
+  // ── SUITE FLOOR SELECTOR & DROPDOWN STYLES ──
+  suiteFloorTabsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingTop: 6,
+    paddingBottom: 4,
+    backgroundColor: '#FAF5EA',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0E6D2',
+  },
+  suiteFloorTabBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2D4B7',
+  },
+  suiteFloorTabBtnActive: {
+    backgroundColor: '#8A5D23',
+    borderColor: '#684518',
+  },
+  suiteFloorTabText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#684518',
+  },
+  suiteFloorTabTextActive: {
+    color: '#FFFFFF',
+  },
+  suiteDropdownTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginHorizontal: 8,
+    marginTop: 6,
+    marginBottom: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#DFCBB0',
+  },
+  suiteDropdownTriggerOpen: {
+    borderColor: '#8A5D23',
+    backgroundColor: '#FFFDF9',
+  },
+  suiteDropdownTriggerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+    marginRight: 8,
+  },
+  suiteDropdownTriggerText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1D2420',
+    flex: 1,
+  },
+  suiteDropdownTriggerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  suiteDropdownTriggerCount: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#8A5D23',
+    backgroundColor: '#FDF7EB',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  suiteDropdownMenuBox: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 8,
+    marginBottom: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#8A5D23',
+    padding: 8,
+    shadowColor: '#000000',
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  suiteDropdownSearchRow: {
+    marginBottom: 6,
+  },
+  suiteDropdownSearchInput: {
+    backgroundColor: '#FDFBF7',
+    fontSize: 11,
+    height: 36,
+  },
+  suiteDropdownScrollList: {
+    maxHeight: 220,
+  },
+  suiteDropdownItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5EFE6',
+  },
+  suiteDropdownItemRowActive: {
+    backgroundColor: '#F7F1E5',
+    borderBottomColor: '#E2D4B7',
+  },
+  suiteDropdownItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  suiteStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  suiteDropdownItemNumber: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#8A5D23',
+  },
+  suiteDropdownItemHolder: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#1D2420',
+    flexShrink: 1,
+  },
+  suiteDropdownItemTier: {
+    fontSize: 9,
+    color: '#78909C',
+    marginTop: 1,
+  },
+  suiteDropdownItemRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginLeft: 6,
+  },
+  suiteDropdownBeoPill: {
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  suiteDropdownBeoPillText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#2E7D32',
+  },
+  suiteDropdownOpenText: {
+    fontSize: 8,
+    fontWeight: '700',
+    color: '#90A4AE',
+  },
+
+  // ── ARCHITECTURAL MICRO-SUITE GRID STYLES ──
+  microSuitesGridRing: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    padding: 8,
+    backgroundColor: '#FAF5EC',
+    justifyContent: 'flex-start',
+  },
+  microSuiteCell: {
+    width: 58,
+    height: 38,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#DFD2BC',
+    paddingHorizontal: 4,
+    paddingVertical: 3,
+    justifyContent: 'space-between',
+    position: 'relative',
+  },
+  microSuiteCellActive: {
+    borderColor: '#FFD700',
+    borderWidth: 2,
+    backgroundColor: '#013369',
+    shadowColor: '#FFD700',
+    shadowOpacity: 0.6,
+    shadowRadius: 5,
+    elevation: 3,
+    transform: [{ scale: 1.06 }],
+  },
+  microSuiteHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  microSuiteStatusDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  microSuiteNumberText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#8A5D23',
+  },
+  microSuiteNumberTextActive: {
+    color: '#FFD700',
+  },
+  microSuiteHolderMini: {
+    fontSize: 8,
+    fontWeight: '600',
+    color: '#546E7A',
+  },
+  microSuiteHolderMiniActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  microSuiteActivePill: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#FFD700',
+    borderRadius: 6,
+    width: 12,
+    height: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  microSuiteActivePillText: {
+    fontSize: 8,
+    color: '#013369',
+    fontWeight: '900',
   },
 });
