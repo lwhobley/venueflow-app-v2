@@ -59,7 +59,7 @@
     "react-native-screens": "~4.26.0",
     "react-native-web": "^0.21.0",
     "three": "^0.170.0",
-    "undici": "^8.9.0",
+    "undici": "^8.10.0",
     "zustand": "^4.5.7"
   },
   "devDependencies": {
