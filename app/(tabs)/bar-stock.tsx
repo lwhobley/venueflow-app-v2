@@ -449,8 +449,16 @@ export default function BarStockScreen() {
     );
   }
 
+  // countItems can shrink out from under an open count session (e.g. another
+  // device deletes an item mid-count via a background refetch) — snap back to
+  // the normal screen instead of indexing past the end.
+  if (countMode && countIndex >= countItems.length) {
+    setCountMode(false);
+    setCountIndex(0);
+  }
+
   // Count workflow overlay
-  if (countMode && countItems.length > 0) {
+  if (countMode && countItems.length > 0 && countIndex < countItems.length) {
     const current = countItems[countIndex];
     const prevArea = countIndex > 0 ? countItems[countIndex - 1].area : null;
     const isNewArea = current.area !== prevArea;
