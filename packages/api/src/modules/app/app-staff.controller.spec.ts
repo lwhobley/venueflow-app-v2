@@ -32,6 +32,13 @@ function makeController() {
       create: vi.fn().mockResolvedValue({ id: 'team-1' }),
       update: vi.fn(),
     },
+    user: {
+      findUniqueOrThrow: vi.fn(),
+      upsert: vi.fn().mockResolvedValue({ id: 'user-x' }),
+    },
+    passwordCredential: {
+      upsert: vi.fn().mockResolvedValue({}),
+    },
     $executeRaw: vi.fn().mockResolvedValue(undefined),
   };
   // The controller passes the same client through as `tx`; reuse the mock so
@@ -44,9 +51,11 @@ function makeController() {
   };
   const staffImportParser = { parse: vi.fn() };
 
-  const auth = {};
+  const auth = {
+    hashPassword: vi.fn().mockResolvedValue({ salt: 'salt', hash: 'hash' }),
+  };
   const controller = new AppStaffController(prisma, email as any, profiles as any, staffImportParser as any, auth as any);
-  return { controller, prisma, email, profiles, staffImportParser };
+  return { controller, prisma, email, profiles, staffImportParser, auth };
 }
 
 const managerViewer = { id: 'manager-1', role: 'manager', allAccess: false, venueId: 'venue-1', fullName: 'Manager Mike', venue: { name: 'Test Venue' } };
@@ -303,6 +312,38 @@ describe('AppStaffController', () => {
         subject: expect.stringContaining('Invitation'),
       }));
       expect(result.email).toBe('new@example.com');
+    });
+
+    it('lets an administrator assign a sign-in PIN to a non-admin new hire (everyone signs in with email + PIN)', async () => {
+      const { controller, prisma, profiles, auth } = makeController();
+      profiles.requireManagerProfile.mockResolvedValue(ownerViewer);
+      prisma.profile.findFirst.mockResolvedValue(null);
+      prisma.profile.create.mockResolvedValue(profileRow({ id: 'new-1', email: 'new@example.com', role: 'staff', userId: null }));
+      prisma.profile.update.mockResolvedValue(profileRow({ id: 'new-1', email: 'new@example.com', role: 'staff', userId: 'user-x' }));
+
+      const result = await controller.upsertVenueStaff(user, {
+        venueId: 'venue-1', email: 'new@example.com', fullName: 'New Hire', role: 'staff', jobTitle: 'Server', onboardingPin: '123456',
+      } as any);
+
+      expect(auth.hashPassword).toHaveBeenCalledWith('123456');
+      expect(prisma.user.upsert).toHaveBeenCalledWith(expect.objectContaining({ where: { email: 'new@example.com' } }));
+      expect(prisma.passwordCredential.upsert).toHaveBeenCalledWith(expect.objectContaining({
+        where: { userId: 'user-x' },
+      }));
+      expect(prisma.profile.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'new-1' },
+        data: { userId: 'user-x' },
+      }));
+      expect(result.email).toBe('new@example.com');
+    });
+
+    it('blocks a manager (non-administrator) from assigning a PIN at all', async () => {
+      const { controller, profiles } = makeController();
+      profiles.requireManagerProfile.mockResolvedValue(managerViewer);
+
+      await expect(controller.upsertVenueStaff(user, {
+        venueId: 'venue-1', email: 'x@example.com', fullName: 'X', role: 'staff', jobTitle: 'Server', onboardingPin: '123456',
+      } as any)).rejects.toThrow('Only venue administrators can assign access PINs.');
     });
 
     it('lower-cases the email on create', async () => {

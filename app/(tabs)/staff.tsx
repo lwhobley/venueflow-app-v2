@@ -444,8 +444,7 @@ function StaffScreen() {
         address: address.trim() || undefined,
         dateOfBirth: dateOfBirth.trim() || undefined,
         certifications: certifications.length > 0 ? certifications : undefined,
-        onboardingPin:
-          role === "admin" ? onboardingPin || undefined : undefined,
+        onboardingPin: onboardingPin || undefined,
       });
       clearForm();
     } catch (e) {
@@ -724,20 +723,21 @@ function StaffScreen() {
                 mode="outlined"
                 style={{ backgroundColor: colors.surface }}
               />
-              {role === "admin" ? (
-                <PaperTextInput
-                  placeholder="Six-digit administrator PIN (optional)"
-                  value={onboardingPin}
-                  onChangeText={(value) =>
-                    setOnboardingPin(value.replace(/\D/g, "").slice(0, 6))
-                  }
-                  keyboardType="number-pad"
-                  secureTextEntry
-                  maxLength={6}
-                  mode="outlined"
-                  style={{ backgroundColor: colors.surface }}
-                />
-              ) : null}
+              <PaperTextInput
+                placeholder={t("staff.pinPlaceholder")}
+                value={onboardingPin}
+                onChangeText={(value) =>
+                  setOnboardingPin(value.replace(/\D/g, "").slice(0, 6))
+                }
+                keyboardType="number-pad"
+                secureTextEntry
+                maxLength={6}
+                mode="outlined"
+                style={{ backgroundColor: colors.surface }}
+              />
+              <Text style={{ color: colors.muted, fontSize: 12, marginTop: -4 }}>
+                {t("staff.pinHelp")}
+              </Text>
               <Dropdown
                 label={t("staff.accessLevel")}
                 value={role}

@@ -127,8 +127,12 @@ export default function MultiVenueComplianceScreen() {
       </View>
 
       {/* Navigation Tabs */}
-      <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md }}>
-        <View style={[styles.tabBar, { borderBottomColor: palette.divider }]}>
+      <View style={{ paddingTop: spacing.md }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={[styles.tabBar, { borderBottomColor: palette.divider, paddingHorizontal: spacing.md }]}
+        >
           <Pressable
             onPress={() => setActiveTab('facilities')}
             style={[styles.tabItem, activeTab === 'facilities' && { borderBottomColor: '#17643B', borderBottomWidth: 2 }]}
@@ -168,7 +172,7 @@ export default function MultiVenueComplianceScreen() {
               CBA & Break Rules
             </CommandText>
           </Pressable>
-        </View>
+        </ScrollView>
       </View>
 
       {/* Main Tab Content */}
@@ -176,11 +180,11 @@ export default function MultiVenueComplianceScreen() {
         {/* TAB 1: VENUES & COMPLIANCE POSTURE */}
         {activeTab === 'facilities' ? (
           <View style={{ gap: spacing.sm }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <CommandText palette={palette} variant="label" style={{ color: '#17643B', fontWeight: '800' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 }}>
+              <CommandText palette={palette} variant="label" style={{ color: '#17643B', fontWeight: '800', flexShrink: 1 }}>
                 ORGANIZATION FACILITY COMPLIANCE AUDIT
               </CommandText>
-              <CommandText palette={palette} variant="caption" style={{ color: '#68706A' }}>
+              <CommandText palette={palette} variant="caption" style={{ color: '#68706A', flexShrink: 1 }}>
                 Evaluated across active shift punches & rosters
               </CommandText>
             </View>
@@ -246,11 +250,11 @@ export default function MultiVenueComplianceScreen() {
         {/* TAB 2: CROSS-VENUE SCHEDULING CONFLICTS */}
         {activeTab === 'conflicts' ? (
           <View style={{ gap: spacing.sm }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <CommandText palette={palette} variant="label" style={{ color: '#17643B', fontWeight: '800' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 }}>
+              <CommandText palette={palette} variant="label" style={{ color: '#17643B', fontWeight: '800', flexShrink: 1 }}>
                 CROSS-VENUE CLOPENING & SCHEDULE OVERLAPS
               </CommandText>
-              <CommandText palette={palette} variant="caption" style={{ color: '#68706A' }}>
+              <CommandText palette={palette} variant="caption" style={{ color: '#68706A', flexShrink: 1 }}>
                 Preventing multi-facility labor penalties
               </CommandText>
             </View>
@@ -438,7 +442,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     gap: spacing.md,
     paddingTop: spacing.xs,
-    overflow: 'scroll',
   },
   tabItem: {
     flexDirection: 'row',

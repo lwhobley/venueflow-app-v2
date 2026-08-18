@@ -213,8 +213,8 @@ export const en = {
         summary: "Add, invite, and manage the team's roles, onboarding, and access.",
         steps: JSON.stringify([
           'Open Staff (managers and admins only) to see the full venue roster.',
-          'Add staff by email one at a time — set their role (Admin, Manager, Staff), job title, and contact info.',
-          'Or use Invite staff via link to generate a shareable link scoped to a role; anyone with the link creates their own account.',
+          'Add staff one at a time — set their email, role (Admin, Manager, Staff), job title, contact info, and a 6-digit sign-in PIN. Everyone signs in with email + PIN, no passwords.',
+          'Or use Invite staff via link to generate a shareable link scoped to a role.',
           'Migrate staff from another platform: paste or upload a roster export from Homebase, When I Work, 7shifts, Deputy, Sling, or any spreadsheet. Review the parsed list, then add everyone in one batch instead of one at a time.',
           'Manage Roles & positions to add custom job titles beyond the built-in list.',
           "New staff onboarding tracks each person's setup checklist (profile, certifications, training, first-shift readiness).",
@@ -514,8 +514,8 @@ export const es: MiscDictionary = {
         summary: 'Añade, invita y gestiona los roles, la incorporación y el acceso del equipo.',
         steps: JSON.stringify([
           'Abre Equipo (solo gerentes y administradores) para ver el listado completo del local.',
-          'Añade personal por correo uno a la vez — define su rol (Admin, Gerente, Personal), puesto e información de contacto.',
-          'O usa Invitar personal por enlace para generar un enlace compartible con un rol asignado; cualquiera con el enlace crea su propia cuenta.',
+          'Añade personal uno a la vez — define su correo, rol (Admin, Gerente, Personal), puesto, información de contacto y un PIN de acceso de 6 dígitos. Todos inician sesión con correo + PIN, sin contraseñas.',
+          'O usa Invitar personal por enlace para generar un enlace compartible con un rol asignado.',
           'Migra personal desde otra plataforma: pega o sube una exportación de plantilla de Homebase, When I Work, 7shifts, Deputy, Sling o cualquier hoja de cálculo. Revisa la lista analizada y añade a todos en un solo lote en vez de uno a uno.',
           'Gestiona Roles y puestos para añadir títulos de trabajo personalizados además de la lista integrada.',
           'La incorporación de nuevo personal sigue la lista de configuración de cada persona (perfil, certificaciones, capacitación, preparación para el primer turno).',
@@ -813,8 +813,8 @@ export const fr: MiscDictionary = {
         summary: "Ajoutez, invitez et gérez les rôles, l'intégration et les accès de l'équipe.",
         steps: JSON.stringify([
           "Ouvrez Personnel (gérants et administrateurs uniquement) pour voir l'effectif complet de l'établissement.",
-          'Ajoutez du personnel par e-mail un par un — définissez son rôle (Admin, Gérant, Personnel), son poste et ses coordonnées.',
-          'Ou utilisez Inviter du personnel par lien pour générer un lien partageable propre à un rôle ; quiconque possède le lien crée son propre compte.',
+          "Ajoutez du personnel un par un — définissez son e-mail, son rôle (Admin, Gérant, Personnel), son poste, ses coordonnées et un code PIN de connexion à 6 chiffres. Tout le monde se connecte avec e-mail + code PIN, sans mot de passe.",
+          'Ou utilisez Inviter du personnel par lien pour générer un lien partageable propre à un rôle.',
           "Migrez du personnel depuis une autre plateforme : collez ou téléversez un export d'effectif depuis Homebase, When I Work, 7shifts, Deputy, Sling ou tout tableur. Vérifiez la liste analysée, puis ajoutez tout le monde en un seul lot au lieu d'un par un.",
           "Gérez Rôles et postes pour ajouter des intitulés de poste personnalisés au-delà de la liste intégrée.",
           "L'intégration du nouveau personnel suit la liste de configuration de chaque personne (profil, certifications, formation, préparation au premier service).",
