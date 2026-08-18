@@ -11,6 +11,13 @@ import { secretsMatch, verifyStripeSignature } from '../common/webhook-auth';
  * secret is configured, inbound requests are rejected unless they present a
  * valid signature or bearer credential, so the endpoints cannot be driven by
  * unauthenticated callers.
+ *
+ * Both secrets are optional integrations, not startup requirements — a
+ * deployment that doesn't use RevenueCat or Stripe should still boot. But in
+ * production, a *missing* secret must not silently fall through to accepting
+ * unauthenticated requests: these handlers are no-ops today, so nothing is
+ * exploitable yet, but the moment either grows real side effects, "no secret
+ * configured" would otherwise mean "anyone can call this." Reject instead.
  */
 @Controller('v1/billing')
 export class BillingController {
@@ -23,10 +30,14 @@ export class BillingController {
   @Post('revenuecat/webhook')
   async handleRevenueCatWebhook(@Body() _body: any, @Headers() headers: any) {
     const secret = this.config.get<string>('REVENUECAT_WEBHOOK_SECRET');
-    if (secret) {
-      const provided = (headers?.['authorization'] as string | undefined)?.replace(/^Bearer\s+/i, '') ?? null;
-      if (!secretsMatch(provided, secret)) throw new UnauthorizedException('Invalid RevenueCat webhook authorization.');
+    if (!secret) {
+      if (process.env.NODE_ENV === 'production') {
+        throw new UnauthorizedException('RevenueCat webhook is not configured.');
+      }
+      return { received: true, mode: 'enterprise' };
     }
+    const provided = (headers?.['authorization'] as string | undefined)?.replace(/^Bearer\s+/i, '') ?? null;
+    if (!secretsMatch(provided, secret)) throw new UnauthorizedException('Invalid RevenueCat webhook authorization.');
     return { received: true, mode: 'enterprise' };
   }
 
@@ -34,8 +45,13 @@ export class BillingController {
   @Post('stripe/webhook')
   async handleStripeWebhook(@Body() _body: any, @Headers() headers: any, @Req() request: Request) {
     const secret = this.config.get<string>('STRIPE_WEBHOOK_SECRET');
+    if (!secret) {
+      if (process.env.NODE_ENV === 'production') {
+        throw new UnauthorizedException('Stripe webhook is not configured.');
+      }
+      return { received: true, mode: 'enterprise' };
+    }
     if (
-      secret &&
       !verifyStripeSignature(
         (request as Request & { rawBody?: Buffer }).rawBody,
         headers?.['stripe-signature'] as string | undefined,

@@ -23,8 +23,8 @@
     "api:migrate:dev": "npm run prisma:migrate:dev -w @venue-wrangler/api",
     "doctor": "expo-doctor",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "npm run api:prisma:generate && vitest run",
+    "test:watch": "npm run api:prisma:generate && vitest"
   },
   "dependencies": {
     "@expo-google-fonts/fraunces": "^0.4.1",

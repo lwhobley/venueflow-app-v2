@@ -34,8 +34,8 @@ describe('StadiumRealtimeController SSE teardown and sequence numbering', () => 
       received.push(event);
     });
 
-    gateway.broadcastBeoUpdate('facility-1', 'zone-1', { beoNumber: 'BEO-1001' });
-    gateway.broadcastReplenishment('facility-1', 'zone-1', { itemId: 'item-1' });
+    await gateway.broadcastBeoUpdate('facility-1', 'zone-1', { beoNumber: 'BEO-1001' });
+    await gateway.broadcastReplenishment('facility-1', 'zone-1', { itemId: 'item-1' });
 
     expect(received.length).toBe(2);
     expect(received[0].id).toBe('1');
@@ -50,7 +50,7 @@ describe('StadiumRealtimeController SSE teardown and sequence numbering', () => 
     subscription.unsubscribe();
 
     // Broadcast another event after unsubscription
-    gateway.broadcastBeoUpdate('facility-1', 'zone-1', { beoNumber: 'BEO-1002' });
+    await gateway.broadcastBeoUpdate('facility-1', 'zone-1', { beoNumber: 'BEO-1002' });
 
     // Should NOT receive event after teardown
     expect(received.length).toBe(2);
@@ -77,8 +77,8 @@ describe('StadiumRealtimeController SSE teardown and sequence numbering', () => 
     expect(ticket).toBeDefined();
 
     // 2. Broadcast events into the gateway buffer before connection
-    gateway.broadcastBeoUpdate('facility-1', 'zone-1', { beoNumber: 'BEO-2001' });
-    gateway.broadcastBeoUpdate('facility-1', 'zone-1', { beoNumber: 'BEO-2002' });
+    await gateway.broadcastBeoUpdate('facility-1', 'zone-1', { beoNumber: 'BEO-2001' });
+    await gateway.broadcastBeoUpdate('facility-1', 'zone-1', { beoNumber: 'BEO-2002' });
 
     // 3. Connect with ticket and lastEventId = "1" to request missed event #2
     const stream$ = await controller.streamFacilityEvents(null as any, 'facility-1', undefined, '1', ticket);
@@ -93,7 +93,7 @@ describe('StadiumRealtimeController SSE teardown and sequence numbering', () => 
     expect(received[0].data.beoNumber).toBe('BEO-2002');
 
     // 4. Now broadcast live event #3
-    gateway.broadcastReplenishment('facility-1', 'zone-1', { itemId: 'item-live-3' });
+    await gateway.broadcastReplenishment('facility-1', 'zone-1', { itemId: 'item-live-3' });
     expect(received.length).toBe(2);
     expect(received[1].id).toBe('3');
 

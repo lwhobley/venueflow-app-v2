@@ -9,7 +9,7 @@ function computeRevisionHash(parentHash: string | null, version: number, payload
 }
 
 describe('Stadium Event End-to-End Rehearsal Simulation', () => {
-  it('executes a full 60,000-seat stadium event lifecycle with zero operational state or accounting violations', () => {
+  it('executes a full 60,000-seat stadium event lifecycle with zero operational state or accounting violations', async () => {
     // Phase 1: Planning & Operational State Machine Validation
     expect(() => assertEventTransition('planning', 'approved')).not.toThrow();
     expect(() => assertEventTransition('approved', 'pre_open')).not.toThrow();
@@ -32,14 +32,14 @@ describe('Stadium Event End-to-End Rehearsal Simulation', () => {
       vipGuestName: 'Enterprise Client VIP',
       totalCents: 450000,
     };
-    gateway.broadcastBeoUpdate('facility-nfl-stadium', 'zone-club-level', beoOrder);
+    await gateway.broadcastBeoUpdate('facility-nfl-stadium', 'zone-club-level', beoOrder);
 
     const replenishment = {
       standId: 'stand-section-104',
       itemSku: 'SKU-BEER-PREMIUM',
       quantityRequested: 200,
     };
-    gateway.broadcastReplenishment('facility-nfl-stadium', 'zone-concourse-east', replenishment);
+    await gateway.broadcastReplenishment('facility-nfl-stadium', 'zone-concourse-east', replenishment);
 
     expect(emittedEvents.length).toBe(2);
     expect(emittedEvents[0].event).toBe('suite_beo_updated');

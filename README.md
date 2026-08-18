@@ -22,7 +22,7 @@ Venue Wrangler is a native iOS/Android venue ops app built with Expo Router, Nes
 
 ## Local setup
 
-1. `npm install --legacy-peer-deps` (the `--legacy-peer-deps` flag is required; see `.npmrc`).
+1. `npm install` (`.npmrc` already sets `legacy-peer-deps=true`, so no extra flag is needed).
 2. Copy `.env.example` to `.env` and set `EXPO_PUBLIC_API_URL` to your local NestJS server endpoint (e.g. `http://localhost:4000/api`).
 3. Set up the local NestJS server inside `packages/api` (see `packages/api/README.md`).
 4. In another terminal: `npm start` (Expo).

@@ -72,7 +72,7 @@ export class EventMenuService {
     });
 
     // Broadcast menu update to terminals
-    this.wsGateway.broadcastBeoUpdate(dto.facilityId, 'global', {
+    await this.wsGateway.broadcastBeoUpdate(dto.facilityId, 'global', {
       type: 'menu_overlay_updated',
       overlay,
     });
@@ -89,7 +89,7 @@ export class EventMenuService {
       data: { active },
     });
 
-    this.wsGateway.broadcastBeoUpdate(existing.facilityId, 'global', {
+    await this.wsGateway.broadcastBeoUpdate(existing.facilityId, 'global', {
       type: 'menu_overlay_updated',
       overlay: updated,
     });
