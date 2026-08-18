@@ -33,7 +33,7 @@ const MORE_OPS = [
   { href: '/(tabs)/documents', label: 'BEOs & Docs', icon: 'file-document-multiple-outline' as const },
   { href: '/(tabs)/reports', label: 'Reports & Recon', icon: 'chart-box-outline' as const },
   { href: '/(tabs)/sales', label: 'Concessions POS', icon: 'cash-register' as const },
-  { href: '/(tabs)/guests', label: 'VIP Guests', icon: 'account-heart-outline' as const },
+  { href: '/(tabs)/guests', label: 'CRM', icon: 'account-heart-outline' as const },
   { href: '/(tabs)/integrations', label: 'POS & Hardware', icon: 'connection' as const },
 ];
 
