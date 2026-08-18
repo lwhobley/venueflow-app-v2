@@ -21,7 +21,35 @@ try {
 }
 
 type Stadium3DModelProps = {
+  /**
+   * The currently selected unit's zone category (e.g. 'luxury_suites'), or
+   * null/undefined for none. Drives a glowing highlight ring around the
+   * matching tier of whichever model is loaded.
+   */
+  highlightCategory?: string | null;
   dom?: import('expo/dom').DOMProps;
+};
+
+/**
+ * Maps each StadiumZoneData category to a vertical position (0 = ground,
+ * 1 = roofline) and a color for the highlight ring. None of the three
+ * possible loaded models (the Meshy AI asset, the nrg-stadium fallback, or
+ * the procedural fallback) share addressable per-suite geometry — the Meshy
+ * asset in particular is a single fused, unnamed mesh with no sub-parts to
+ * select. A ring wrapping the model at the tier's real-world height works
+ * uniformly across all three and matches the granularity the app's own zone
+ * categories actually support (tier-level, not per-suite).
+ */
+const CATEGORY_HIGHLIGHT: Record<string, { heightFraction: number; color: string; label: string }> = {
+  field_sidelines: { heightFraction: 0.03, color: '#2ECC71', label: 'Field & Sidelines' },
+  stadium_gates: { heightFraction: 0.05, color: '#00E5FF', label: 'Entry Gates' },
+  locker_rooms_aux: { heightFraction: 0.08, color: '#42A5F5', label: 'Locker Rooms' },
+  commissary_boh: { heightFraction: 0.1, color: '#8D6E63', label: 'Commissary / BOH' },
+  concourse_service_areas: { heightFraction: 0.18, color: '#FF7043', label: 'Concourse Service' },
+  concourse_bunkers: { heightFraction: 0.2, color: '#FFB300', label: 'Concourse Bunkers' },
+  club_level: { heightFraction: 0.36, color: '#AB47BC', label: 'Club Level' },
+  luxury_suites: { heightFraction: 0.52, color: '#FFD700', label: 'Luxury Suites' },
+  upper_deck: { heightFraction: 0.8, color: '#EF5350', label: 'Upper Deck' },
 };
 
 function resolveAssetUri(asset: any): string | null {
@@ -234,9 +262,23 @@ function createProceduralStadium(): THREE.Group {
   return stadiumGroup;
 }
 
-export default function Stadium3DModel(_props: Stadium3DModelProps) {
+export default function Stadium3DModel({ highlightCategory }: Stadium3DModelProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'fallback'>('loading');
+  // Mutable, read every animation frame — a ref (not state) so changing the
+  // highlighted category doesn't re-run the scene-setup effect below and
+  // reload/rebuild the whole WebGL scene on every click.
+  const highlightRef = useRef<{
+    category: string | null;
+    ring: THREE.Mesh | null;
+    ringGroup: THREE.Group | null;
+    modelHeight: number;
+  }>({ category: highlightCategory ?? null, ring: null, ringGroup: null, modelHeight: 0 });
+
+  // Sync the prop into the ref without tearing down the scene.
+  useEffect(() => {
+    highlightRef.current.category = highlightCategory ?? null;
+  }, [highlightCategory]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -297,6 +339,27 @@ export default function Stadium3DModel(_props: Stadium3DModelProps) {
     ground.receiveShadow = true;
     scene.add(ground);
 
+    // Highlight ring: a glowing halo that wraps around whichever model is
+    // loaded, at the vertical height matching the clicked zone's category.
+    // Built once at unit scale (radius 1) and repositioned/rescaled per
+    // frame in the render loop below — see CATEGORY_HIGHLIGHT and
+    // finalizeLoadedModel for how its target height/radius are derived.
+    const ringGeometry = new THREE.TorusGeometry(1, 0.02, 12, 64);
+    const ringMaterial = new THREE.MeshBasicMaterial({
+      color: '#FFFFFF',
+      transparent: true,
+      opacity: 0,
+      side: THREE.DoubleSide,
+    });
+    const highlightRing = new THREE.Mesh(ringGeometry, ringMaterial);
+    highlightRing.rotation.x = Math.PI / 2;
+    highlightRing.visible = false;
+    const highlightRingGroup = new THREE.Group();
+    highlightRingGroup.add(highlightRing);
+    scene.add(highlightRingGroup);
+    highlightRef.current.ring = highlightRing;
+    highlightRef.current.ringGroup = highlightRingGroup;
+
     let activeModel: THREE.Object3D | null = null;
     let disposed = false;
 
@@ -318,6 +381,14 @@ export default function Stadium3DModel(_props: Stadium3DModelProps) {
         }
       });
       scene.add(activeModel);
+
+      // After the repositioning above, the model's world-space Y range is
+      // exactly [0, size.y] and it is centered on the X/Z origin — so the
+      // ring only needs the model's height and footprint radius to place
+      // itself at any tier, regardless of which model this is.
+      highlightRef.current.modelHeight = size.y;
+      const footprintRadius = Math.max(size.x, size.z) / 2;
+      highlightRingGroup.userData.footprintRadius = footprintRadius;
 
       const radius = Math.max(size.x, size.y, size.z) * 0.5;
       const distance = Math.max(radius / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), 12);
@@ -380,9 +451,30 @@ export default function Stadium3DModel(_props: Stadium3DModelProps) {
     resizeObserver.observe(host);
     resize();
 
+    const updateHighlight = () => {
+      const { category, ring, ringGroup, modelHeight } = highlightRef.current;
+      if (!ring || !ringGroup) return;
+      const config = category ? CATEGORY_HIGHLIGHT[category] : undefined;
+      const footprintRadius = (ringGroup.userData.footprintRadius as number | undefined) ?? 0;
+      if (!config || modelHeight <= 0 || footprintRadius <= 0) {
+        ring.visible = false;
+        return;
+      }
+      const ringRadius = footprintRadius * 1.06;
+      ringGroup.position.set(0, config.heightFraction * modelHeight, 0);
+      ring.scale.setScalar(ringRadius);
+      // A gentle pulse — noticeably "lit" without being distracting.
+      const pulse = (Math.sin(performance.now() / 420) + 1) / 2; // 0..1
+      const material = ring.material as THREE.MeshBasicMaterial;
+      material.color.set(config.color);
+      material.opacity = 0.35 + pulse * 0.45;
+      ring.visible = true;
+    };
+
     let animationFrame = 0;
     const render = () => {
       controls.update();
+      updateHighlight();
       renderer.render(scene, camera);
       animationFrame = requestAnimationFrame(render);
     };
@@ -396,10 +488,16 @@ export default function Stadium3DModel(_props: Stadium3DModelProps) {
       if (activeModel) disposeObject(activeModel);
       ground.geometry.dispose();
       (ground.material as THREE.Material).dispose();
+      ringGeometry.dispose();
+      ringMaterial.dispose();
+      highlightRef.current.ring = null;
+      highlightRef.current.ringGroup = null;
       renderer.dispose();
       renderer.domElement.remove();
     };
   }, []);
+
+  const activeHighlight = highlightCategory ? CATEGORY_HIGHLIGHT[highlightCategory] : undefined;
 
   return (
     <div
@@ -407,7 +505,7 @@ export default function Stadium3DModel(_props: Stadium3DModelProps) {
         position: 'relative',
         width: '100%',
         height: '100%',
-        minHeight: 520,
+        minHeight: 200,
         overflow: 'hidden',
         background: '#08131f',
         color: '#fff',
@@ -415,6 +513,38 @@ export default function Stadium3DModel(_props: Stadium3DModelProps) {
       }}
     >
       <div ref={hostRef} style={{ position: 'absolute', inset: 0 }} />
+
+      {activeHighlight ? (
+        <div
+          style={{
+            position: 'absolute',
+            right: 12,
+            top: 12,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '7px 12px',
+            borderRadius: 6,
+            background: 'rgba(8, 19, 31, 0.92)',
+            border: `1px solid ${activeHighlight.color}`,
+            boxShadow: `0 4px 14px rgba(0, 0, 0, 0.45), 0 0 10px ${activeHighlight.color}55`,
+            pointerEvents: 'none',
+          }}
+        >
+          <div
+            style={{
+              width: 9,
+              height: 9,
+              borderRadius: 5,
+              background: activeHighlight.color,
+              boxShadow: `0 0 6px 2px ${activeHighlight.color}`,
+            }}
+          />
+          <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.3, color: '#FFFFFF' }}>
+            HIGHLIGHTING · {activeHighlight.label.toUpperCase()}
+          </span>
+        </div>
+      ) : null}
 
       {status === 'loading' ? (
         <div

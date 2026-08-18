@@ -533,7 +533,7 @@ export function StadiumVenueMap({
                       <CommandText
                         palette={palette}
                         variant="caption"
-                        style={{ color: isActive ? '#FFFFFF' : '#1D2420', fontWeight: '700' }}
+                        style={{ color: isActive ? '#FFFFFF' : '#1D2420', fontWeight: '700', fontSize: 10, lineHeight: 13 }}
                       >
                         {lvl.label}
                       </CommandText>
@@ -545,8 +545,9 @@ export function StadiumVenueMap({
 
             {/* Actual GLB renderer in 3D mode; the architectural plan remains available in 2D mode. */}
             {viewPerspective === '3d_isometric' ? (
-              <View style={styles.interactiveModelFrame}>
+              <View style={[styles.interactiveModelFrame, { height: isMobile ? 300 : 380 }]}>
                 <Stadium3DModel
+                  highlightCategory={activeSelectedUnit?.zone.category ?? null}
                   dom={{
                     scrollEnabled: false,
                     contentInsetAdjustmentBehavior: 'never',
@@ -950,63 +951,6 @@ export function StadiumVenueMap({
                             </ScrollView>
                           </View>
                         ) : null}
-
-                        {/* Architectural Micro-Suite Grid (Realistic stadium suite cells) */}
-                        <View style={styles.microSuitesGridRing}>
-                          {filteredFloorSuites.map((unit) => {
-                            const isSelected = selectedUnitId === unit.id;
-                            const hasBeo = Boolean(unit.suiteDetails?.beoNumber);
-                            const suiteNum = unit.suiteDetails?.suiteNumber ?? unit.code.replace('SUITE-', '');
-                            return (
-                              <Pressable
-                                key={unit.id}
-                                onPress={() => handleUnitPress(unit, 'zone-300-suites')}
-                                style={[
-                                  styles.microSuiteCell,
-                                  isSelected ? styles.microSuiteCellActive : null,
-                                ]}
-                              >
-                                <View style={styles.microSuiteHeader}>
-                                  <View
-                                    style={[
-                                      styles.microSuiteStatusDot,
-                                      {
-                                        backgroundColor: hasBeo
-                                          ? '#2E7D32'
-                                          : isSelected
-                                            ? '#FFD700'
-                                            : '#90A4AE',
-                                      },
-                                    ]}
-                                  />
-                                  <Text
-                                    numberOfLines={1}
-                                    style={[
-                                      styles.microSuiteNumberText,
-                                      isSelected ? styles.microSuiteNumberTextActive : null,
-                                    ]}
-                                  >
-                                    {suiteNum}
-                                  </Text>
-                                </View>
-                                <Text
-                                  numberOfLines={1}
-                                  style={[
-                                    styles.microSuiteHolderMini,
-                                    isSelected ? styles.microSuiteHolderMiniActive : null,
-                                  ]}
-                                >
-                                  {unit.suiteDetails?.suiteholder?.split(' ')[0] ?? unit.code}
-                                </Text>
-                                {isSelected ? (
-                                  <View style={styles.microSuiteActivePill}>
-                                    <Text style={styles.microSuiteActivePillText}>★</Text>
-                                  </View>
-                                ) : null}
-                              </Pressable>
-                            );
-                          })}
-                        </View>
 
                         {/* ── LEVEL 200 CLUB TIER (CURVED TERRACE + 360° LED RIBBON BOARD) ── */}
                         <View style={styles.clubTierRing}>
