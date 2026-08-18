@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
-import { getTenantVenueId } from './tenant-context';
-import { scopeArgs, scopeFieldForModel, shouldScopeOperation } from './tenant-scope';
+import { getTenantContext } from './tenant-context';
+import { scopeArgs, scopeFieldForModel, scopeIdForField, shouldScopeOperation } from './tenant-scope';
 
 /**
  * Prisma Client extension that enforces tenant isolation as a database-layer
@@ -23,12 +23,19 @@ export function tenantIsolationExtension() {
     query: {
       $allModels: {
         async $allOperations({ model, operation, args, query }) {
-          const venueId = getTenantVenueId();
           const scopeField = scopeFieldForModel(model);
-          if (!venueId || !scopeField || !shouldScopeOperation(operation)) {
+          if (!scopeField || !shouldScopeOperation(operation)) {
             return query(args);
           }
-          return query(scopeArgs(operation, args as Record<string, any>, venueId, scopeField));
+          // Read the field the model actually uses. enterTenant() currently
+          // mirrors venueId into facilityId, but scoping must not assume that
+          // — a facilityId-scoped model must be filtered by the tenant's
+          // facilityId, not silently reuse whatever venueId happens to hold.
+          const scopeId = scopeIdForField(getTenantContext(), scopeField);
+          if (!scopeId) {
+            return query(args);
+          }
+          return query(scopeArgs(operation, args as Record<string, any>, scopeId, scopeField));
         },
       },
     },

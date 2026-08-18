@@ -5,14 +5,18 @@ import { Public } from '../../auth/public.decorator';
 import { RequireSubscription } from '../../billing/require-subscription.decorator';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
-import { canManageAssignedScope, canViewPilotHealth } from '../../auth/roles';
+import { canAccessCrossFacilityRealtime, canManageAssignedScope, canViewPilotHealth } from '../../auth/roles';
+import { PrismaService } from '../../prisma/prisma.service';
 
 type Scope = NonNullable<VenueScopedRequest['venueScope']>;
 
 @Controller('v1/stadium')
 @RequireSubscription()
 export class StadiumRealtimeController {
-  constructor(private readonly gateway: SuiteHospitalityGateway) {}
+  constructor(
+    private readonly gateway: SuiteHospitalityGateway,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Post('facilities/:facilityId/ticket')
   async createStreamTicket(
@@ -21,11 +25,20 @@ export class StadiumRealtimeController {
     @Query('zoneId') zoneId?: string,
   ) {
     if (!scope) throw new UnauthorizedException('Authentication required to generate stream ticket.');
-    if (scope.venueId !== facilityId && !canViewPilotHealth(scope.role, scope.allAccess)) {
+    if (scope.venueId !== facilityId && !canAccessCrossFacilityRealtime(scope.role, scope.allAccess)) {
       throw new ForbiddenException('Realtime stream is restricted to assigned facility scope.');
     }
     if (zoneId && !canManageAssignedScope(scope.role) && !canViewPilotHealth(scope.role, scope.allAccess)) {
       throw new ForbiddenException('Zone-scoped realtime stream requires assigned scope authorization.');
+    }
+    // A role that only has assigned-scope access (not full venue management or
+    // platform-wide visibility) must hold a matching ScopeAssignment — for the
+    // requested zone, or a facility-wide assignment when no zone is requested.
+    // Without this, such a role could request any zoneId (or omit it to get a
+    // facility-wide ticket) and receive live operational data for zones it is
+    // not actually assigned to. Mirrors SuiteHospitalityController.assertOperator.
+    if (scope.venueId === facilityId && canManageAssignedScope(scope.role) && !canViewPilotHealth(scope.role, scope.allAccess)) {
+      await this.assertZoneAssignment(scope, zoneId);
     }
     const ticket = await this.gateway.createTicket({
       venueId: scope.venueId,
@@ -57,6 +70,14 @@ export class StadiumRealtimeController {
       if (!ticketPayload || ticketPayload.facilityId !== facilityId) {
         throw new ForbiddenException('Invalid or expired streaming ticket.');
       }
+      // The ticket's zone binding is authoritative and was the only thing
+      // actually checked against ScopeAssignment at issuance. Without this
+      // comparison, a caller could take a legitimately zone-scoped ticket and
+      // subscribe to a *different* zone's channel by supplying a different
+      // zoneId query param — silently widening the ticket's grant.
+      if (ticketPayload.zoneId !== zoneId) {
+        throw new ForbiddenException('Invalid or expired streaming ticket.');
+      }
       activeRole = ticketPayload.role;
       activeAllAccess = ticketPayload.allAccess;
       activeVenueId = ticketPayload.venueId;
@@ -64,7 +85,7 @@ export class StadiumRealtimeController {
       throw new UnauthorizedException('A valid streaming ticket or authorization token is required.');
     }
 
-    if (activeVenueId !== facilityId && !canViewPilotHealth(activeRole, activeAllAccess)) {
+    if (activeVenueId !== facilityId && !canAccessCrossFacilityRealtime(activeRole, activeAllAccess)) {
       throw new ForbiddenException('Realtime stream is restricted to assigned facility scope.');
     }
     if (zoneId && !canManageAssignedScope(activeRole) && !canViewPilotHealth(activeRole, activeAllAccess)) {
@@ -115,6 +136,30 @@ export class StadiumRealtimeController {
         this.gateway.off(channelKey, handler);
       };
     });
+  }
+
+  // Mirrors SuiteHospitalityController.assertOperator / ConcourseInventoryController.assertOperator.
+  private async assertZoneAssignment(scope: Scope, zoneId?: string) {
+    const assignment = await this.prisma.scopeAssignment.findFirst({
+      where: {
+        organizationId: await this.organizationIdFor(scope.venueId),
+        active: true,
+        membership: { userId: scope.userId, status: 'active' },
+        AND: [
+          { OR: [{ facilityId: null }, { facilityId: scope.venueId }] },
+          zoneId ? { OR: [{ zoneId: null }, { zoneId }] } : { zoneId: null },
+        ],
+      },
+      select: { id: true },
+    });
+    if (!assignment) {
+      throw new ForbiddenException('This realtime stream is outside your assigned facility or zone.');
+    }
+  }
+
+  private async organizationIdFor(facilityId: string) {
+    const venue = await this.prisma.venue.findUniqueOrThrow({ where: { id: facilityId }, select: { organizationId: true } });
+    return venue.organizationId;
   }
 }
 

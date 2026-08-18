@@ -26,11 +26,41 @@ export const VENUE_SCOPED_MODELS: ReadonlySet<string> = new Set([
   'AsyncWriteReceipt',
 ]);
 
-/** Stadium operational models use the newer `facilityId` tenant key. */
+/**
+ * Stadium operational models use the newer `facilityId` tenant key. Only
+ * models whose `facilityId` column is mandatory belong here — see
+ * FACILITY_ID_WILDCARD_MODELS below for why nullable-facilityId models are
+ * deliberately excluded.
+ */
 export const FACILITY_SCOPED_MODELS: ReadonlySet<string> = new Set([
   'SuiteBeoOrder', 'StandSheet', 'InventoryTransferRequest', 'HawkerVendorSession',
   'EventMenuOverlay', 'TempAgency', 'WorkerProfile', 'ShiftPunch',
   'UnionRuleConfig', 'UnionComplianceViolation',
+  'FacilityZone', 'Outlet', 'SubVenue', 'Terminal',
+]);
+
+/**
+ * Models whose `facilityId` column is optional and where `null` is a load-
+ * bearing wildcard meaning "applies to every facility" (e.g. an org-wide
+ * ScopeAssignment or SSO group-role mapping) rather than "not yet scoped".
+ * Call sites that read these already encode the wildcard explicitly (see
+ * `assertOperator` in the stadium controllers: `{ OR: [{ facilityId: null },
+ * { facilityId: venueId }] }`).
+ *
+ * These must NOT be added to FACILITY_SCOPED_MODELS: the extension's AND-ed
+ * `facilityId = <tenant>` predicate would make every `facilityId: null` row
+ * permanently unmatched once a tenant context is bound, silently breaking
+ * facility-wide grants rather than protecting tenant boundaries. Tenant
+ * isolation for these models is enforced at the query call sites instead
+ * (organizationId + explicit OR clause), which is exercised by
+ * `enterprise-sso.service.spec.ts` and the stadium controller specs.
+ *
+ * Listed explicitly (rather than left as a silent gap) so the drift guard in
+ * tenant-scope.spec.ts can assert every facilityId-bearing model in the
+ * schema is accounted for one way or the other.
+ */
+export const FACILITY_ID_WILDCARD_MODELS: ReadonlySet<string> = new Set([
+  'ScopeAssignment', 'EnterpriseSsoGroupRoleMapping',
 ]);
 
 export function scopeFieldForModel(model: string | undefined | null): 'venueId' | 'facilityId' | null {
@@ -38,6 +68,20 @@ export function scopeFieldForModel(model: string | undefined | null): 'venueId' 
   if (VENUE_SCOPED_MODELS.has(model)) return 'venueId';
   if (FACILITY_SCOPED_MODELS.has(model)) return 'facilityId';
   return null;
+}
+
+/**
+ * Pick the tenant-context value that matches a model's scope field. Callers
+ * must not assume venueId and facilityId are interchangeable — enterTenant()
+ * mirrors venueId onto facilityId today, but a facilityId-scoped model must
+ * still read facilityId explicitly so the two are free to diverge later
+ * without silently mis-scoping queries.
+ */
+export function scopeIdForField(
+  context: { venueId?: string; facilityId?: string },
+  scopeField: 'venueId' | 'facilityId',
+): string | undefined {
+  return scopeField === 'facilityId' ? context.facilityId : context.venueId;
 }
 
 /**

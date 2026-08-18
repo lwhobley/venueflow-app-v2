@@ -206,7 +206,11 @@ export class EnterpriseSsoAdminController {
   async updateGroupRoleMapping(@CurrentUser() user: AuthUser, @Param('mappingId') mappingId: string, @Body() body: UpdateGroupRoleMappingDto) {
     const mapping = await this.prisma.enterpriseSsoGroupRoleMapping.findUniqueOrThrow({ where: { id: mappingId } });
     await this.sso.assertOrganizationAdministrator(user.sub, mapping.organizationId);
-    if (body.role) await this.assertRoleCeiling(user.sub, mapping.organizationId, body.role);
+    // Check the role that will be live after this patch, not just a supplied
+    // one — otherwise an admin can retarget an existing high-privilege mapping
+    // (e.g. change its externalGroup) without ever being ceiling-checked.
+    const effectiveRole = body.role ?? mapping.role;
+    await this.assertRoleCeiling(user.sub, mapping.organizationId, effectiveRole);
     return this.prisma.enterpriseSsoGroupRoleMapping.update({
       where: { id: mappingId },
       data: {

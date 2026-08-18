@@ -34,6 +34,15 @@ export function canViewPilotHealth(role?: string | null, allAccess = false): boo
   return allAccess || ['platform_admin', 'organization_admin', 'owner', 'admin', 'fnb_director', 'event_manager', 'finance_viewer', 'auditor'].includes(role ?? '');
 }
 
+/**
+ * Viewing a facility other than your own is a platform-wide capability, not a
+ * venue-manager one — being an owner/admin/auditor of venue A must not grant
+ * visibility into venue B's live operational stream.
+ */
+export function canAccessCrossFacilityRealtime(role?: string | null, allAccess = false): boolean {
+  return allAccess || ['platform_admin', 'organization_admin'].includes(role ?? '');
+}
+
 /** Only leadership may use a reason-required recovery transition after approval. */
 export function canOverrideEventState(role?: string | null, allAccess = false): boolean {
   return allAccess || ['platform_admin', 'organization_admin', 'owner', 'admin', 'fnb_director', 'event_manager'].includes(role ?? '');

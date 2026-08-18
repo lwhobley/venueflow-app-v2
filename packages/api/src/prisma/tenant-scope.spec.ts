@@ -1,7 +1,15 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { FACILITY_SCOPED_MODELS, isVenueScoped, scopeArgs, scopeFieldForModel, shouldScopeOperation, VENUE_SCOPED_MODELS } from './tenant-scope';
+import { FACILITY_ID_WILDCARD_MODELS, FACILITY_SCOPED_MODELS, isVenueScoped, scopeArgs, scopeFieldForModel, scopeIdForField, shouldScopeOperation, VENUE_SCOPED_MODELS } from './tenant-scope';
+
+function readSchema(): string {
+  const prismaDir = join(__dirname, '..', '..', 'prisma');
+  return readdirSync(prismaDir)
+    .filter((file) => file.endsWith('.prisma'))
+    .map((file) => readFileSync(join(prismaDir, file), 'utf8'))
+    .join('\n');
+}
 
 const VENUE = 'venue-1';
 
@@ -51,11 +59,7 @@ describe('VENUE_SCOPED_MODELS drift guard', () => {
     // remembering to update the hardcoded set. Reads every .prisma file in the
     // schema folder — AiUsageEvent lives in ai-usage.prisma and was missed by
     // the single-file version of this guard.
-    const prismaDir = join(__dirname, '..', '..', 'prisma');
-    const schema = readdirSync(prismaDir)
-      .filter((file) => file.endsWith('.prisma'))
-      .map((file) => readFileSync(join(prismaDir, file), 'utf8'))
-      .join('\n');
+    const schema = readSchema();
     const modelBlockPattern = /^model (\w+) \{([\s\S]*?)^\}/gm;
     const actualVenueScopedModels = new Set<string>();
     let match: RegExpExecArray | null;
@@ -68,6 +72,42 @@ describe('VENUE_SCOPED_MODELS drift guard', () => {
 
     expect(actualVenueScopedModels.size).toBeGreaterThan(40); // sanity: the parser actually found models
     expect([...VENUE_SCOPED_MODELS].sort()).toEqual([...actualVenueScopedModels].sort());
+  });
+});
+
+describe('FACILITY_SCOPED_MODELS drift guard', () => {
+  it('exactly matches every model with a mandatory facilityId column, once wildcard models are excluded', () => {
+    // Same bug class as the VENUE_SCOPED_MODELS guard above, caught before it
+    // shipped: FacilityZone, Outlet, SubVenue, and Terminal all carry a
+    // mandatory facilityId column but were absent from FACILITY_SCOPED_MODELS,
+    // leaving the DB-layer isolation backstop inert for them.
+    //
+    // ScopeAssignment and EnterpriseSsoGroupRoleMapping are deliberately
+    // excluded even though they carry a facilityId column: it is optional,
+    // and `null` is a load-bearing wildcard meaning "applies to every
+    // facility" (see FACILITY_ID_WILDCARD_MODELS). Auto-scoping them would
+    // AND a concrete facilityId into every query, making that wildcard
+    // permanently unmatched once a tenant context is bound — silently
+    // breaking facility-wide grants rather than protecting a tenant boundary.
+    const schema = readSchema();
+    const modelBlockPattern = /^model (\w+) \{([\s\S]*?)^\}/gm;
+    const mandatoryFacilityIdModels = new Set<string>();
+    const nullableFacilityIdModels = new Set<string>();
+    let match: RegExpExecArray | null;
+    while ((match = modelBlockPattern.exec(schema))) {
+      const [, modelName, body] = match;
+      const facilityIdField = /^\s*facilityId\s+String(\?)?(?=\s|$)/m.exec(body);
+      if (!facilityIdField) continue;
+      if (facilityIdField[1] === '?') nullableFacilityIdModels.add(modelName);
+      else mandatoryFacilityIdModels.add(modelName);
+    }
+
+    expect(mandatoryFacilityIdModels.size).toBeGreaterThan(5); // sanity: the parser actually found models
+    expect([...FACILITY_SCOPED_MODELS].sort()).toEqual([...mandatoryFacilityIdModels].sort());
+    // Every nullable-facilityId model must be an explicitly reviewed wildcard,
+    // not a silent gap — this fails loudly if a new one is added without
+    // either fixing its nullability or adding it here on purpose.
+    expect([...nullableFacilityIdModels].sort()).toEqual([...FACILITY_ID_WILDCARD_MODELS].sort());
   });
 });
 
@@ -160,5 +200,26 @@ describe('scopeArgs — unique-keyed operations', () => {
       create: { name: 'x', venueId: VENUE },
       update: { name: 'x' },
     });
+  });
+});
+
+describe('scopeIdForField', () => {
+  it('reads venueId for a venueId-scoped model', () => {
+    expect(scopeIdForField({ venueId: 'venue-1', facilityId: 'facility-9' }, 'venueId')).toBe('venue-1');
+  });
+
+  it('reads facilityId for a facilityId-scoped model, even when venueId differs', () => {
+    // The regression this guards against: the extension used to always read
+    // venueId regardless of which field the model actually uses. enterTenant
+    // mirrors venueId onto facilityId in the normal request path, so this
+    // test deliberately binds distinct values to prove the correct field is
+    // read rather than one that merely happens to match today.
+    expect(scopeIdForField({ venueId: 'venue-1', facilityId: 'facility-9' }, 'facilityId')).toBe('facility-9');
+  });
+
+  it('returns undefined when the matching field is not bound', () => {
+    expect(scopeIdForField({ venueId: 'venue-1' }, 'facilityId')).toBeUndefined();
+    expect(scopeIdForField({ facilityId: 'facility-9' }, 'venueId')).toBeUndefined();
+    expect(scopeIdForField({}, 'venueId')).toBeUndefined();
   });
 });
