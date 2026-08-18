@@ -9,7 +9,7 @@ import {
   ViewStyle,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { DesignPalette, radius, shadowSoft, spacing } from "../lib/theme";
+import { DesignPalette, fontFamily, radius, shadowSoft, spacing } from "../lib/theme";
 
 type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 type CommandTextVariant =
@@ -69,8 +69,8 @@ export function CommandText({
   style?: StyleProp<TextStyle>;
 }) {
   const styles: Record<CommandTextVariant, TextStyle> = {
-    hero: { color: palette.charcoal, fontSize: 30, lineHeight: 36, letterSpacing: -0.6, fontWeight: "800" },
-    title: { color: palette.charcoal, fontSize: 19, lineHeight: 25, letterSpacing: -0.25, fontWeight: "700" },
+    hero: { color: palette.charcoal, fontSize: 30, lineHeight: 36, letterSpacing: -0.4, fontWeight: "600", fontFamily: fontFamily.display },
+    title: { color: palette.charcoal, fontSize: 19, lineHeight: 25, letterSpacing: -0.2, fontWeight: "600", fontFamily: fontFamily.display },
     label: { color: palette.muted, fontSize: 11, lineHeight: 15, fontWeight: "700", letterSpacing: 0.8, textTransform: "uppercase" },
     body: { color: palette.charcoal, fontSize: 14, lineHeight: 21, fontWeight: "500" },
     caption: { color: palette.muted, fontSize: 12, lineHeight: 17, fontWeight: "500" },

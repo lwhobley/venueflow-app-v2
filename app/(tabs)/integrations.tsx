@@ -185,28 +185,26 @@ function IntegrationsScreenInner() {
         ))}
       </View>
 
-      {/* POS Aggregator Command Hub Card */}
-      <Card style={{ backgroundColor: '#EEF5F0', borderRadius: radius.sharp, borderWidth: 1, borderColor: '#17643B' }}>
+      <Card style={{ backgroundColor: colors.surface, borderRadius: radius.sharp, borderWidth: 1, borderColor: colors.border }}>
         <Card.Content style={{ gap: spacing.xs }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={{ fontWeight: '800', color: '#17643B', fontSize: 16 }}>Universal POS Aggregator Core</Text>
-            </View>
-            <View style={{ backgroundColor: '#17643B', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
-              <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 11 }}>ONLINE</Text>
+            <Text style={{ fontWeight: '700', color: colors.charcoal, fontSize: 16 }}>POS aggregator</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: `${colors.success}18`, paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill }}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.success }} />
+              <Text style={{ color: colors.success, fontWeight: '700', fontSize: 12 }}>Online</Text>
             </View>
           </View>
-          <Text style={{ color: '#1D2420', fontSize: 13 }}>
-            Unified live stream aggregating transactions, menus, 86 item broadcasts, and tender reconciliation across Toast, Square, SpotOn, Clover, Shopify POS & In-Seat mobile apps.
+          <Text style={{ color: colors.muted, fontSize: 13 }}>
+            Unified live stream aggregating transactions, menus, 86'd items, and tender reconciliation across Toast, Square, SpotOn, Clover, Shopify POS & in-seat mobile apps.
           </Text>
           <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs }}>
             <Button
               mode="contained"
-              buttonColor="#17643B"
+              buttonColor={colors.primary}
               icon="broadcast"
               onPress={() => router.push('/stadium/pos-aggregator')}
             >
-              Open POS Aggregator Console
+              Open aggregator console
             </Button>
           </View>
         </Card.Content>

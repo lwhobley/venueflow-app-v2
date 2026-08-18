@@ -13,7 +13,7 @@ import { Skeleton } from '../../components/Skeleton';
 import { useAuthStore } from '../../lib/auth-store';
 import { usePushNotifications } from '../../lib/usePushNotifications';
 import { useAuthenticatedSession } from '../../lib/auth-readiness';
-import { spacing, useDesignTheme } from '../../lib/theme';
+import { radius, spacing, useDesignTheme } from '../../lib/theme';
 import { formatDuration, formatMoney } from '../../lib/format';
 import { canManageVenue } from '../../lib/permissions';
 import { useResponsive } from '../../lib/responsive';
@@ -87,55 +87,55 @@ export default function HomeScreen() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: 'transparent' }} contentContainerStyle={{ paddingBottom: spacing.xxl }} showsVerticalScrollIndicator={false}>
-      <View style={{ backgroundColor: '#013369', paddingHorizontal: pagePadding, paddingTop: isPhone ? spacing.lg : spacing.xl, paddingBottom: spacing.lg, gap: spacing.md, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 }}>
+      <View style={{ backgroundColor: palette.primary, paddingHorizontal: pagePadding, paddingTop: isPhone ? spacing.lg : spacing.xl, paddingBottom: spacing.lg, gap: spacing.md, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
           <View style={{ flex: 1 }}>
             <Pressable onPress={() => router.push('/venue/settings')} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, flexDirection: 'row', alignItems: 'center', gap: 4 })}>
-              <CommandText palette={palette} variant="label" style={{ color: '#A8C4E0' }}>{venueName}</CommandText>
-              {venues.length > 1 ? <MaterialCommunityIcons name="swap-horizontal" size={16} color="#A8C4E0" /> : null}
+              <CommandText palette={palette} variant="label" style={{ color: palette.buttonText, opacity: 0.7 }}>{venueName}</CommandText>
+              {venues.length > 1 ? <MaterialCommunityIcons name="swap-horizontal" size={16} color={palette.buttonText} style={{ opacity: 0.7 }} /> : null}
             </Pressable>
-            <CommandText palette={palette} variant="hero" style={{ color: '#FFFFFF', fontSize: isPhone ? 26 : undefined }}>Stadium F&B Command</CommandText>
+            <CommandText palette={palette} variant="hero" style={{ color: palette.buttonText, fontSize: isPhone ? 26 : undefined }}>Stadium F&B Command</CommandText>
           </View>
           <Pressable onPress={() => setShowNotifications((value) => !value)} accessibilityRole="button" accessibilityLabel="Open notifications" style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1, padding: 8 })}>
             <View>
-              <MaterialCommunityIcons name={unreadCount ? 'bell-ring-outline' : 'bell-outline'} size={24} color="#FFFFFF" />
-              {unreadCount ? <View style={styles.notificationBadge}><CommandText palette={palette} variant="caption" style={{ color: '#FFFFFF' }}>{unreadCount}</CommandText></View> : null}
+              <MaterialCommunityIcons name={unreadCount ? 'bell-ring-outline' : 'bell-outline'} size={24} color={String(palette.buttonText)} />
+              {unreadCount ? <View style={[styles.notificationBadge, { backgroundColor: palette.secondary }]}><CommandText palette={palette} variant="caption" style={{ color: palette.buttonText }}>{unreadCount}</CommandText></View> : null}
             </View>
           </Pressable>
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <MaterialCommunityIcons name="calendar-blank-outline" size={16} color="#C5D6EB" />
-            <CommandText palette={palette} variant="body" style={{ color: '#C5D6EB' }}>{currentDate}</CommandText>
-          </View>
-          <View style={{ width: StyleSheet.hairlineWidth, height: 20, backgroundColor: '#4A6FA5' }} />
-          <CommandText palette={palette} variant="body" style={{ color: '#C5D6EB' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', backgroundColor: `${palette.buttonText}22`, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5 }}>
+          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: readiness?.status === 'blocked' ? palette.danger : readiness?.status === 'at-risk' ? palette.warning : palette.buttonText }} />
+          <CommandText palette={palette} variant="caption" style={{ color: palette.buttonText, fontWeight: '700' }}>
             {readiness?.status === 'blocked' ? 'Needs attention' : readiness?.status === 'at-risk' ? 'Watch F&B operations' : 'F&B command ready'}
           </CommandText>
+          <View style={{ width: StyleSheet.hairlineWidth, height: 12, backgroundColor: palette.buttonText, opacity: 0.3 }} />
+          <CommandText palette={palette} variant="caption" style={{ color: palette.buttonText, opacity: 0.85, fontVariant: ['tabular-nums'] }}>{currentDate}</CommandText>
         </View>
       </View>
 
-      <View style={{ paddingHorizontal: pagePadding, paddingTop: spacing.md }}>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-          <Pressable onPress={() => router.push('/stadium-map')} style={({ pressed }) => [styles.quickActionTile, { backgroundColor: '#013369', opacity: pressed ? 0.8 : 1 }]}>
-            <MaterialCommunityIcons name="stadium" size={22} color="#FFFFFF" />
-            <CommandText palette={palette} variant="body" style={{ color: '#FFFFFF', fontWeight: '800' }}>Stadium Map</CommandText>
-            <CommandText palette={palette} variant="caption" style={{ color: '#A8C4E0' }}>Zones, Suites, Stands</CommandText>
+      <View style={{ paddingHorizontal: pagePadding, paddingTop: spacing.md, gap: spacing.sm }}>
+        <Pressable onPress={() => router.push('/stadium-map')} style={({ pressed }) => [styles.heroTile, { backgroundColor: palette.primary, opacity: pressed ? 0.85 : 1 }]}>
+          <View style={[styles.heroIconBadge, { backgroundColor: `${palette.buttonText}22` }]}>
+            <MaterialCommunityIcons name="stadium" size={24} color={String(palette.buttonText)} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <CommandText palette={palette} variant="body" style={{ color: palette.buttonText, fontWeight: '700', fontSize: 16 }}>Stadium Map</CommandText>
+            <CommandText palette={palette} variant="caption" style={{ color: palette.buttonText, opacity: 0.75 }}>Zones, suites, stands</CommandText>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={20} color={String(palette.buttonText)} style={{ opacity: 0.7 }} />
+        </Pressable>
+        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+          <Pressable onPress={() => router.push('/event-command-center')} style={({ pressed }) => [styles.subTile, { backgroundColor: palette.surface, borderColor: palette.border, opacity: pressed ? 0.7 : 1 }]}>
+            <MaterialCommunityIcons name="shield-star-outline" size={18} color={String(palette.primary)} />
+            <CommandText palette={palette} variant="caption" style={{ fontWeight: '700', color: palette.charcoal }}>Command Center</CommandText>
           </Pressable>
-          <Pressable onPress={() => router.push('/event-command-center')} style={({ pressed }) => [styles.quickActionTile, { backgroundColor: palette.surface, borderColor: palette.border, borderWidth: 1, opacity: pressed ? 0.8 : 1 }]}>
-            <MaterialCommunityIcons name="shield-star-outline" size={22} color="#013369" />
-            <CommandText palette={palette} variant="body" style={{ fontWeight: '800' }}>Command Center</CommandText>
-            <CommandText palette={palette} variant="caption" style={{ color: palette.muted }}>Event Status & Gates</CommandText>
+          <Pressable onPress={() => router.push('/stadium/stand-sheet')} style={({ pressed }) => [styles.subTile, { backgroundColor: palette.surface, borderColor: palette.border, opacity: pressed ? 0.7 : 1 }]}>
+            <MaterialCommunityIcons name="clipboard-list-outline" size={18} color={String(palette.primary)} />
+            <CommandText palette={palette} variant="caption" style={{ fontWeight: '700', color: palette.charcoal }}>Stand Sheets</CommandText>
           </Pressable>
-          <Pressable onPress={() => router.push('/stadium/stand-sheet')} style={({ pressed }) => [styles.quickActionTile, { backgroundColor: palette.surface, borderColor: palette.border, borderWidth: 1, opacity: pressed ? 0.8 : 1 }]}>
-            <MaterialCommunityIcons name="clipboard-list-outline" size={22} color="#013369" />
-            <CommandText palette={palette} variant="body" style={{ fontWeight: '800' }}>Stand Sheets</CommandText>
-            <CommandText palette={palette} variant="caption" style={{ color: palette.muted }}>Concession Cash & Par</CommandText>
-          </Pressable>
-          <Pressable onPress={() => router.push('/stadium/suite-attendant')} style={({ pressed }) => [styles.quickActionTile, { backgroundColor: palette.surface, borderColor: palette.border, borderWidth: 1, opacity: pressed ? 0.8 : 1 }]}>
-            <MaterialCommunityIcons name="room-service-outline" size={22} color="#013369" />
-            <CommandText palette={palette} variant="body" style={{ fontWeight: '800' }}>Suite BEOs</CommandText>
-            <CommandText palette={palette} variant="caption" style={{ color: palette.muted }}>VIP Luxury Hospitality</CommandText>
+          <Pressable onPress={() => router.push('/stadium/suite-attendant')} style={({ pressed }) => [styles.subTile, { backgroundColor: palette.surface, borderColor: palette.border, opacity: pressed ? 0.7 : 1 }]}>
+            <MaterialCommunityIcons name="room-service-outline" size={18} color={String(palette.primary)} />
+            <CommandText palette={palette} variant="caption" style={{ fontWeight: '700', color: palette.charcoal }}>Suite BEOs</CommandText>
           </Pressable>
         </View>
       </View>
@@ -172,12 +172,12 @@ export default function HomeScreen() {
       <View style={{ paddingHorizontal: pagePadding, paddingTop: spacing.lg }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <MaterialCommunityIcons name="map-marker-radius" size={20} color="#013369" />
-            <CommandText palette={palette} variant="title">Stadium Layout & Zone Status</CommandText>
+            <MaterialCommunityIcons name="map-marker-radius" size={20} color={String(palette.primary)} />
+            <CommandText palette={palette} variant="title">Stadium layout & zone status</CommandText>
           </View>
           <Pressable onPress={() => router.push('/stadium-map')} style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, flexDirection: 'row', alignItems: 'center', gap: 2 })}>
-            <CommandText palette={palette} variant="caption" style={{ color: '#013369', fontWeight: '700' }}>Full Screen Map</CommandText>
-            <MaterialCommunityIcons name="chevron-right" size={16} color="#013369" />
+            <CommandText palette={palette} variant="caption" style={{ color: palette.primary, fontWeight: '700' }}>Full screen</CommandText>
+            <MaterialCommunityIcons name="chevron-right" size={16} color={String(palette.primary)} />
           </Pressable>
         </View>
         <StadiumVenueMap />
@@ -243,14 +243,29 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#D50A0A',
   },
-  quickActionTile: {
-    flex: 1,
-    minWidth: 148,
-    borderRadius: 16,
+  heroTile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radius.lg,
     padding: spacing.md,
-    gap: 4,
     overflow: 'hidden',
+  },
+  heroIconBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subTile: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
   },
 });

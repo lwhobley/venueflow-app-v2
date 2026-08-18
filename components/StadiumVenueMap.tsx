@@ -612,7 +612,7 @@ export function StadiumVenueMap({
                             <View style={styles.gatePylonPillarRight} />
                             {isSelected ? (
                               <View style={styles.architecturalActiveBadge}>
-                                <Text style={styles.architecturalActiveBadgeText}>★ SELECTED GATE PORTAL</Text>
+                                <Text style={styles.architecturalActiveBadgeText}>Selected</Text>
                               </View>
                             ) : null}
                           </Pressable>
@@ -680,7 +680,7 @@ export function StadiumVenueMap({
 
                               {isSelected ? (
                                 <View style={styles.grandstandActiveHalo}>
-                                  <Text style={styles.grandstandActiveHaloText}>★ ACTIVE GRANDSTAND</Text>
+                                  <Text style={styles.grandstandActiveHaloText}>Active</Text>
                                 </View>
                               ) : null}
                             </Pressable>
@@ -727,7 +727,7 @@ export function StadiumVenueMap({
                           <View style={styles.stadiumTierBadgeGold}>
                             <MaterialCommunityIcons name="glass-cocktail" size={12} color="#FFFFFF" />
                             <Text style={styles.tierPillGoldText}>
-                              LEVEL 300 / 400 · EXECUTIVE SUITES & LOGE BOXES ({allSuites.length} SUITES)
+                              Level 300–400 · Suites ({allSuites.length})
                             </Text>
                           </View>
                         </View>
@@ -832,8 +832,8 @@ export function StadiumVenueMap({
                             />
                             <Text numberOfLines={1} style={styles.suiteDropdownTriggerText}>
                               {activeSelectedUnit?.zone.id === 'zone-300-suites'
-                                ? `Selected: ${activeSelectedUnit.unit.name} (${activeSelectedUnit.unit.suiteDetails?.beoNumber ? '★ BEO Ready' : 'Open'})`
-                                : `▾ Select Suite from Floor Dropdown (${filteredFloorSuites.length} available)...`}
+                                ? `${activeSelectedUnit.unit.name} · ${activeSelectedUnit.unit.suiteDetails?.beoNumber ? 'BEO ready' : 'Open'}`
+                                : `Select a suite (${filteredFloorSuites.length} available)`}
                             </Text>
                           </View>
                           <View style={styles.suiteDropdownTriggerRight}>
@@ -957,7 +957,7 @@ export function StadiumVenueMap({
                           {/* 360 Dynamic LED Ribbon Banner */}
                           <View style={styles.ribbonLedDisplay}>
                             <Text style={styles.ribbonLedText}>
-                              ★ HOUSTON TEXANS · CLUB LEVEL 200 TERRACE · 360° LED HOSPITALITY RIBBON ★
+                              Houston Texans · Club Level 200 Terrace
                             </Text>
                           </View>
 
@@ -1341,7 +1341,7 @@ export function StadiumVenueMap({
                             <View style={styles.gatePylonPillarRight} />
                             {isSelected ? (
                               <View style={styles.architecturalActiveBadge}>
-                                <Text style={styles.architecturalActiveBadgeText}>★ SELECTED GATE PORTAL</Text>
+                                <Text style={styles.architecturalActiveBadgeText}>Selected</Text>
                               </View>
                             ) : null}
                           </Pressable>

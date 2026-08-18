@@ -583,7 +583,7 @@ export default function Stadium3DModel({ highlightCategory }: Stadium3DModelProp
           boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
         }}
       >
-        ✦ 3D ISOMETRIC STADIUM BOWL · Drag to orbit · Pinch / Scroll to zoom · Right-drag to pan
+        Drag to orbit · Pinch to zoom · Right-drag to pan
       </div>
     </div>
   );

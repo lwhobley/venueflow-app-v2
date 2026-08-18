@@ -110,8 +110,13 @@ export const radius = {
   sharp: 6, soft: 14, sm: 10, md: 14, lg: 18, xl: 24, pill: 999,
 };
 
+// Loaded via useFonts() in app/_layout.tsx. These string literals must match
+// the keys passed there exactly, or React Native silently falls back to the
+// system font with no warning.
 export const fontFamily = {
-  display: undefined, displayItalic: undefined, displayMedium: undefined,
+  display: "Fraunces_600SemiBold",
+  displayItalic: "Fraunces_600SemiBold_Italic",
+  displayMedium: "Fraunces_500Medium",
 } as const;
 
 export const type = {
@@ -121,8 +126,8 @@ export const type = {
   body: { fontSize: 15, lineHeight: 22, letterSpacing: 0 },
   bodyLarge: { fontSize: 17, lineHeight: 24, letterSpacing: 0 },
   heading: { fontSize: 20, lineHeight: 26, letterSpacing: -0.2, fontWeight: "700" as const },
-  title: { fontSize: 28, lineHeight: 34, letterSpacing: -0.4, fontWeight: "700" as const },
-  display: { fontSize: 40, lineHeight: 44, letterSpacing: -0.6, fontWeight: "700" as const },
+  title: { fontSize: 28, lineHeight: 34, letterSpacing: -0.4, fontWeight: "600" as const, fontFamily: fontFamily.display },
+  display: { fontSize: 40, lineHeight: 44, letterSpacing: -0.6, fontWeight: "600" as const, fontFamily: fontFamily.display },
 } as const;
 
 export const shadow = {
