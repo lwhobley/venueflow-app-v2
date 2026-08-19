@@ -54,7 +54,6 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="schedule"
         options={{
-          href: null,
           title: "Rosters",
           tabBarIcon: icon("calendar-week"),
         }}
@@ -63,7 +62,6 @@ export default function TabsLayout() {
         name="guests"
         options={{
           title: "CRM",
-          href: null,
           tabBarIcon: icon("account-heart-outline"),
         }}
       />
@@ -71,7 +69,6 @@ export default function TabsLayout() {
         name="integrations"
         options={{
           title: "POS & Hardware",
-          href: null,
           tabBarIcon: icon("connection"),
         }}
       />
@@ -79,7 +76,6 @@ export default function TabsLayout() {
         name="sales"
         options={{
           title: "Concessions POS",
-          href: null,
           tabBarIcon: icon("cash-register"),
         }}
       />
@@ -99,7 +95,6 @@ export default function TabsLayout() {
         name="documents"
         options={{
           title: "BEOs & Docs",
-          href: null,
           tabBarIcon: icon("file-document-multiple-outline"),
         }}
       />
@@ -107,7 +102,6 @@ export default function TabsLayout() {
         name="reports"
         options={{
           title: "Reports & Recon",
-          href: null,
           tabBarIcon: icon("chart-box-outline"),
         }}
       />
@@ -115,7 +109,6 @@ export default function TabsLayout() {
         name="staff"
         options={{
           title: "Staff & Union",
-          href: null,
           tabBarIcon: icon("account-group"),
         }}
       />
