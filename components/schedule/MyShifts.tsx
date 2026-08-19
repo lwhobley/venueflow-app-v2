@@ -2,13 +2,14 @@ import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { router } from 'expo-router';
 import { Button, Card, Chip, Snackbar, Text, TextInput } from 'react-native-paper';
-import { useMutation, useQuery } from '../../lib/railway-hooks';
+import { useMutation, useQuery, useQueryState } from '../../lib/railway-hooks';
 import { api } from '../../lib/railway-api';
 import type { Id } from '../../lib/ids';
 import { accents, colors, spacing } from '../../lib/theme';
 import { useAuthStore, type AuthState } from '../../lib/auth-store';
 import { useAuthenticatedSession } from '../../lib/auth-readiness';
 import { ScheduleSkeleton } from './ScheduleSkeleton';
+import { ScreenState } from '../ScreenState';
 import { asArray } from '../../lib/format';
 
 type Shift = {
@@ -45,7 +46,8 @@ type RosterDay = { dayIndex: number; dayLabel: string; coworkers: Coworker[] };
 export function MyShifts() {
   const venue = useAuthStore((state: AuthState) => state.venue);
   const { isReady } = useAuthenticatedSession();
-  const data = useQuery(api.scheduling.getMySchedule, isReady ? {} : 'skip');
+  const scheduleQuery = useQueryState<any>(api.scheduling.getMySchedule, isReady ? {} : 'skip');
+  const data = scheduleQuery.data;
   const blackoutData = useQuery(api.scheduling.listBlackouts, isReady && venue?.id ? { venueId: venue.id } : 'skip');
   const claimOpenShift = useMutation(api.scheduling.claimOpenShift);
   const requestDropShift = useMutation(api.scheduling.requestDropShift);
@@ -161,7 +163,20 @@ export function MyShifts() {
     }
   };
 
-  if (data === undefined) return <ScheduleSkeleton rows={3} />;
+  if (scheduleQuery.isLoading) return <ScheduleSkeleton rows={3} />;
+
+  // Distinguish "your shifts haven't loaded yet" from "we couldn't load them".
+  if (scheduleQuery.error || data === undefined) {
+    return (
+      <ScreenState
+        isLoading={false}
+        error={scheduleQuery.error ?? new Error('Your shifts could not be loaded.')}
+        onRetry={() => void scheduleQuery.refetch()}
+      >
+        {null}
+      </ScreenState>
+    );
+  }
 
   return (
     <View style={{ gap: spacing.md }}>

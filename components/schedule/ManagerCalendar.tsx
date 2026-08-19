@@ -3,13 +3,14 @@ import { Platform, Pressable, ScrollView, View, Modal } from 'react-native';
 import { router } from 'expo-router';
 import { Button, Card, Chip, Divider, IconButton, Menu, Searchbar, SegmentedButtons, Snackbar, Text, TextInput } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useMutation, useQuery } from '../../lib/railway-hooks';
+import { useMutation, useQuery, useQueryState } from '../../lib/railway-hooks';
 import { api } from '../../lib/railway-api';
 import type { Id } from '../../lib/ids';
 import { accents, colors, spacing } from '../../lib/theme';
 import { useIsDesktop } from '../../lib/responsive';
 import { AutoScheduleModal } from './AutoScheduleModal';
 import { ScheduleSkeleton } from './ScheduleSkeleton';
+import { ScreenState } from '../ScreenState';
 import { CollapsibleSection } from '../AppCard';
 import { asArray } from '../../lib/format';
 
@@ -170,7 +171,8 @@ export function ManagerCalendar({ venueId }: { venueId: Id<'venues'> }) {
   }, [weekOffset]);
 
   const selectedWeekStart = `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, '0')}-${String(weekStart.getDate()).padStart(2, '0')}`;
-  const data = useQuery(api.scheduling.getManagerSchedule, { venueId, weekStart: selectedWeekStart });
+  const scheduleQuery = useQueryState<any>(api.scheduling.getManagerSchedule, { venueId, weekStart: selectedWeekStart });
+  const data = scheduleQuery.data;
   const forecast = useQuery(api.scheduling.getLaborForecast, { venueId, weekStart: selectedWeekStart }) as LaborForecast | undefined;
   const templates = useQuery(api.scheduling.listScheduleTemplates, { venueId });
   const requestRows = useQuery(api.app.listStaffRequests, { venueId });
@@ -414,8 +416,22 @@ export function ManagerCalendar({ venueId }: { venueId: Id<'venues'> }) {
     );
   }, [shifts]);
 
-  if (data === undefined) {
+  if (scheduleQuery.isLoading) {
     return <ScheduleSkeleton rows={5} />;
+  }
+
+  // A failed week read used to sit on the skeleton forever, which reads as a
+  // slow network rather than a request the server refused.
+  if (scheduleQuery.error || data === undefined) {
+    return (
+      <ScreenState
+        isLoading={false}
+        error={scheduleQuery.error ?? new Error('The schedule for this week could not be loaded.')}
+        onRetry={() => void scheduleQuery.refetch()}
+      >
+        {null}
+      </ScreenState>
+    );
   }
 
   const topButtonStyle = isDesktop ? { minWidth: 120 } : {};

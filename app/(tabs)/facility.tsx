@@ -3,9 +3,10 @@ import { router } from 'expo-router';
 import { ScrollView, View } from 'react-native';
 import { Button, Chip, TextInput } from 'react-native-paper';
 import { CommandSurface, CommandText, StatusPill } from '../../components/FutureUI';
+import { ScreenState } from '../../components/ScreenState';
 import { asArray, errorMessage, humanizeLabel } from '../../lib/format';
 import { api } from '../../lib/railway-api';
-import { useMutation, useQuery } from '../../lib/railway-hooks';
+import { useMutation, useQueryState } from '../../lib/railway-hooks';
 import { spacing, useDesignTheme } from '../../lib/theme';
 import { useVenueAuth } from '../../lib/useVenueAuth';
 
@@ -35,7 +36,8 @@ const label = humanizeLabel;
 export default function FacilityScreen() {
   const palette = useDesignTheme();
   const { venue, isReady, canManage } = useVenueAuth();
-  const overview = useQuery(api.stadium.getOverview, isReady && venue?.id ? {} : 'skip') as StadiumOverview | undefined;
+  const overviewQuery = useQueryState<StadiumOverview>(api.stadium.getOverview, isReady && venue?.id ? {} : 'skip');
+  const overview = overviewQuery.data;
   const createZone = useMutation(api.stadium.createZone);
   const generateEventPlan = useMutation(api.stadium.generateEventPlan);
   const updateZoneStatus = useMutation(api.stadium.updateZoneStatus);
@@ -143,7 +145,7 @@ export default function FacilityScreen() {
           <TextInput mode="outlined" label="Expected attendance" keyboardType="number-pad" value={expectedAttendance} onChangeText={setExpectedAttendance} />
           <Button mode="contained" buttonColor={palette.primary} disabled={!eventTitle.trim() || !eventStart.trim()} onPress={() => void saveEvent()}>Create event</Button>
         </View> : null}
-        {overview?.events?.length ? overview.events.map((event) => (
+        <ScreenState isLoading={overviewQuery.isLoading} error={overviewQuery.error} isEmpty={!overview?.events?.length} emptyMessage="No stadium events scheduled yet." onRetry={() => void overviewQuery.refetch()} skeletonRows={2}>{asArray(overview?.events).map((event) => (
           <View key={event.id} style={{ borderTopWidth: 1, borderColor: palette.border, paddingTop: spacing.sm, gap: spacing.xs }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
               <View style={{ flex: 1 }}><CommandText palette={palette} variant="body" style={{ fontWeight: '800' }}>{event.title}</CommandText><CommandText palette={palette} variant="caption">{new Date(event.startsAt).toLocaleString()} · {event.expectedAttendance?.toLocaleString() ?? '—'} expected</CommandText></View>
@@ -153,7 +155,7 @@ export default function FacilityScreen() {
             {canManage ? <Button compact mode="contained-tonal" textColor={palette.primary} onPress={() => void buildEventPlan(event.id)}>Generate F&B plan</Button> : null}
             {canManage && eventStateNext[event.operationalState] ? <Button compact mode="outlined" textColor={palette.primary} onPress={() => void updateEventState({ eventId: event.id, state: eventStateNext[event.operationalState] })}>Move to {label(eventStateNext[event.operationalState]!)}</Button> : null}
           </View>
-        )) : <CommandText palette={palette} variant="caption">No stadium events scheduled yet.</CommandText>}
+        ))}</ScreenState>
       </CommandSurface>
 
       <CommandSurface palette={palette} style={{ gap: spacing.md }}>
@@ -177,12 +179,12 @@ export default function FacilityScreen() {
             <CommandText palette={palette} variant="caption">{departmentZones.map((zone) => `${zone.stadiumZone ?? zone.level ?? 'Unassigned zone'}: ${zone.code} ${zone.name}`).join(' · ')}</CommandText>
           </View> : null;
         }) : null}
-        {overview?.zones?.length ? overview.zones.map((zone) => (
+        <ScreenState isLoading={overviewQuery.isLoading} error={overviewQuery.error} isEmpty={!overview?.zones?.length} emptyMessage="Add concession stands, markets, portables, kitchens, suites, clubs, catering spaces, bars, pickup points, and partner concepts." onRetry={() => void overviewQuery.refetch()} skeletonRows={2}>{asArray(overview?.zones).map((zone) => (
           <View key={zone.id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderTopWidth: 1, borderColor: palette.border, paddingTop: spacing.sm }}>
             <View style={{ flex: 1 }}><CommandText palette={palette} variant="body" style={{ fontWeight: '800' }}>{zone.code} · {zone.name}</CommandText><CommandText palette={palette} variant="caption">{label(zone.type)}{zone.capacity ? ` · ${zone.capacity.toLocaleString()} capacity` : ''}</CommandText></View>
             <Button compact mode="outlined" disabled={!canManage} textColor={zone.status === 'incident' || zone.status === 'closed' ? palette.warning : palette.primary} onPress={() => void updateZoneStatus({ zoneId: zone.id, status: zoneStatusNext[zone.status] })}>{label(zone.status)}</Button>
           </View>
-        )) : <CommandText palette={palette} variant="caption">Add concession stands, markets, portables, kitchens, suites, clubs, catering spaces, bars, pickup points, and partner concepts.</CommandText>}
+        ))}</ScreenState>
       </CommandSurface>
 
       <CommandSurface palette={palette} style={{ gap: spacing.md }}>
@@ -196,12 +198,12 @@ export default function FacilityScreen() {
           <TextInput mode="outlined" label="Revenue share % (optional)" keyboardType="decimal-pad" value={partnerRevenueShare} onChangeText={setPartnerRevenueShare} />
           <Button mode="contained" buttonColor={palette.primary} disabled={!partnerName.trim()} onPress={() => void savePartner()}>Save partner</Button>
         </View> : null}
-        {overview?.partners?.length ? overview.partners.map((partner) => (
+        <ScreenState isLoading={overviewQuery.isLoading} error={overviewQuery.error} isEmpty={!overview?.partners?.length} emptyMessage="Partner concepts, pop-ups, licensing, revenue-share terms, and compliance will appear here." onRetry={() => void overviewQuery.refetch()} skeletonRows={2}>{asArray(overview?.partners).map((partner) => (
           <View key={partner.id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderTopWidth: 1, borderColor: palette.border, paddingTop: spacing.sm }}>
             <View style={{ flex: 1 }}><CommandText palette={palette} variant="body" style={{ fontWeight: '800' }}>{partner.name}</CommandText><CommandText palette={palette} variant="caption">{label(partner.type)}{partner.revenueShareBps != null ? ` · ${(partner.revenueShareBps / 100).toFixed(2)}% revenue share` : ''}</CommandText></View>
             <StatusPill palette={palette} tone={partner.status === 'active' || partner.status === 'approved' ? 'good' : partner.status === 'noncompliant' ? 'warn' : 'neutral'}>{label(partner.status)}</StatusPill>
           </View>
-        )) : <CommandText palette={palette} variant="caption">Partner concepts, pop-ups, licensing, revenue-share terms, and compliance will appear here.</CommandText>}
+        ))}</ScreenState>
       </CommandSurface>
     </ScrollView>
   );

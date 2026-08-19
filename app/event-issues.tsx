@@ -3,9 +3,10 @@ import { ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import { Button, Chip, TextInput } from 'react-native-paper';
 import { CommandSurface, CommandText, StatusPill } from '../components/FutureUI';
-import { errorMessage, humanizeLabel } from '../lib/format';
+import { ScreenState } from '../components/ScreenState';
+import { asArray, errorMessage, humanizeLabel } from '../lib/format';
 import { api } from '../lib/railway-api';
-import { useMutation, useQuery } from '../lib/railway-hooks';
+import { useMutation, useQueryState } from '../lib/railway-hooks';
 import { spacing, useDesignTheme } from '../lib/theme';
 import { useVenueAuth } from '../lib/useVenueAuth';
 import { SyncStatus } from '../lib/sync-status';
@@ -20,7 +21,8 @@ const label = humanizeLabel;
 export default function EventIssuesScreen() {
   const palette = useDesignTheme();
   const { isReady, venue } = useVenueAuth();
-  const overview = useQuery(api.stadium.getOverview, isReady && venue?.id ? {} : 'skip') as Overview | undefined;
+  const overviewQuery = useQueryState<Overview>(api.stadium.getOverview, isReady && venue?.id ? {} : 'skip');
+  const overview = overviewQuery.data;
   const [eventId, setEventId] = useState<string | null>(null);
   const [issueType, setIssueType] = useState('operational');
   const [severity, setSeverity] = useState<Issue['severity']>('high');
@@ -36,7 +38,8 @@ export default function EventIssuesScreen() {
     if (!eventId && overview?.events?.[0]) setEventId(overview.events[0].id);
   }, [eventId, overview?.events]);
 
-  const issues = useQuery(api.stadium.listEventIssues, eventId ? { eventId } : 'skip') as Issue[] | undefined;
+  const issuesQuery = useQueryState<Issue[]>(api.stadium.listEventIssues, eventId ? { eventId } : 'skip');
+  const issues = asArray<Issue>(issuesQuery.data);
   const activeEvent = useMemo(() => overview?.events?.find((event) => event.id === eventId), [eventId, overview?.events]);
 
   const report = async () => {
@@ -62,7 +65,7 @@ export default function EventIssuesScreen() {
     {message ? <CommandSurface palette={palette}><CommandText palette={palette} variant="body">{message}</CommandText></CommandSurface> : null}
     <CommandSurface palette={palette} strong style={{ gap: spacing.sm }}><CommandText palette={palette} variant="title">Event in scope</CommandText><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>{overview?.events?.map((event) => <Chip key={event.id} selected={event.id === eventId} onPress={() => setEventId(event.id)}>{event.title}</Chip>)}</View>{activeEvent ? <CommandText palette={palette} variant="caption">{new Date(activeEvent.startsAt).toLocaleString()} · {label(activeEvent.operationalState ?? 'draft')}</CommandText> : <CommandText palette={palette} variant="caption">Create or select an event before reporting issues.</CommandText>}</CommandSurface>
     <CommandSurface palette={palette} style={{ gap: spacing.sm }}><CommandText palette={palette} variant="title">Report an issue</CommandText><TextInput mode="outlined" label="Issue type" value={issueType} onChangeText={setIssueType} placeholder="e.g. stockout, equipment, safety" /><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>{severities.map((value) => <Chip key={value} selected={severity === value} onPress={() => setSeverity(value)}>{label(value)}</Chip>)}</View><TextInput mode="outlined" label="Short title" value={title} onChangeText={setTitle} /><TextInput mode="outlined" label="What happened?" value={description} onChangeText={setDescription} multiline /><Button mode="contained" buttonColor={palette.primary} disabled={!eventId || !title.trim() || !description.trim()} onPress={() => void report()}>Report issue</Button></CommandSurface>
-    <CommandSurface palette={palette} style={{ gap: spacing.sm }}><CommandText palette={palette} variant="title">Open and recent issues</CommandText>{issues?.length ? issues.map((issue) => <View key={issue.id} style={{ borderTopWidth: 1, borderColor: palette.border, paddingTop: spacing.sm, gap: spacing.xs }}><View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}><View style={{ flex: 1 }}><CommandText palette={palette} variant="body" style={{ fontWeight: '800' }}>{issue.title}</CommandText><CommandText palette={palette} variant="caption">{label(issue.issueType)} · {new Date(issue.openedAt).toLocaleTimeString()}</CommandText></View><StatusPill palette={palette} tone={issue.severity === 'critical' || issue.severity === 'high' ? 'warn' : issue.status === 'resolved' ? 'good' : 'neutral'}>{label(issue.status)} · {label(issue.severity)}</StatusPill></View><CommandText palette={palette} variant="caption">{issue.description}</CommandText>{issue.status === 'open' ? <Button compact mode="outlined" textColor={palette.primary} onPress={() => void acknowledgeIssue({ issueId: issue.id })}>Acknowledge</Button> : null}{issue.status !== 'resolved' ? <><TextInput mode="outlined" dense label="Resolution notes" value={resolutionNotes[issue.id] ?? ''} onChangeText={(value) => setResolutionNotes((notes) => ({ ...notes, [issue.id]: value }))} /><Button compact mode="contained-tonal" textColor={palette.primary} onPress={() => void resolve(issue)}>Resolve</Button></> : <CommandText palette={palette} variant="caption">Resolution: {issue.resolutionNotes}</CommandText>}</View>) : <CommandText palette={palette} variant="caption">No issues have been reported for this event.</CommandText>}</CommandSurface>
+    <CommandSurface palette={palette} style={{ gap: spacing.sm }}><CommandText palette={palette} variant="title">Open and recent issues</CommandText><ScreenState isLoading={issuesQuery.isLoading} error={issuesQuery.error} isEmpty={!issues.length} emptyMessage="No issues have been reported for this event." onRetry={() => void issuesQuery.refetch()}>{issues.map((issue) => <View key={issue.id} style={{ borderTopWidth: 1, borderColor: palette.border, paddingTop: spacing.sm, gap: spacing.xs }}><View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}><View style={{ flex: 1 }}><CommandText palette={palette} variant="body" style={{ fontWeight: '800' }}>{issue.title}</CommandText><CommandText palette={palette} variant="caption">{label(issue.issueType)} · {new Date(issue.openedAt).toLocaleTimeString()}</CommandText></View><StatusPill palette={palette} tone={issue.severity === 'critical' || issue.severity === 'high' ? 'warn' : issue.status === 'resolved' ? 'good' : 'neutral'}>{label(issue.status)} · {label(issue.severity)}</StatusPill></View><CommandText palette={palette} variant="caption">{issue.description}</CommandText>{issue.status === 'open' ? <Button compact mode="outlined" textColor={palette.primary} onPress={() => void acknowledgeIssue({ issueId: issue.id })}>Acknowledge</Button> : null}{issue.status !== 'resolved' ? <><TextInput mode="outlined" dense label="Resolution notes" value={resolutionNotes[issue.id] ?? ''} onChangeText={(value) => setResolutionNotes((notes) => ({ ...notes, [issue.id]: value }))} /><Button compact mode="contained-tonal" textColor={palette.primary} onPress={() => void resolve(issue)}>Resolve</Button></> : <CommandText palette={palette} variant="caption">Resolution: {issue.resolutionNotes}</CommandText>}</View>)}</ScreenState></CommandSurface>
   </ScrollView>;
 }
 
