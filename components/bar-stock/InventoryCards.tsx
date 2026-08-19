@@ -6,6 +6,7 @@
 import { memo } from 'react';
 import { View } from 'react-native';
 import { Button, Card, Chip, Text } from 'react-native-paper';
+import { asArray } from '../../lib/format';
 import { useQuery } from '../../lib/railway-hooks';
 import { api } from '../../lib/railway-api';
 import { accents, colors, spacing } from '../../lib/theme';
@@ -42,10 +43,11 @@ export const MovementTimeline = memo(function MovementTimeline({ itemId }: { ite
     | null
     | undefined;
   if (!data) return <Text style={{ color: colors.muted }}>Loading history...</Text>;
-  if (data.movements.length === 0) return <Text style={{ color: colors.muted }}>No movements recorded yet.</Text>;
+  const movements = asArray<MovementRow>(data.movements);
+  if (movements.length === 0) return <Text style={{ color: colors.muted }}>No movements recorded yet.</Text>;
   return (
     <View style={{ gap: 2 }}>
-      {data.movements.map((m) => {
+      {movements.map((m) => {
         const color = MOVEMENT_COLORS[m.movementType] ?? colors.muted;
         const date = new Date(m.createdAt);
         return (
@@ -74,13 +76,14 @@ export const MovementTimeline = memo(function MovementTimeline({ itemId }: { ite
 });
 
 export const VelocityCard = memo(function VelocityCard({ velocity }: { velocity: VelocityRow[] | null | undefined }) {
-  if (!velocity || velocity.length === 0 || !velocity.some((v) => v.perWeek > 0)) return null;
+  const rows = asArray<VelocityRow>(velocity);
+  if (rows.length === 0 || !rows.some((v) => v.perWeek > 0)) return null;
   return (
     <Card style={{ backgroundColor: colors.surface, borderRadius: 16 }}>
       <Card.Content style={{ gap: spacing.sm }}>
         <Text variant="titleMedium" style={{ fontWeight: '700' }}>Usage velocity</Text>
         <Text style={{ color: colors.muted, fontSize: 12 }}>4-week rolling consumption. Items with no recorded usage are hidden.</Text>
-        {velocity
+        {rows
           .filter((v) => v.perWeek > 0)
           .sort((a, b) => (a.daysUntilEmpty ?? Infinity) - (b.daysUntilEmpty ?? Infinity))
           .slice(0, 12)
@@ -113,11 +116,11 @@ export const ShrinkageCard = memo(function ShrinkageCard({ data }: { data: Shrin
         <Text variant="titleMedium" style={{ fontWeight: '700' }}>Shrinkage report (30 days)</Text>
         {!data ? (
           <Text style={{ color: colors.muted }}>Loading...</Text>
-        ) : data.rows.length === 0 ? (
+        ) : asArray(data.rows).length === 0 ? (
           <Text style={{ color: colors.muted }}>No waste or comp movements recorded in the past 30 days.</Text>
         ) : (
           <>
-            {data.rows.map((row) => (
+            {asArray<ShrinkageData['rows'][number]>(data.rows).map((row) => (
               <View key={row.category} style={{ paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors.border }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Text style={{ fontWeight: '700', textTransform: 'capitalize' }}>{row.category}</Text>
@@ -181,11 +184,11 @@ export const PurchaseOrderCard = memo(function PurchaseOrderCard({
           <Text style={{ color: colors.muted }}>All items are at or above par level.</Text>
         ) : (
           <>
-            <Text style={{ color: colors.muted }}>{purchaseOrder.itemCount} items below par across {purchaseOrder.groups.length} supplier{purchaseOrder.groups.length !== 1 ? 's' : ''}</Text>
-            {purchaseOrder.groups.map((group) => (
+            <Text style={{ color: colors.muted }}>{purchaseOrder.itemCount} items below par across {asArray(purchaseOrder.groups).length} supplier{asArray(purchaseOrder.groups).length !== 1 ? 's' : ''}</Text>
+            {asArray<any>(purchaseOrder.groups).map((group: any) => (
               <View key={group.supplier} style={{ gap: 4 }}>
                 <Text style={{ fontWeight: '700', color: colors.primary, marginTop: spacing.sm }}>{group.supplier}</Text>
-                {group.lines.map((line) => (
+                {asArray<any>(group.lines).map((line: any) => (
                   <View key={line._id} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: colors.border }}>
                     <View style={{ flex: 1 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -245,10 +248,10 @@ export const AgingCard = memo(function AgingCard({ report }: { report: AgingRepo
           <Text style={{ color: colors.muted }}>Loading...</Text>
         ) : (
           <>
-            <Text style={{ fontWeight: '700', color: report.uncountedItems.length > 0 ? colors.warning : colors.muted }}>
-              {report.uncountedItems.length} item{report.uncountedItems.length !== 1 ? 's' : ''} not counted in 7+ days
+            <Text style={{ fontWeight: '700', color: asArray<any>(report.uncountedItems).length > 0 ? colors.warning : colors.muted }}>
+              {asArray<any>(report.uncountedItems).length} item{asArray<any>(report.uncountedItems).length !== 1 ? 's' : ''} not counted in 7+ days
             </Text>
-            {report.uncountedItems.slice(0, 8).map((item) => (
+            {asArray<any>(report.uncountedItems).slice(0, 8).map((item) => (
               <View key={item._id} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3, borderBottomWidth: 1, borderBottomColor: colors.border }}>
                 <Text style={{ fontSize: 13 }}>{item.name}</Text>
                 <Text style={{ color: colors.muted, fontSize: 12 }}>
@@ -256,16 +259,16 @@ export const AgingCard = memo(function AgingCard({ report }: { report: AgingRepo
                 </Text>
               </View>
             ))}
-            {report.uncountedItems.length > 8 && (
-              <Text style={{ color: colors.muted, fontSize: 12 }}>+{report.uncountedItems.length - 8} more</Text>
+            {asArray<any>(report.uncountedItems).length > 8 && (
+              <Text style={{ color: colors.muted, fontSize: 12 }}>+{asArray<any>(report.uncountedItems).length - 8} more</Text>
             )}
 
-            {report.noActivityItems.length > 0 && (
+            {asArray<any>(report.noActivityItems).length > 0 && (
               <>
                 <Text style={{ fontWeight: '700', color: colors.muted, marginTop: spacing.sm }}>
-                  {report.noActivityItems.length} item{report.noActivityItems.length !== 1 ? 's' : ''} with no movement in 30 days
+                  {asArray<any>(report.noActivityItems).length} item{asArray<any>(report.noActivityItems).length !== 1 ? 's' : ''} with no movement in 30 days
                 </Text>
-                {report.noActivityItems.slice(0, 6).map((item) => (
+                {asArray<any>(report.noActivityItems).slice(0, 6).map((item) => (
                   <Text key={item._id} style={{ color: colors.charcoal, fontSize: 12 }}>
                     {item.name} — {item.onHand} on hand
                   </Text>
@@ -273,18 +276,18 @@ export const AgingCard = memo(function AgingCard({ report }: { report: AgingRepo
               </>
             )}
 
-            {report.staleCostItems.length > 0 && (
+            {asArray<any>(report.staleCostItems).length > 0 && (
               <>
                 <Text style={{ fontWeight: '700', color: colors.muted, marginTop: spacing.sm }}>
-                  {report.staleCostItems.length} item{report.staleCostItems.length !== 1 ? 's' : ''} missing unit cost
+                  {asArray<any>(report.staleCostItems).length} item{asArray<any>(report.staleCostItems).length !== 1 ? 's' : ''} missing unit cost
                 </Text>
-                {report.staleCostItems.slice(0, 6).map((item) => (
+                {asArray<any>(report.staleCostItems).slice(0, 6).map((item) => (
                   <Text key={item._id} style={{ color: colors.charcoal, fontSize: 12 }}>{item.name}</Text>
                 ))}
               </>
             )}
 
-            {report.uncountedItems.length === 0 && report.noActivityItems.length === 0 && report.staleCostItems.length === 0 && (
+            {asArray<any>(report.uncountedItems).length === 0 && asArray<any>(report.noActivityItems).length === 0 && asArray<any>(report.staleCostItems).length === 0 && (
               <Text style={{ color: colors.muted }}>All items are up to date.</Text>
             )}
           </>

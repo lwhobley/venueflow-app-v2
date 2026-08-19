@@ -1,6 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
-import { apiRequest } from '../../lib/api-client';
+import { useQueryClient } from '@tanstack/react-query';
+import { apiRequest, useApiQuery } from '../../lib/api-client';
+import { useStadiumLiveStream } from '../../lib/stadium-live-stream';
+import { asArray } from '../../lib/format';
+import { OpsQueryState, OpsStaleNotice } from '../../components/stadium/OpsQueryState';
+import { opsConsole } from '../../lib/theme';
 
 export interface BEOItem {
   code: string;
@@ -26,29 +31,28 @@ export interface SuiteBEO {
   minutesUntilDelivery: number;
 }
 
+const SUITE_BEOS_KEY = ['stadium', 'suite-beos'];
+
 export default function KitchenBumpScreen() {
-  const [beos, setBeos] = useState<SuiteBEO[]>([]);
-  const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [lastSynced, setLastSynced] = useState<string>('');
+  const queryClient = useQueryClient();
 
-  const fetchOrders = async (silent = false) => {
-    try {
-      setBeos(await apiRequest<SuiteBEO[]>('/v1/stadium/suite-beos'));
-    } catch (error) {
-      setBeos([]);
-      if (!silent) Alert.alert('KDS sync failed', error instanceof Error ? error.message : 'Unable to load live orders.');
-    } finally {
-      setLoading(false);
-      setLastSynced(new Date().toLocaleTimeString());
-    }
-  };
-
-  useEffect(() => {
-    fetchOrders();
-    const interval = setInterval(() => fetchOrders(true), 5000);
-    return () => clearInterval(interval);
-  }, []);
+  // The board used to poll with its own setInterval and pop an Alert whenever a
+  // refresh failed — on a kitchen monitor nobody is there to dismiss it. React
+  // Query polls instead: it pauses while the screen is unmounted, shares one
+  // cache entry with the runner queue on the same path, and keeps the last good
+  // board on screen through a blip. The live stream (web only — see
+  // useStadiumLiveStream) invalidates on push, so the 20s interval below is a
+  // fallback cadence, not the primary update path.
+  const query = useApiQuery<SuiteBEO[]>(SUITE_BEOS_KEY, '/v1/stadium/suite-beos', true, 20000);
+  useStadiumLiveStream({
+    events: ['suite_beo_updated'],
+    invalidate: [SUITE_BEOS_KEY],
+  });
+  const beos = asArray<SuiteBEO>(query.data);
+  const loading = query.isLoading;
+  const lastSynced = query.dataUpdatedAt ? new Date(query.dataUpdatedAt).toLocaleTimeString() : '';
+  const refresh = () => void queryClient.invalidateQueries({ queryKey: SUITE_BEOS_KEY });
 
   const handleBumpStatus = async (id: string, nextStatus: 'prep_initiated' | 'en_route') => {
     try {
@@ -59,7 +63,7 @@ export default function KitchenBumpScreen() {
     } catch (error) {
       Alert.alert('Status update failed', error instanceof Error ? error.message : 'The order was not changed.');
     }
-    fetchOrders();
+    refresh();
   };
 
   const filteredBeos = beos.filter(b => {
@@ -79,7 +83,7 @@ export default function KitchenBumpScreen() {
         </View>
         <View style={styles.headerRight}>
           <Text style={styles.syncText}>LAST SYNC: {lastSynced || 'LIVE'}</Text>
-          <TouchableOpacity style={styles.seedBtn} onPress={() => fetchOrders()}>
+          <TouchableOpacity style={styles.seedBtn} onPress={refresh}>
             <Text style={styles.seedBtnText}>REFRESH</Text>
           </TouchableOpacity>
         </View>
@@ -100,15 +104,20 @@ export default function KitchenBumpScreen() {
         ))}
       </View>
 
-      {loading ? (
-        <View style={styles.loadingBox}>
-          <ActivityIndicator size="large" color="#3b82f6" />
-          <Text style={styles.loadingText}>Loading Kitchen Bump Screen Queue...</Text>
-        </View>
-      ) : (
+      {/* A failed poll keeps the last good board on screen; the strip says so. */}
+      {beos.length > 0 ? <OpsStaleNotice error={query.error} onRetry={refresh} /> : null}
+
+      <OpsQueryState
+        isLoading={loading}
+        error={beos.length > 0 ? null : query.error}
+        isEmpty={filteredBeos.length === 0}
+        loadingMessage="Loading Kitchen Bump Screen Queue…"
+        emptyMessage="No suite orders match this filter."
+        onRetry={refresh}
+      >
         <ScrollView contentContainerStyle={styles.gridContainer}>
           {filteredBeos.map((beo) => {
-            const urgencyBg = beo.minutesUntilDelivery <= 15 ? '#ef4444' : beo.minutesUntilDelivery <= 30 ? '#f59e0b' : '#10b981';
+            const urgencyBg = beo.minutesUntilDelivery <= 15 ? opsConsole.danger : beo.minutesUntilDelivery <= 30 ? opsConsole.warn : opsConsole.good;
             return (
               <View key={beo.id} style={styles.card}>
                 {/* Urgency Header */}
@@ -181,60 +190,65 @@ export default function KitchenBumpScreen() {
             );
           })}
         </ScrollView>
-      )}
+      </OpsQueryState>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: opsConsole.background },
   header: {
-    padding: 16, backgroundColor: '#1e293b', borderBottomWidth: 2, borderBottomColor: '#334155',
+    padding: 16, backgroundColor: opsConsole.surface, borderBottomWidth: 2, borderBottomColor: opsConsole.border,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
   },
   headerTitleGroup: { flexDirection: 'column' },
-  headerTitle: { color: '#f8fafc', fontSize: 24, fontWeight: '900', letterSpacing: 1 },
-  headerSub: { color: '#94a3b8', fontSize: 11, fontWeight: '700', marginTop: 2 },
+  headerTitle: { color: opsConsole.text, fontSize: 24, fontWeight: '900', letterSpacing: 1 },
+  headerSub: { color: opsConsole.muted, fontSize: 11, fontWeight: '700', marginTop: 2 },
   headerRight: { alignItems: 'flex-end' },
-  syncText: { color: '#10b981', fontSize: 11, fontWeight: '800', marginBottom: 4 },
-  seedBtn: { backgroundColor: '#3b82f6', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
-  seedBtnText: { color: '#ffffff', fontSize: 12, fontWeight: '800' },
-  filterBar: { flexDirection: 'row', padding: 12, backgroundColor: '#1e293b', gap: 8 },
-  filterChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#334155' },
-  filterChipActive: { backgroundColor: '#3b82f6' },
-  filterChipText: { color: '#94a3b8', fontSize: 12, fontWeight: '700' },
-  filterChipTextActive: { color: '#ffffff' },
+  syncText: { color: opsConsole.good, fontSize: 11, fontWeight: '800', marginBottom: 4 },
+  seedBtn: { backgroundColor: opsConsole.accent, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
+  seedBtnText: { color: opsConsole.textStrong, fontSize: 12, fontWeight: '800' },
+  filterBar: { flexDirection: 'row', padding: 12, backgroundColor: opsConsole.surface, gap: 8 },
+  filterChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: opsConsole.border },
+  filterChipActive: { backgroundColor: opsConsole.accent },
+  filterChipText: { color: opsConsole.muted, fontSize: 12, fontWeight: '700' },
+  filterChipTextActive: { color: opsConsole.textStrong },
   loadingBox: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { color: '#94a3b8', marginTop: 12, fontSize: 14 },
+  loadingText: { color: opsConsole.muted, marginTop: 12, fontSize: 14 },
   gridContainer: { padding: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   card: {
-    width: '48%', backgroundColor: '#1e293b', borderRadius: 12, overflow: 'hidden',
-    borderWidth: 1, borderColor: '#334155', marginBottom: 12,
+    width: '48%', backgroundColor: opsConsole.surface, borderRadius: 12, overflow: 'hidden',
+    borderWidth: 1, borderColor: opsConsole.border, marginBottom: 12,
   },
   cardHeader: { padding: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  suiteName: { color: '#ffffff', fontSize: 18, fontWeight: '800' },
+  suiteName: { color: opsConsole.textStrong, fontSize: 18, fontWeight: '800' },
   beoNumber: { color: '#f1f5f9', fontSize: 12, fontWeight: '600' },
   timerBadge: { backgroundColor: 'rgba(0,0,0,0.3)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  timerText: { color: '#ffffff', fontSize: 12, fontWeight: '900' },
+  timerText: { color: opsConsole.textStrong, fontSize: 12, fontWeight: '900' },
   cardBody: { padding: 12 },
   metaRow: { flexDirection: 'row', marginBottom: 8 },
-  metaLabel: { color: '#64748b', fontSize: 12, fontWeight: '700', width: 60 },
-  metaValue: { color: '#cbd5e1', fontSize: 12, fontWeight: '600' },
+  metaLabel: { color: opsConsole.mutedDim, fontSize: 12, fontWeight: '700', width: 60 },
+  metaValue: { color: opsConsole.subtle, fontSize: 12, fontWeight: '600' },
   instructionsBox: { backgroundColor: '#451a03', padding: 8, borderRadius: 6, borderWidth: 1, borderColor: '#b45309', marginVertical: 8 },
-  instructionsLabel: { color: '#f59e0b', fontSize: 11, fontWeight: '800' },
+  instructionsLabel: { color: opsConsole.warn, fontSize: 11, fontWeight: '800' },
   instructionsText: { color: '#fef3c7', fontSize: 12, marginTop: 2 },
-  sectionHeader: { color: '#94a3b8', fontSize: 11, fontWeight: '800', marginTop: 8, marginBottom: 4 },
-  lineItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#334155' },
-  itemQty: { color: '#38bdf8', fontSize: 14, fontWeight: '900', width: 32 },
-  itemName: { color: '#f8fafc', fontSize: 14, fontWeight: '600', flex: 1 },
-  itemCat: { color: '#64748b', fontSize: 11 },
-  cardFooter: { padding: 12, backgroundColor: '#0f172a' },
+  sectionHeader: { color: opsConsole.muted, fontSize: 11, fontWeight: '800', marginTop: 8, marginBottom: 4 },
+  lineItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: opsConsole.border },
+  itemQty: { color: opsConsole.accentSoft, fontSize: 14, fontWeight: '900', width: 32 },
+  itemName: { color: opsConsole.text, fontSize: 14, fontWeight: '600', flex: 1 },
+  itemCat: { color: opsConsole.mutedDim, fontSize: 11 },
+  cardFooter: { padding: 12, backgroundColor: opsConsole.background },
   actionBtn: { paddingVertical: 14, borderRadius: 8, alignItems: 'center' },
   prepBtn: { backgroundColor: '#eab308' },
-  readyBtn: { backgroundColor: '#10b981' },
-  actionBtnText: { color: '#0f172a', fontSize: 15, fontWeight: '900' },
+  readyBtn: { backgroundColor: opsConsole.good },
+  actionBtnText: { color: opsConsole.background, fontSize: 15, fontWeight: '900' },
   statusBadgeEnRoute: { backgroundColor: '#0284c7', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-  statusTextEnRoute: { color: '#ffffff', fontSize: 14, fontWeight: '900' },
+  statusTextEnRoute: { color: opsConsole.textStrong, fontSize: 14, fontWeight: '900' },
   statusBadgeDelivered: { backgroundColor: '#16a34a', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-  statusTextDelivered: { color: '#ffffff', fontSize: 14, fontWeight: '900' },
+  statusTextDelivered: { color: opsConsole.textStrong, fontSize: 14, fontWeight: '900' },
 });
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

@@ -2,11 +2,12 @@ import { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import { Button, Chip, IconButton, Text, TextInput as PaperTextInput } from 'react-native-paper';
-import { useMutation, useQuery } from '../lib/railway-hooks';
+import { useMutation, useQueryState } from '../lib/railway-hooks';
 import { api } from '../lib/railway-api';
 import { colors, spacing, type } from '../lib/theme';
 import { AppCard } from '../components/AppCard';
-import { errorMessage } from '../lib/format';
+import { ScreenState } from '../components/ScreenState';
+import { asArray, errorMessage } from '../lib/format';
 import { useVenueAuth } from '../lib/useVenueAuth';
 import { useI18n } from '../lib/i18n';
 
@@ -34,9 +35,9 @@ export default function LogbookScreen() {
     { value: 'maintenance', label: t('logbook.categoryMaintenance') },
     { value: 'general', label: t('logbook.categoryGeneral') },
   ];
-  const myProfileId = me?.profile._id ?? null;
-  const entriesQuery = useQuery(api.operations.listLogbook, isReady && venue?.id ? { limit: 100 } : 'skip') as { entries: LogbookEntry[] } | null | undefined;
-  const entries = useMemo(() => entriesQuery?.entries ?? [], [entriesQuery]);
+  const myProfileId = me?.profile?._id ?? null;
+  const entriesQuery = useQueryState<{ entries: LogbookEntry[] }>(api.operations.listLogbook, isReady && venue?.id ? { limit: 100 } : 'skip');
+  const entries = useMemo(() => asArray<LogbookEntry>(entriesQuery.data?.entries), [entriesQuery.data]);
 
   const addEntry = useMutation(api.operations.addLogbookEntry);
   const deleteEntry = useMutation(api.operations.deleteLogbookEntry);
@@ -112,10 +113,14 @@ export default function LogbookScreen() {
           </View>
       </AppCard>
 
-      {entries.length === 0 ? (
-        <Text style={{ color: colors.muted, textAlign: 'center', marginTop: spacing.lg }}>{t('logbook.noEntries')}</Text>
-      ) : (
-        entries.map((entry) => {
+      <ScreenState
+        isLoading={entriesQuery.isLoading}
+        error={entriesQuery.error}
+        isEmpty={entries.length === 0}
+        emptyMessage={t('logbook.noEntries')}
+        onRetry={() => void entriesQuery.refetch()}
+      >
+        {entries.map((entry) => {
           const categoryLabel = CATEGORIES.find((c) => c.value === entry.category)?.label ?? entry.category;
           const canDelete = canManage || entry.authorProfileId === myProfileId;
           return (
@@ -136,8 +141,13 @@ export default function LogbookScreen() {
                 </View>
             </AppCard>
           );
-        })
-      )}
+        })}
+      </ScreenState>
     </ScrollView>
   );
 }
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../components/ErrorBoundary';

@@ -29,6 +29,12 @@ function makeController() {
       groupBy: vi.fn().mockResolvedValue([]),
     },
     venue: { findUnique: vi.fn().mockResolvedValue({ timezone: 'America/New_York' }) },
+    posAggregatorChannel: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue(null),
+      create: vi.fn(),
+      update: vi.fn(),
+    },
     $queryRaw: vi.fn().mockResolvedValue([]),
     $transaction: vi.fn().mockImplementation((ops: any[]) => Promise.all(ops)),
   } as any;
@@ -322,6 +328,75 @@ describe('PosController', () => {
 
       expect(result.byEmployee[0]).toEqual(expect.objectContaining({ employeeName: 'Alex', tipsCents: 3500, payCents: 12000 }));
       expect(result.totalTipsCents).toBe(3500);
+    });
+  });
+
+  describe('aggregator channels', () => {
+    it('rejects listing channels for a role that cannot manage the venue', async () => {
+      const { controller } = makeController();
+      await expect(controller.getAggregatorChannels(staffScope)).rejects.toThrow(ForbiddenException);
+    });
+
+    it('lists only this venue\'s channels, serialized for the frontend', async () => {
+      const { controller, prisma } = makeController();
+      prisma.posAggregatorChannel.findMany.mockResolvedValue([
+        { id: 'ch-1', name: 'North Stands', zoneLabel: 'North 100', primaryProvider: 'toast', fallbackProvider: 'square', terminalCount: 16, active: true },
+      ]);
+
+      const result = await controller.getAggregatorChannels(managerScope);
+
+      expect(prisma.posAggregatorChannel.findMany).toHaveBeenCalledWith({
+        where: { venueId: 'venue-1' },
+        orderBy: { createdAt: 'asc' },
+      });
+      expect(result).toEqual([
+        { id: 'ch-1', name: 'North Stands', zone: 'North 100', primaryProvider: 'toast', fallbackProvider: 'square', terminalCount: 16, status: 'active' },
+      ]);
+    });
+
+    it('rejects creating a channel for a role that cannot manage the venue', async () => {
+      const { controller } = makeController();
+      await expect(controller.createAggregatorChannel(staffScope, {
+        name: 'North Stands', zoneLabel: 'North 100', primaryProvider: 'toast', fallbackProvider: 'square',
+      } as any)).rejects.toThrow(ForbiddenException);
+    });
+
+    it('creates a channel scoped to the caller\'s venue', async () => {
+      const { controller, prisma } = makeController();
+      prisma.posAggregatorChannel.create.mockResolvedValue({
+        id: 'ch-2', name: 'East Stands', zoneLabel: 'East 100', primaryProvider: 'toast', fallbackProvider: 'clover', terminalCount: 0, active: true,
+      });
+
+      const result = await controller.createAggregatorChannel(managerScope, {
+        name: 'East Stands', zoneLabel: 'East 100', primaryProvider: 'toast', fallbackProvider: 'clover',
+      } as any);
+
+      expect(prisma.posAggregatorChannel.create).toHaveBeenCalledWith({
+        data: { venueId: 'venue-1', name: 'East Stands', zoneLabel: 'East 100', primaryProvider: 'toast', fallbackProvider: 'clover', terminalCount: 0 },
+      });
+      expect(result.status).toBe('active');
+    });
+
+    it('does not let one venue update another venue\'s channel', async () => {
+      const { controller, prisma } = makeController();
+      prisma.posAggregatorChannel.findFirst.mockResolvedValue(null);
+
+      await expect(controller.updateAggregatorChannelStatus(managerScope, 'foreign-channel', { active: false } as any))
+        .rejects.toThrow('POS aggregator channel not found');
+      expect(prisma.posAggregatorChannel.update).not.toHaveBeenCalled();
+    });
+
+    it('toggles a channel\'s active status', async () => {
+      const { controller, prisma } = makeController();
+      prisma.posAggregatorChannel.findFirst.mockResolvedValue({ id: 'ch-1', venueId: 'venue-1' });
+      prisma.posAggregatorChannel.update.mockResolvedValue({
+        id: 'ch-1', name: 'North Stands', zoneLabel: 'North 100', primaryProvider: 'toast', fallbackProvider: 'square', terminalCount: 16, active: false,
+      });
+
+      const result = await controller.updateAggregatorChannelStatus(managerScope, 'ch-1', { active: false } as any);
+
+      expect(prisma.posAggregatorChannel.update).toHaveBeenCalledWith({ where: { id: 'ch-1' }, data: { active: false } });
+      expect(result.status).toBe('inactive');
     });
   });
 });

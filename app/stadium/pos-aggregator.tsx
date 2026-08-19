@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { TextInput } from 'react-native-paper';
+import { Button, Chip, TextInput } from 'react-native-paper';
 import { CommandButton, CommandText, StatusPill } from '../../components/FutureUI';
 import { spacing, useDesignTheme } from '../../lib/theme';
 import { useVenueAuth } from '../../lib/useVenueAuth';
 import { useMutation, useQuery } from '../../lib/railway-hooks';
+import { asArray, errorMessage } from '../../lib/format';
 import { api } from '../../lib/railway-api';
 
 interface PosProviderCard {
@@ -40,12 +41,61 @@ export default function PosAggregatorScreen() {
   const settlement = useQuery(api.pos.getAggregatorSettlement, isReady && canManage && venue?.id ? { venueId: venue.id } : 'skip') as any;
 
   const sync86Mutation = useMutation(api.pos.sync86Broadcast);
+  const createChannel = useMutation(api.pos.createAggregatorChannel);
+  const updateChannelStatus = useMutation(api.pos.updateAggregatorChannelStatus);
 
   const [activeTab, setActiveTab] = useState<'feed' | 'providers' | 'channels' | 'sync86' | 'settlement'>('feed');
   const [newItem86, setNewItem86] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All Outlets');
   const [syncStatusMessage, setSyncStatusMessage] = useState<string | null>(null);
   const [isBroadcasting, setIsBroadcasting] = useState(false);
+
+  const [showChannelForm, setShowChannelForm] = useState(false);
+  const [channelName, setChannelName] = useState('');
+  const [channelZone, setChannelZone] = useState('');
+  const [channelPrimary, setChannelPrimary] = useState('toast');
+  const [channelFallback, setChannelFallback] = useState('square');
+  const [channelTerminals, setChannelTerminals] = useState('');
+  const [channelMessage, setChannelMessage] = useState<string | null>(null);
+  const [channelBusy, setChannelBusy] = useState<string | null>(null);
+
+  const channels = asArray<{ id: string; name: string; zone: string; primaryProvider: string; fallbackProvider: string; terminalCount: number; status: string }>(aggregatorChannels);
+
+  const saveChannel = async () => {
+    if (!channelName.trim() || !channelZone.trim() || !venue?.id) return;
+    setChannelBusy('create');
+    setChannelMessage(null);
+    try {
+      await createChannel({
+        venueId: venue.id,
+        name: channelName.trim(),
+        zoneLabel: channelZone.trim(),
+        primaryProvider: channelPrimary,
+        fallbackProvider: channelFallback,
+        terminalCount: channelTerminals ? Number(channelTerminals) : undefined,
+      });
+      setChannelName('');
+      setChannelZone('');
+      setChannelTerminals('');
+      setShowChannelForm(false);
+    } catch (error) {
+      setChannelMessage(errorMessage(error, 'The channel could not be saved.'));
+    } finally {
+      setChannelBusy(null);
+    }
+  };
+
+  const toggleChannelStatus = async (channel: { id: string; status: string }) => {
+    setChannelBusy(channel.id);
+    setChannelMessage(null);
+    try {
+      await updateChannelStatus({ channelId: channel.id, active: channel.status !== 'active' });
+    } catch (error) {
+      setChannelMessage(errorMessage(error, 'The channel status could not be changed.'));
+    } finally {
+      setChannelBusy(null);
+    }
+  };
 
   const liveFeeds = aggregatorStatus?.recentTransactions?.length ? aggregatorStatus.recentTransactions : [
     { id: 'tx-1', externalCheckId: 'CHK-TOAST-9821', provider: 'toast', totalCents: 4400, status: 'paid', openedAt: Date.now() - 15000, revenueCenter: 'Stand 101 · Smokehouse BBQ', items: '2x Brisket Sandwich, 2x Draft IPA' },
@@ -283,22 +333,64 @@ export default function PosAggregatorScreen() {
         {/* TAB 3: CHANNEL ROUTING MATRIX */}
         {activeTab === 'channels' ? (
           <View style={{ gap: spacing.sm }}>
-            <CommandText palette={palette} variant="label" style={{ color: '#17643B', fontWeight: '800' }}>
-              VENUE MULTI-CHANNEL ROUTING MATRIX
-            </CommandText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <CommandText palette={palette} variant="label" style={{ color: '#17643B', fontWeight: '800' }}>
+                VENUE MULTI-CHANNEL ROUTING MATRIX
+              </CommandText>
+              <Button compact mode="text" textColor="#17643B" onPress={() => setShowChannelForm((value) => !value)}>
+                {showChannelForm ? 'Cancel' : 'Add channel'}
+              </Button>
+            </View>
 
-            {(aggregatorChannels || []).map((ch: any) => (
+            {channelMessage ? (
+              <CommandText palette={palette} variant="caption" style={{ color: palette.danger }}>{channelMessage}</CommandText>
+            ) : null}
+
+            {showChannelForm ? (
+              <View style={[styles.channelCard, { backgroundColor: palette.surface, borderColor: palette.border, gap: spacing.sm }]}>
+                <TextInput mode="outlined" label="Channel name" value={channelName} onChangeText={setChannelName} placeholder="e.g. North Concourse 100 Stands" />
+                <TextInput mode="outlined" label="Zone" value={channelZone} onChangeText={setChannelZone} placeholder="e.g. North 100" />
+                <CommandText palette={palette} variant="caption">Primary provider</CommandText>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+                  {PROVIDER_METRICS.map((p) => (
+                    <Chip key={`primary-${p.provider}`} selected={channelPrimary === p.provider} onPress={() => setChannelPrimary(p.provider)}>{p.provider}</Chip>
+                  ))}
+                </View>
+                <CommandText palette={palette} variant="caption">Fallback provider</CommandText>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+                  {PROVIDER_METRICS.map((p) => (
+                    <Chip key={`fallback-${p.provider}`} selected={channelFallback === p.provider} onPress={() => setChannelFallback(p.provider)}>{p.provider}</Chip>
+                  ))}
+                </View>
+                <TextInput mode="outlined" label="Terminal count (optional)" keyboardType="number-pad" value={channelTerminals} onChangeText={setChannelTerminals} />
+                <Button mode="contained" buttonColor="#17643B" loading={channelBusy === 'create'} disabled={channelBusy === 'create' || !channelName.trim() || !channelZone.trim()} onPress={() => void saveChannel()}>
+                  Save channel
+                </Button>
+              </View>
+            ) : null}
+
+            {channels.length === 0 ? (
+              <CommandText palette={palette} variant="caption" style={{ color: palette.muted }}>
+                No POS channels configured yet. Channels group a zone's terminals under a primary and fallback provider.
+              </CommandText>
+            ) : null}
+
+            {channels.map((ch) => (
               <View key={ch.id} style={[styles.channelCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                   <CommandText palette={palette} variant="body" style={{ fontWeight: '700' }}>
                     {ch.name}
                   </CommandText>
-                  <StatusPill palette={palette} tone="good">{ch.status.toUpperCase()}</StatusPill>
+                  <Pressable onPress={() => void toggleChannelStatus(ch)} disabled={channelBusy === ch.id}>
+                    <StatusPill palette={palette} tone={ch.status === 'active' ? 'good' : 'neutral'}>
+                      {(ch.status ?? 'unknown').toUpperCase()}
+                    </StatusPill>
+                  </Pressable>
                 </View>
                 <View style={styles.channelDetailsRow}>
                   <CommandText palette={palette} variant="caption">Zone: {ch.zone} · Terminals: {ch.terminalCount}</CommandText>
                   <CommandText palette={palette} variant="caption" style={{ color: '#17643B', fontWeight: '700' }}>
-                    Primary: {ch.primaryProvider.toUpperCase()} (Fallback: {ch.fallbackProvider.toUpperCase()})
+                    Primary: {(ch.primaryProvider ?? '—').toUpperCase()} (Fallback: {(ch.fallbackProvider ?? '—').toUpperCase()})
                   </CommandText>
                 </View>
               </View>
@@ -527,3 +619,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
 });
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

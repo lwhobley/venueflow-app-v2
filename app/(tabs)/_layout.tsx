@@ -1,13 +1,10 @@
 import { Redirect, Tabs } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { ColorValue } from "react-native";
-import { useQuery } from "../../lib/railway-hooks";
-import { api } from "../../lib/railway-api";
 import { useDesignTheme } from "../../lib/theme";
 import { useAuthStore, type AuthState } from "../../lib/auth-store";
 import { CarouselTabBar } from "../../components/CarouselTabBar";
 import { useI18n } from "../../lib/i18n";
-import { canManageVenue } from "../../lib/permissions";
 import { useAuthenticatedSession } from "../../lib/auth-readiness";
 
 const icon =
@@ -23,11 +20,7 @@ export default function TabsLayout() {
   const fullName = localUser?.full_name ?? "Profile";
   const { t } = useI18n();
   const palette = useDesignTheme();
-  const { isReady } = useAuthenticatedSession();
-  const me = useQuery(api.app.getMe, isReady ? {} : "skip");
-  const canManage = Boolean(
-    me && canManageVenue(me.profile.role, me.profile.allAccess),
-  );
+  useAuthenticatedSession();
 
   if (hydrated && !localUser) {
     return <Redirect href="/(auth)/sign-in" />;
@@ -61,7 +54,6 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="schedule"
         options={{
-          href: null,
           title: "Rosters",
           tabBarIcon: icon("calendar-week"),
         }}
@@ -70,7 +62,6 @@ export default function TabsLayout() {
         name="guests"
         options={{
           title: "CRM",
-          href: null,
           tabBarIcon: icon("account-heart-outline"),
         }}
       />
@@ -78,7 +69,6 @@ export default function TabsLayout() {
         name="integrations"
         options={{
           title: "POS & Hardware",
-          href: null,
           tabBarIcon: icon("connection"),
         }}
       />
@@ -86,7 +76,6 @@ export default function TabsLayout() {
         name="sales"
         options={{
           title: "Concessions POS",
-          href: null,
           tabBarIcon: icon("cash-register"),
         }}
       />
@@ -106,7 +95,6 @@ export default function TabsLayout() {
         name="documents"
         options={{
           title: "BEOs & Docs",
-          href: null,
           tabBarIcon: icon("file-document-multiple-outline"),
         }}
       />
@@ -114,7 +102,6 @@ export default function TabsLayout() {
         name="reports"
         options={{
           title: "Reports & Recon",
-          href: null,
           tabBarIcon: icon("chart-box-outline"),
         }}
       />
@@ -122,7 +109,6 @@ export default function TabsLayout() {
         name="staff"
         options={{
           title: "Staff & Union",
-          href: null,
           tabBarIcon: icon("account-group"),
         }}
       />

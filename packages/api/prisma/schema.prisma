@@ -815,6 +815,7 @@ model Venue {
   waitlistEntries               Waitlist[]
   tableAssignments              TableAssignment[]
   posConnections                PosConnection[]
+  posAggregatorChannels          PosAggregatorChannel[]
   posLaborPunches               PosLaborPunch[]
   crmActivityLogs               CrmActivityLog[]
   crmBeos                       CrmBeo[]
@@ -1493,6 +1494,28 @@ model PosConnection {
 
   @@unique([venueId, provider])
   @@index([venueId])
+}
+
+// A manager-configured routing entry for the POS aggregator's channel matrix
+// (app/stadium/pos-aggregator.tsx "Channels" tab) — which zone's terminals
+// route through which primary/fallback provider. Distinct from PosConnection
+// (one row per provider the venue has authenticated with); a channel groups
+// terminals under a human label and names which connected provider they use.
+model PosAggregatorChannel {
+  id               String      @id @default(cuid())
+  venueId          String
+  name             String
+  zoneLabel        String
+  primaryProvider  PosProvider
+  fallbackProvider PosProvider
+  terminalCount    Int         @default(0)
+  active           Boolean     @default(true)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  venue            Venue       @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@unique([venueId, name])
+  @@index([venueId, active])
 }
 
 model PosCheck {

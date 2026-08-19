@@ -4,6 +4,7 @@ import { Button, Text } from "react-native-paper";
 import { authColors, spacing, type } from "../../lib/theme";
 import { useAuthStore, type AuthState } from "../../lib/auth-store";
 
+
 const logoSource = require("../../assets/stadium-wrangler-logo.png");
 
 export default function NoVenueScreen() {
@@ -85,3 +86,8 @@ const styles = StyleSheet.create({
     maxWidth: 280,
   },
 });
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

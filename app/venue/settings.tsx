@@ -22,7 +22,7 @@ export default function VenueSettingsScreen() {
 
   const { isReady, user } = useAuthenticatedSession();
   const me = useQuery(api.app.getMe, isReady ? {} : 'skip');
-  const canManage = Boolean(me && canManageVenue(me.profile.role, me.profile.allAccess));
+  const canManage = Boolean(me?.profile && canManageVenue(me.profile.role, me.profile.allAccess));
   const joinCode = useQuery<{ code: string }>(api.app.getVenueJoinCode, isReady && canManage ? {} : 'skip');
 
   const [name, setName] = useState(venue?.name ?? '');
@@ -195,3 +195,8 @@ export default function VenueSettingsScreen() {
     </ScrollView>
   );
 }
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

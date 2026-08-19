@@ -15,7 +15,7 @@ export const VENUE_SCOPED_MODELS: ReadonlySet<string> = new Set([
   'ChatImage', 'ChecklistCompletion', 'ChecklistTemplateItem', 'Conversation', 'ConversationRead',
   'CrmActivityLog', 'CrmBeo', 'CrmContract', 'CrmLead', 'CrmNote', 'EmailTemplate', 'EventFnbReadiness', 'FloorChair',
   'FloorPlan', 'FnbOperationUnit', 'FnbPartner', 'Guest', 'Invite', 'Invoice', 'LogbookEntry', 'ManagerGoal', 'Message', 'NotificationEvent',
-  'NotificationRead', 'PaymentMethod', 'PayrollExport', 'PosCheck', 'PosConnection',
+  'NotificationRead', 'PaymentMethod', 'PayrollExport', 'PosAggregatorChannel', 'PosCheck', 'PosConnection',
   'PosLaborPunch', 'PrepBoardItem', 'Profile', 'PushToken', 'Reservation', 'ReservationConnection',
   'ReservationHold', 'ReservationSetting', 'ReservationSyncEvent', 'ScheduleEmailEvent',
   'ScheduleMemoryNote', 'ScheduleShift', 'ScheduleTemplate', 'ShiftSwap', 'StaffOnboardingTask', 'StaffRequest', 'Subscription',

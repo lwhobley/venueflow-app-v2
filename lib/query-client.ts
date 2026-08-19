@@ -1,4 +1,5 @@
 import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
+import { ApiError } from './api-client';
 
 // useQuery() in railway-hooks.ts returns only `query.data`, by design (every
 // screen treats loading/error the same way: undefined). That means a failed
@@ -23,6 +24,15 @@ export const queryClient = new QueryClient({
     queries: {
       staleTime: 10000,
       gcTime: 300000,
+      // A 4xx is the server rejecting the request on purpose — wrong role, bad
+      // args, gone. Retrying it fails identically and only holds the screen on
+      // its loading state for several more seconds before it can show the real
+      // outcome. Retry once for genuinely transient failures (5xx, network).
+      retry: (failureCount, error) => {
+        const status = error instanceof ApiError ? error.status : 0;
+        if (status >= 400 && status < 500) return false;
+        return failureCount < 1;
+      },
     },
   },
 });

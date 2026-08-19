@@ -22,6 +22,7 @@ import { configurePurchases, logoutPurchases } from '../lib/purchases';
 import { queryClient } from '../lib/query-client';
 import { flushOfflineQueue } from '../lib/offline-queue';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { DataErrorBanner } from '../components/DataErrorBanner';
 
 const shouldIgnoreWebError = (message: string) =>
   message.includes('ResizeObserver loop completed with undelivered notifications') ||
@@ -127,6 +128,7 @@ export default function RootLayout() {
                 <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }} edges={['top', 'left', 'right']}>
                   <ErrorBoundary>
                     <OfflineBanner />
+                    <DataErrorBanner />
                     <SubscriptionGate>
                       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }} />
                     </SubscriptionGate>

@@ -21,6 +21,8 @@ import type { Role } from "../../lib/types";
 import { SectionHeader } from "../../components/AppCard";
 import { useI18n } from "../../lib/i18n";
 import { readPickedFileText } from "../../lib/picked-file";
+import { asArray } from '../../lib/format';
+
 
 type VenueRole = { _id: string; name: string };
 type ParsedStaffImportRow = {
@@ -211,7 +213,7 @@ function StaffScreen() {
     isReady && venue?.id && canManage ? { venueId: venue.id } : "skip",
   );
   const staff = useMemo(
-    () => (staffQuery ?? []) as StaffMember[],
+    () => asArray(staffQuery) as StaffMember[],
     [staffQuery],
   );
   const onboardingQuery = useQuery(
@@ -232,7 +234,7 @@ function StaffScreen() {
     isReady && venue?.id && canManage ? { venueId: venue.id } : "skip",
   );
   const customRoles = useMemo(
-    () => (rolesQuery ?? []) as VenueRole[],
+    () => asArray(rolesQuery) as VenueRole[],
     [rolesQuery],
   );
   // Dropdown options: the standard job titles plus any custom roles the venue added.
@@ -298,7 +300,7 @@ function StaffScreen() {
     setImportBusy(true);
     try {
       const result = await parseStaffImport({ text: importText });
-      const items = (result.items ?? []) as ParsedStaffImportRow[];
+      const items = asArray(result.items) as ParsedStaffImportRow[];
       setImportRows(items);
       setImportMsg(
         items.length > 0
@@ -388,11 +390,11 @@ function StaffScreen() {
 
   const selectedStaff =
     staff.find((member: StaffMember) => member._id === selectedStaffId) ?? null;
-  const onboardingRows = onboardingQuery?.staff ?? [];
+  const onboardingRows = asArray(onboardingQuery?.staff);
   const selectedOnboarding = selectedStaffId
     ? (onboardingRows.find((row) => row._id === selectedStaffId) ?? null)
     : null;
-  const auditEntries = auditLogQuery?.entries ?? [];
+  const auditEntries = asArray(auditLogQuery?.entries);
   const onboardingProgress =
     selectedOnboarding && selectedOnboarding.totalCount > 0
       ? Math.round(
@@ -411,7 +413,7 @@ function StaffScreen() {
     setAltPhone(member.altPhone ?? "");
     setAddress(member.address ?? "");
     setDateOfBirth(member.dateOfBirth ?? "");
-    setCertifications(member.certifications ?? []);
+    setCertifications(asArray(member.certifications));
     setOnboardingPin("");
   };
 
@@ -1230,3 +1232,8 @@ function StaffScreen() {
     />
   );
 }
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

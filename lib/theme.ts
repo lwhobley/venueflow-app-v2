@@ -95,12 +95,40 @@ export const authInputProps = {
   style: { backgroundColor: authColors.surface },
 };
 
+// Screens index this list by fixed position (accents[0] .. accents[5]) for KPI
+// tiles and callout cards, so it must keep at least six entries — a shorter
+// list crashes those screens with "cannot read properties of undefined".
 export const accents = [
   { bg: designPalettes.light.primary, fg: "#FFFFFF", icon: designPalettes.light.primary },
   { bg: designPalettes.light.secondary, fg: "#FFFFFF", icon: designPalettes.light.secondary },
   { bg: designPalettes.light.info, fg: "#FFFFFF", icon: designPalettes.light.info },
   { bg: designPalettes.light.warning, fg: "#FFFFFF", icon: designPalettes.light.warning },
+  { bg: designPalettes.light.charcoal, fg: "#FFFFFF", icon: designPalettes.light.charcoal },
+  { bg: designPalettes.light.shadow, fg: "#FFFFFF", icon: designPalettes.light.shadow },
 ];
+
+/**
+ * Palette for the stadium operations consoles (KDS, stand sheets, commissary,
+ * runner and kiosk screens). Those run on wall-mounted kitchen displays and
+ * back-of-house tablets, so they stay dark regardless of the app's light/dark
+ * setting — but they were each hardcoding the same slate ramp inline, which
+ * meant a dozen near-identical hex values and no single place to adjust them.
+ */
+export const opsConsole = {
+  background: "#0F172A",
+  surface: "#1E293B",
+  border: "#334155",
+  text: "#F8FAFC",
+  textStrong: "#FFFFFF",
+  muted: "#94A3B8",
+  mutedDim: "#64748B",
+  subtle: "#CBD5E1",
+  accent: "#3B82F6",
+  accentSoft: "#38BDF8",
+  good: "#10B981",
+  warn: "#F59E0B",
+  danger: "#EF4444",
+} as const;
 
 export const spacing = {
   xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, xxxl: 48, huge: 64,
