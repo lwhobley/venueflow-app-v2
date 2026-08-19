@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiRequest, useApiQuery } from '../../lib/api-client';
+import { useStadiumLiveStream } from '../../lib/stadium-live-stream';
 import { asArray } from '../../lib/format';
 import { OpsQueryState, OpsStaleNotice } from '../../components/stadium/OpsQueryState';
 import { opsConsole } from '../../lib/theme';
@@ -40,8 +41,14 @@ export default function KitchenBumpScreen() {
   // refresh failed — on a kitchen monitor nobody is there to dismiss it. React
   // Query polls instead: it pauses while the screen is unmounted, shares one
   // cache entry with the runner queue on the same path, and keeps the last good
-  // board on screen through a blip.
-  const query = useApiQuery<SuiteBEO[]>(SUITE_BEOS_KEY, '/v1/stadium/suite-beos', true, 5000);
+  // board on screen through a blip. The live stream (web only — see
+  // useStadiumLiveStream) invalidates on push, so the 20s interval below is a
+  // fallback cadence, not the primary update path.
+  const query = useApiQuery<SuiteBEO[]>(SUITE_BEOS_KEY, '/v1/stadium/suite-beos', true, 20000);
+  useStadiumLiveStream({
+    events: ['suite_beo_updated'],
+    invalidate: [SUITE_BEOS_KEY],
+  });
   const beos = asArray<SuiteBEO>(query.data);
   const loading = query.isLoading;
   const lastSynced = query.dataUpdatedAt ? new Date(query.dataUpdatedAt).toLocaleTimeString() : '';

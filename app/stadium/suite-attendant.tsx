@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiRequest, useApiQuery } from '../../lib/api-client';
+import { useStadiumLiveStream } from '../../lib/stadium-live-stream';
 import { asArray } from '../../lib/format';
 import { OpsQueryState, OpsStaleNotice } from '../../components/stadium/OpsQueryState';
 import { opsConsole } from '../../lib/theme';
@@ -39,7 +40,13 @@ export default function SuiteAttendantRunnerScreen() {
   const [replenishSummary, setReplenishSummary] = useState<string>('');
   const [signatureName, setSignatureName] = useState<string>('');
 
-  const query = useApiQuery<SuiteBEO[]>(SUITE_BEOS_KEY, '/v1/stadium/suite-beos', true, 4000);
+  // Fallback cadence — the live stream (web only) invalidates this cache on
+  // push, same as the kitchen bump screen it shares SUITE_BEOS_KEY with.
+  const query = useApiQuery<SuiteBEO[]>(SUITE_BEOS_KEY, '/v1/stadium/suite-beos', true, 20000);
+  useStadiumLiveStream({
+    events: ['suite_beo_updated', 'replenishment_requested'],
+    invalidate: [SUITE_BEOS_KEY],
+  });
   const beos = asArray<SuiteBEO>(query.data);
   const fetchRunnerOrders = () => void queryClient.invalidateQueries({ queryKey: SUITE_BEOS_KEY });
 
