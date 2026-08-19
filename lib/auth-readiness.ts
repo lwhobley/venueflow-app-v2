@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useAuthStore, type AuthState } from './auth-store';
 import { canManageBilling, canManageVenue } from './permissions';
-import { useQuery } from './railway-hooks';
+import { useQueryState } from './railway-hooks';
 import { api } from './railway-api';
 
 export function useAuthenticatedSession() {
@@ -11,7 +11,10 @@ export function useAuthenticatedSession() {
   const token = useAuthStore((state: AuthState) => state.token);
   const isReady = hydrated && Boolean(user) && Boolean(token);
 
-  const { data: me, isLoading } = useQuery(api.app.getMe, isReady ? {} : 'skip');
+  // `useQuery` here returns the payload itself (or undefined while loading),
+  // so it must never be destructured. `useQueryState` is the variant that
+  // returns the { data, isLoading } envelope.
+  const { data: me, isLoading } = useQueryState(api.app.getMe, isReady ? {} : 'skip');
 
   // Hydrate the venue list from the server (getMe returns venues). This runs
   // in the always-mounted authed tree, so it covers every sign-in path and
@@ -32,8 +35,8 @@ export function useAuthenticatedSession() {
   }, [me?.profile?.role, me?.profile?.allAccess, venueId]);
 
   const cached = lastKnown.current?.venueId === venueId ? lastKnown.current : null;
-  const role = me?.profile.role ?? cached?.role ?? null;
-  const allAccess = me?.profile.allAccess ?? cached?.allAccess ?? false;
+  const role = me?.profile?.role ?? cached?.role ?? null;
+  const allAccess = me?.profile?.allAccess ?? cached?.allAccess ?? false;
   const canManage = canManageVenue(role, allAccess);
   const canViewBilling = canManageBilling(role, allAccess);
 

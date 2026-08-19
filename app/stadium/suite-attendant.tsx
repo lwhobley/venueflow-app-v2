@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert } from 'react-native';
 import { apiRequest } from '../../lib/api-client';
+import { asArray } from '../../lib/format';
 
 export interface BEOItem {
   code: string;
@@ -34,7 +35,7 @@ export default function SuiteAttendantRunnerScreen() {
 
   const fetchRunnerOrders = async (silent = false) => {
     try {
-      setBeos(await apiRequest<SuiteBEO[]>('/v1/stadium/suite-beos'));
+      setBeos(asArray<SuiteBEO>(await apiRequest<SuiteBEO[]>('/v1/stadium/suite-beos')));
     } catch (error) {
       setBeos([]);
       if (!silent) Alert.alert('Runner sync failed', error instanceof Error ? error.message : 'Unable to load suite deliveries.');
@@ -290,3 +291,8 @@ const styles = StyleSheet.create({
   confirmBtn: { flex: 1, backgroundColor: '#10b981', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
   confirmBtnText: { color: '#ffffff', fontSize: 13, fontWeight: '900' },
 });
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

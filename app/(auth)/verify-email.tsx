@@ -8,6 +8,7 @@ import { authCardStyle, authColors as colors, authInputProps as inputProps, spac
 import { Kicker } from '../../components/AppCard';
 import { useI18n } from '../../lib/i18n';
 
+
 export default function VerifyEmailScreen() {
   const { t } = useI18n();
   const { invite } = useLocalSearchParams<{ invite?: string }>();
@@ -150,3 +151,8 @@ const styles = StyleSheet.create({
     ...authCardStyle,
   },
 });
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

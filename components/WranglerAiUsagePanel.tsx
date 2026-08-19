@@ -1,6 +1,7 @@
 import { View } from 'react-native';
 import { CommandText } from './FutureUI';
 import { spacing, useDesignTheme } from '../lib/theme';
+import { asArray } from '../lib/format';
 import { useWranglerAiUsage } from '../lib/useWrangler';
 
 function money(value: number) {
@@ -13,8 +14,8 @@ function tokens(value: number) {
   return String(value);
 }
 
-function featureLabel(value: string) {
-  return value.split('_').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+function featureLabel(value: string | null | undefined) {
+  return String(value ?? '').split('_').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
 }
 
 export function WranglerAiUsagePanel() {
@@ -30,7 +31,7 @@ export function WranglerAiUsagePanel() {
         <CommandText palette={palette} variant="caption">Month-to-date usage for this venue. Cost is estimated from configured model rates.</CommandText>
       </View>
 
-      {usage.isLoading || !usage.data ? (
+      {usage.isLoading || !usage.data?.budget ? (
         <CommandText palette={palette} variant="caption">Loading venue AI usage…</CommandText>
       ) : (
         <>
@@ -76,7 +77,7 @@ export function WranglerAiUsagePanel() {
 
           <View style={{ gap: spacing.sm }}>
             <CommandText palette={palette} variant="label">BY FEATURE / MODEL</CommandText>
-            {usage.data.breakdown.length ? usage.data.breakdown.slice(0, 6).map((row) => (
+            {asArray(usage.data.breakdown).length ? asArray<(typeof usage.data.breakdown)[number]>(usage.data.breakdown).slice(0, 6).map((row) => (
               <View key={`${row.feature}:${row.model}`} style={{ borderTopWidth: 1, borderColor: palette.divider, paddingTop: spacing.sm, gap: 2 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md }}>
                   <CommandText palette={palette} variant="body" style={{ fontWeight: '700', flex: 1 }}>{featureLabel(row.feature)}</CommandText>

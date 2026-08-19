@@ -11,6 +11,7 @@ import { useAuthenticatedSession } from "../../lib/auth-readiness";
 import { canManageBilling, canManageVenue } from "../../lib/permissions";
 import { useI18n } from "../../lib/i18n";
 
+
 export default function ProfileScreen() {
   const { t } = useI18n();
   const user = useAuthStore((state: AuthState) => state.user);
@@ -18,8 +19,8 @@ export default function ProfileScreen() {
   const clearSession = useAuthStore((state: AuthState) => state.clearSession);
   const { isReady } = useAuthenticatedSession();
   const me = useQuery(api.app.getMe, isReady ? {} : "skip");
-  const serverRole = me?.profile.role ?? null;
-  const allAccess = me?.profile.allAccess ?? false;
+  const serverRole = me?.profile?.role ?? null;
+  const allAccess = me?.profile?.allAccess ?? false;
   const canManage = Boolean(
     serverRole && canManageVenue(serverRole, allAccess),
   );
@@ -221,3 +222,8 @@ export default function ProfileScreen() {
     </ScrollView>
   );
 }
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

@@ -10,7 +10,7 @@ import { api } from '../../lib/railway-api';
 import type { Id } from '../../lib/ids';
 import { accents, colors, radius, spacing } from '../../lib/theme';
 import { useVenueAuth } from '../../lib/useVenueAuth';
-import { errorMessage } from '../../lib/format';
+import { asArray, errorMessage } from '../../lib/format';
 import { useI18n } from '../../lib/i18n';
 import { ManagerGate } from '../../components/ManagerGate';
 import {
@@ -32,6 +32,7 @@ import { InlineMessage } from '../../components/InlineMessage';
 import { SectionHeader } from '../../components/AppCard';
 import { readPickedFileText } from '../../lib/picked-file';
 import {
+
   INVENTORY_RENDER_BATCH_SIZE,
   inventoryRowsForWindow,
   nextInventoryWindow,
@@ -164,7 +165,7 @@ export default function BarStockScreen() {
   const costHistory = useQuery(api.barInventory.getCostHistory, isReady && canManage && costHistoryItemId ? { itemId: costHistoryItemId } : 'skip') as { itemName: string; currentCostCents: number | null; entries: CostHistoryEntry[] } | null | undefined;
   const agingReport = useQuery(api.barInventory.getAgingReport, isReady && canManage && showAgingReport ? {} : 'skip') as AgingReport | null | undefined;
 
-  const allItems = useMemo(() => (stock?.items ?? []) as BarItem[], [stock]);
+  const allItems = useMemo(() => asArray(stock?.items) as BarItem[], [stock]);
 
   const items = useMemo(() => {
     return allItems.filter(item => {
@@ -180,7 +181,7 @@ export default function BarStockScreen() {
     return items.reduce((sum, item) => sum + (item.onHand * (item.unitCostCents ?? 0)), 0);
   }, [items]);
 
-  const prepItems = useMemo(() => prepBoard?.items ?? [], [prepBoard]);
+  const prepItems = useMemo(() => asArray(prepBoard?.items), [prepBoard]);
   const activePrepItems = prepItems.filter((item) => item.status === 'open' && item.kind === 'prep');
   const activeEightySixItems = prepItems.filter((item) => item.status === 'open' && item.kind === 'eighty_six');
 
@@ -922,3 +923,8 @@ export default function BarStockScreen() {
     </ManagerGate>
   );
 }
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

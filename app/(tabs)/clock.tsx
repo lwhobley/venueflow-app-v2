@@ -7,10 +7,11 @@ import { accents, colors, radius, spacing } from '../../lib/theme';
 import { useAuthStore, type AuthState } from '../../lib/auth-store';
 import { useAuthenticatedSession } from '../../lib/auth-readiness';
 import { canManageVenue } from '../../lib/permissions';
-import { formatTime, errorMessage } from '../../lib/format';
+import { asArray, errorMessage, formatTime } from '../../lib/format';
 import { getPreciseLocation, isWithinGeofence, type CurrentLocation } from '../../lib/location';
 import { appApi, useApiMutation, useApiQuery } from '../../lib/api-client';
 import { useI18n } from '../../lib/i18n';
+
 
 type ActiveClockEntry = {
   _id: string;
@@ -86,8 +87,8 @@ export default function ClockScreen() {
     return { name: rawVenue.name, latitude: rawVenue.latitude, longitude: rawVenue.longitude, geofenceRadiusM };
   }, [rawVenue]);
 
-  const activeClockEntries = (clockBoard?.activeClockEntries ?? []) as ActiveClockEntry[];
-  const managerAlerts = (clockBoard?.managerAlerts ?? []) as ManagerAlert[];
+  const activeClockEntries = asArray(clockBoard?.activeClockEntries) as ActiveClockEntry[];
+  const managerAlerts = asArray(clockBoard?.managerAlerts) as ManagerAlert[];
   const isClockedIn = timeClock?.isClockedIn ?? Boolean(clockBoard?.employeeEntry);
 
   const employeeEntry = clockBoard?.employeeEntry;
@@ -209,7 +210,7 @@ export default function ClockScreen() {
   };
 
   const { time, ampm } = fmtClock(now);
-  const punches = (timeClock?.punches ?? []) as PunchRow[];
+  const punches = asArray(timeClock?.punches) as PunchRow[];
 
   return (
     <ScrollView
@@ -538,3 +539,8 @@ export default function ClockScreen() {
     </ScrollView>
   );
 }
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

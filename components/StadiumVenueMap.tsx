@@ -9,6 +9,7 @@ import { StadiumUnitDetailModal, type StadiumZoneItem } from './StadiumUnitDetai
 import Stadium3DModel from './Stadium3DModel';
 import { COMPREHENSIVE_STADIUM_ZONES, type StadiumZoneData } from './stadium-map/zone-data';
 import { styles } from './stadium-map/StadiumVenueMap.styles';
+import { asArray } from '../lib/format';
 
 // Static stadium zone/unit data and component styles were split out into
 // components/stadium-map/ to keep this file to the actual component logic —
@@ -119,7 +120,7 @@ export function StadiumVenueMap({
   }, [zonesState]);
 
   const allSuites = useMemo(() => {
-    return luxurySuitesZone?.units ?? [];
+    return asArray(luxurySuitesZone?.units);
   }, [luxurySuitesZone]);
 
   const filteredFloorSuites = useMemo(() => {
@@ -547,7 +548,7 @@ export function StadiumVenueMap({
             {viewPerspective === '3d_isometric' ? (
               <View style={[styles.interactiveModelFrame, { height: isMobile ? 300 : 380 }]}>
                 <Stadium3DModel
-                  highlightCategory={activeSelectedUnit?.zone.category ?? null}
+                  highlightCategory={activeSelectedUnit?.zone?.category ?? null}
                   dom={{
                     scrollEnabled: false,
                     contentInsetAdjustmentBehavior: 'never',
@@ -579,7 +580,7 @@ export function StadiumVenueMap({
                   <View style={styles.gateNorthWrapper}>
                     {zonesState
                       .find((z) => z.id === 'zone-stadium-gates')
-                      ?.units.filter((u) => u.id === 'u-gate-ford')
+                      ?.units?.filter((u) => u.id === 'u-gate-ford')
                       .map((unit) => {
                         const isSelected = selectedUnitId === unit.id;
                         return (
@@ -643,7 +644,7 @@ export function StadiumVenueMap({
                     <View style={styles.upperDeckSectors}>
                       {zonesState
                         .find((z) => z.id === 'zone-400-upper')
-                        ?.units.map((unit) => {
+                        ?.units?.map((unit) => {
                           const isSelected = selectedUnitId === unit.id;
                           return (
                             <Pressable
@@ -693,7 +694,7 @@ export function StadiumVenueMap({
                       {/* WEST: Phillips 66 Gate Tower */}
                       {zonesState
                         .find((z) => z.id === 'zone-stadium-gates')
-                        ?.units.filter((u) => u.id === 'u-gate-p66')
+                        ?.units?.filter((u) => u.id === 'u-gate-p66')
                         .map((unit) => {
                           const isSelected = selectedUnitId === unit.id;
                           return (
@@ -831,7 +832,7 @@ export function StadiumVenueMap({
                               color="#8A5D23"
                             />
                             <Text numberOfLines={1} style={styles.suiteDropdownTriggerText}>
-                              {activeSelectedUnit?.zone.id === 'zone-300-suites'
+                              {activeSelectedUnit?.zone?.id === 'zone-300-suites'
                                 ? `${activeSelectedUnit.unit.name} · ${activeSelectedUnit.unit.suiteDetails?.beoNumber ? 'BEO ready' : 'Open'}`
                                 : `Select a suite (${filteredFloorSuites.length} available)`}
                             </Text>
@@ -964,7 +965,7 @@ export function StadiumVenueMap({
                           <View style={styles.clubSectorsRow}>
                             {zonesState
                               .find((z) => z.id === 'zone-200-club')
-                              ?.units.map((unit) => {
+                              ?.units?.map((unit) => {
                                 const isSelected = selectedUnitId === unit.id;
                                 return (
                                   <Pressable
@@ -1013,7 +1014,7 @@ export function StadiumVenueMap({
                             <View style={styles.concoursePerimeterRow}>
                               {zonesState
                                 .find((z) => z.id === 'zone-concourse-service-areas')
-                                ?.units.slice(2, 6)
+                                ?.units?.slice(2, 6)
                                 .map((unit) => {
                                   const isSelected = selectedUnitId === unit.id;
                                   return (
@@ -1046,7 +1047,7 @@ export function StadiumVenueMap({
                                 {/* North Bunker Club (Underground Vault) */}
                                 {zonesState
                                   .find((z) => z.id === 'zone-concourse-bunkers')
-                                  ?.units.filter((u) => u.id === 'u-bunker-north')
+                                  ?.units?.filter((u) => u.id === 'u-bunker-north')
                                   .map((unit) => {
                                     const isSelected = selectedUnitId === unit.id;
                                     return (
@@ -1075,7 +1076,7 @@ export function StadiumVenueMap({
                                 {/* North Endzone Turf */}
                                 {zonesState
                                   .find((z) => z.id === 'zone-field-sidelines')
-                                  ?.units.filter((u) => u.id === 'u-endzone-north')
+                                  ?.units?.filter((u) => u.id === 'u-endzone-north')
                                   .map((unit) => {
                                     const isSelected = selectedUnitId === unit.id;
                                     return (
@@ -1102,7 +1103,7 @@ export function StadiumVenueMap({
                                 {/* West / Home Sideline Bench Area */}
                                 {zonesState
                                   .find((z) => z.id === 'zone-field-sidelines')
-                                  ?.units.filter((u) => u.id === 'u-side-home')
+                                  ?.units?.filter((u) => u.id === 'u-side-home')
                                   .map((unit) => {
                                     const isSelected = selectedUnitId === unit.id;
                                     return (
@@ -1149,7 +1150,7 @@ export function StadiumVenueMap({
                                 {/* East / Visiting Sideline Bench Area */}
                                 {zonesState
                                   .find((z) => z.id === 'zone-field-sidelines')
-                                  ?.units.filter((u) => u.id === 'u-side-visiting')
+                                  ?.units?.filter((u) => u.id === 'u-side-visiting')
                                   .map((unit) => {
                                     const isSelected = selectedUnitId === unit.id;
                                     return (
@@ -1175,7 +1176,7 @@ export function StadiumVenueMap({
                                 {/* South Bunker Club (Underground Vault) */}
                                 {zonesState
                                   .find((z) => z.id === 'zone-concourse-bunkers')
-                                  ?.units.filter((u) => u.id === 'u-bunker-south')
+                                  ?.units?.filter((u) => u.id === 'u-bunker-south')
                                   .map((unit) => {
                                     const isSelected = selectedUnitId === unit.id;
                                     return (
@@ -1204,7 +1205,7 @@ export function StadiumVenueMap({
                                 {/* South Endzone Turf */}
                                 {zonesState
                                   .find((z) => z.id === 'zone-field-sidelines')
-                                  ?.units.filter((u) => u.id === 'u-endzone-south')
+                                  ?.units?.filter((u) => u.id === 'u-endzone-south')
                                   .map((unit) => {
                                     const isSelected = selectedUnitId === unit.id;
                                     return (
@@ -1231,9 +1232,9 @@ export function StadiumVenueMap({
                             <View style={styles.concoursePerimeterRow}>
                               {zonesState
                                 .find((z) => z.id === 'zone-concourse-service-areas')
-                                ?.units.slice(0, 2)
+                                ?.units?.slice(0, 2)
                                 .concat(
-                                  zonesState.find((z) => z.id === 'zone-concourse-service-areas')?.units.slice(6, 8) ?? [],
+                                  asArray(zonesState.find((z) => z.id === 'zone-concourse-service-areas')?.units?.slice(6, 8)),
                                 )
                                 .map((unit) => {
                                   const isSelected = selectedUnitId === unit.id;
@@ -1266,7 +1267,7 @@ export function StadiumVenueMap({
                       {/* EAST: xfinity Gate Tower */}
                       {zonesState
                         .find((z) => z.id === 'zone-stadium-gates')
-                        ?.units.filter((u) => u.id === 'u-gate-xfinity')
+                        ?.units?.filter((u) => u.id === 'u-gate-xfinity')
                         .map((unit) => {
                           const isSelected = selectedUnitId === unit.id;
                           return (
@@ -1307,7 +1308,7 @@ export function StadiumVenueMap({
                   <View style={styles.gateSouthWrapper}>
                     {zonesState
                       .find((z) => z.id === 'zone-stadium-gates')
-                      ?.units.filter((u) => u.id === 'u-gate-kroger')
+                      ?.units?.filter((u) => u.id === 'u-gate-kroger')
                       .map((unit) => {
                         const isSelected = selectedUnitId === unit.id;
                         return (
@@ -1363,7 +1364,7 @@ export function StadiumVenueMap({
                     <View style={styles.lockersGridRow}>
                       {zonesState
                         .find((z) => z.id === 'zone-locker-rooms-aux')
-                        ?.units.map((unit) => {
+                        ?.units?.map((unit) => {
                           const isSelected = selectedUnitId === unit.id;
                           const isHome = unit.id === 'u-lck-home';
                           const isVisit = unit.id === 'u-lck-visiting';
@@ -1501,7 +1502,7 @@ export function StadiumVenueMap({
                           POS Terminals: <Text style={{ fontWeight: '700' }}>{activeSelectedUnit.unit.standDetails.terminalCount ?? 4}</Text>
                         </Text>
                         <Text style={styles.standMetricItem}>
-                          Event Staff: <Text style={{ fontWeight: '700' }}>{activeSelectedUnit.unit.standDetails.hierarchy?.assignedStaff.length ?? 3} On Duty</Text>
+                          Event Staff: <Text style={{ fontWeight: '700' }}>{activeSelectedUnit.unit.standDetails.hierarchy?.assignedStaff?.length ?? 3} On Duty</Text>
                         </Text>
                       </View>
                     </View>

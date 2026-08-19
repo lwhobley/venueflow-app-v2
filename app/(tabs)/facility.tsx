@@ -3,11 +3,12 @@ import { router } from 'expo-router';
 import { ScrollView, View } from 'react-native';
 import { Button, Chip, TextInput } from 'react-native-paper';
 import { CommandSurface, CommandText, StatusPill } from '../../components/FutureUI';
-import { errorMessage } from '../../lib/format';
+import { asArray, errorMessage, humanizeLabel } from '../../lib/format';
 import { api } from '../../lib/railway-api';
 import { useMutation, useQuery } from '../../lib/railway-hooks';
 import { spacing, useDesignTheme } from '../../lib/theme';
 import { useVenueAuth } from '../../lib/useVenueAuth';
+
 
 type ZoneType = 'concession_stand' | 'grab_and_go' | 'portable_cart' | 'kiosk' | 'food_vendor' | 'commissary' | 'production_kitchen' | 'premium_suite' | 'premium_club' | 'loge_hospitality' | 'in_seat_service' | 'catering' | 'banquet' | 'bar' | 'beer_cart' | 'beverage' | 'mobile_pickup' | 'retail_fnb' | 'partner_pop_up' | 'back_of_house' | 'other';
 type FnbDepartment = 'concessions' | 'culinary_production' | 'premium_hospitality' | 'catering_banquets' | 'beverage_operations' | 'retail_fnb' | 'vendor_partners';
@@ -29,7 +30,7 @@ const eventStateNext: Partial<Record<EventOperationalState, EventOperationalStat
   draft: 'planning', planning: 'approved', approved: 'pre_open', pre_open: 'live', live: 'closing', closing: 'closed', closed: 'archived',
 };
 
-const label = (value: string) => value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+const label = humanizeLabel;
 
 export default function FacilityScreen() {
   const palette = useDesignTheme();
@@ -60,7 +61,7 @@ export default function FacilityScreen() {
   const [message, setMessage] = useState<string | null>(null);
 
   const zoneSummary = useMemo(() => {
-    const zones = overview?.zones ?? [];
+    const zones = asArray(overview?.zones);
     return {
       total: zones.length,
       open: zones.filter((zone) => zone.status === 'open').length,
@@ -113,7 +114,7 @@ export default function FacilityScreen() {
       <View style={{ gap: spacing.xs }}>
         <CommandText palette={palette} variant="label">Stadium food & beverage</CommandText>
         <CommandText palette={palette} variant="hero">Stadium / arena F&B map</CommandText>
-        <CommandText palette={palette} variant="caption">{overview?.venue.name ?? venue?.name ?? 'Your stadium'}{overview?.venue.stadiumCapacity ? ` · ${overview.venue.stadiumCapacity.toLocaleString()} capacity` : ''}</CommandText>
+        <CommandText palette={palette} variant="caption">{overview?.venue?.name ?? venue?.name ?? 'Your stadium'}{overview?.venue?.stadiumCapacity ? ` · ${overview.venue.stadiumCapacity.toLocaleString()} capacity` : ''}</CommandText>
       </View>
 
       {message ? <CommandSurface palette={palette} style={{ borderColor: palette.warning }}><CommandText palette={palette} variant="body">{message}</CommandText></CommandSurface> : null}
@@ -142,7 +143,7 @@ export default function FacilityScreen() {
           <TextInput mode="outlined" label="Expected attendance" keyboardType="number-pad" value={expectedAttendance} onChangeText={setExpectedAttendance} />
           <Button mode="contained" buttonColor={palette.primary} disabled={!eventTitle.trim() || !eventStart.trim()} onPress={() => void saveEvent()}>Create event</Button>
         </View> : null}
-        {overview?.events.length ? overview.events.map((event) => (
+        {overview?.events?.length ? overview.events.map((event) => (
           <View key={event.id} style={{ borderTopWidth: 1, borderColor: palette.border, paddingTop: spacing.sm, gap: spacing.xs }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
               <View style={{ flex: 1 }}><CommandText palette={palette} variant="body" style={{ fontWeight: '800' }}>{event.title}</CommandText><CommandText palette={palette} variant="caption">{new Date(event.startsAt).toLocaleString()} · {event.expectedAttendance?.toLocaleString() ?? '—'} expected</CommandText></View>
@@ -169,14 +170,14 @@ export default function FacilityScreen() {
           <TextInput mode="outlined" label="Capacity (optional)" keyboardType="number-pad" value={zoneCapacity} onChangeText={setZoneCapacity} />
           <Button mode="contained" buttonColor={palette.primary} disabled={!zoneCode.trim() || !zoneName.trim()} onPress={() => void saveZone()}>Save zone</Button>
         </View> : null}
-        {overview?.zones.length ? departments.map((department) => {
+        {overview?.zones?.length ? departments.map((department) => {
           const departmentZones = overview.zones.filter((zone) => zone.department === department);
           return departmentZones.length ? <View key={`section-${department}`} style={{ gap: spacing.xs, borderTopWidth: 1, borderColor: palette.border, paddingTop: spacing.sm }}>
             <CommandText palette={palette} variant="body" style={{ fontWeight: '800' }}>{label(department)}</CommandText>
             <CommandText palette={palette} variant="caption">{departmentZones.map((zone) => `${zone.stadiumZone ?? zone.level ?? 'Unassigned zone'}: ${zone.code} ${zone.name}`).join(' · ')}</CommandText>
           </View> : null;
         }) : null}
-        {overview?.zones.length ? overview.zones.map((zone) => (
+        {overview?.zones?.length ? overview.zones.map((zone) => (
           <View key={zone.id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderTopWidth: 1, borderColor: palette.border, paddingTop: spacing.sm }}>
             <View style={{ flex: 1 }}><CommandText palette={palette} variant="body" style={{ fontWeight: '800' }}>{zone.code} · {zone.name}</CommandText><CommandText palette={palette} variant="caption">{label(zone.type)}{zone.capacity ? ` · ${zone.capacity.toLocaleString()} capacity` : ''}</CommandText></View>
             <Button compact mode="outlined" disabled={!canManage} textColor={zone.status === 'incident' || zone.status === 'closed' ? palette.warning : palette.primary} onPress={() => void updateZoneStatus({ zoneId: zone.id, status: zoneStatusNext[zone.status] })}>{label(zone.status)}</Button>
@@ -195,7 +196,7 @@ export default function FacilityScreen() {
           <TextInput mode="outlined" label="Revenue share % (optional)" keyboardType="decimal-pad" value={partnerRevenueShare} onChangeText={setPartnerRevenueShare} />
           <Button mode="contained" buttonColor={palette.primary} disabled={!partnerName.trim()} onPress={() => void savePartner()}>Save partner</Button>
         </View> : null}
-        {overview?.partners.length ? overview.partners.map((partner) => (
+        {overview?.partners?.length ? overview.partners.map((partner) => (
           <View key={partner.id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderTopWidth: 1, borderColor: palette.border, paddingTop: spacing.sm }}>
             <View style={{ flex: 1 }}><CommandText palette={palette} variant="body" style={{ fontWeight: '800' }}>{partner.name}</CommandText><CommandText palette={palette} variant="caption">{label(partner.type)}{partner.revenueShareBps != null ? ` · ${(partner.revenueShareBps / 100).toFixed(2)}% revenue share` : ''}</CommandText></View>
             <StatusPill palette={palette} tone={partner.status === 'active' || partner.status === 'approved' ? 'good' : partner.status === 'noncompliant' ? 'warn' : 'neutral'}>{label(partner.status)}</StatusPill>
@@ -205,3 +206,8 @@ export default function FacilityScreen() {
     </ScrollView>
   );
 }
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

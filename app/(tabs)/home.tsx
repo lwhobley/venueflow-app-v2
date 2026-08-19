@@ -14,9 +14,10 @@ import { useAuthStore } from '../../lib/auth-store';
 import { usePushNotifications } from '../../lib/usePushNotifications';
 import { useAuthenticatedSession } from '../../lib/auth-readiness';
 import { radius, spacing, useDesignTheme } from '../../lib/theme';
-import { formatDuration, formatMoney } from '../../lib/format';
+import { asArray, formatDuration, formatMoney } from '../../lib/format';
 import { canManageVenue } from '../../lib/permissions';
 import { useResponsive } from '../../lib/responsive';
+
 
 type NotificationItem = {
   _id: Id<'notificationEvents'>;
@@ -51,16 +52,16 @@ export default function HomeScreen() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [goalTitle, setGoalTitle] = useState('');
 
-  const venueName = dashboard?.venue.name ?? venue?.name ?? 'Stadium F&B Operations';
-  const canManage = Boolean(dashboard && canManageVenue(dashboard.profile.role, dashboard.profile.allAccess));
+  const venueName = dashboard?.venue?.name ?? venue?.name ?? 'Stadium F&B Operations';
+  const canManage = Boolean(dashboard?.profile && canManageVenue(dashboard.profile.role, dashboard.profile.allAccess));
   const managerDashboard = useQuery(api.operations.getManagerDashboard, isReady && canManage && venue?.id ? { venueId: venue.id } : 'skip') as any;
   const dailyBrief = useQuery(api.operations.getDailyBrief, isReady && canManage && venue?.id ? { venueId: venue.id } : 'skip') as any;
   const commandCenter = useQuery(api.operations.getCommandCenter, isReady && canManage && venue?.id ? { venueId: venue.id } : 'skip') as any;
-  const notificationsList = (notifications ?? []) as NotificationItem[];
+  const notificationsList = asArray(notifications) as NotificationItem[];
   const unreadCount = notificationsList.filter((item) => !item.read).length;
   const readiness = commandCenter?.readiness;
   const pulse = dailyBrief?.profitabilityPulse;
-  const events = commandCenter?.events?.slice(0, 4) ?? managerDashboard?.events?.slice(0, 4) ?? [];
+  const events = commandCenter?.events?.slice(0, 4) ?? asArray(managerDashboard?.events?.slice(0, 4));
   const loading = dashboard === undefined;
   const currentDate = todayLabel.format(new Date());
   const readinessRows = useMemo(() => {
@@ -269,3 +270,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
   },
 });
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

@@ -17,7 +17,7 @@ export function useVenueAuth() {
   const me = useQuery(api.app.getMe, isReady ? {} : 'skip');
   const profileLoading = isReady && me === undefined;
   const canManage = Boolean(
-    me && canManageVenue(me.profile.role, me.profile.allAccess),
+    me?.profile && canManageVenue(me.profile.role, me.profile.allAccess),
   );
 
   return { venue, venues, switchVenue, isReady, user, me, profileLoading, canManage } as const;

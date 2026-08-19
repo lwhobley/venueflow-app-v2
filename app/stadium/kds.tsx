@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { apiRequest } from '../../lib/api-client';
+import { asArray } from '../../lib/format';
 
 export interface BEOItem {
   code: string;
@@ -34,7 +35,7 @@ export default function KitchenBumpScreen() {
 
   const fetchOrders = async (silent = false) => {
     try {
-      setBeos(await apiRequest<SuiteBEO[]>('/v1/stadium/suite-beos'));
+      setBeos(asArray<SuiteBEO>(await apiRequest<SuiteBEO[]>('/v1/stadium/suite-beos')));
     } catch (error) {
       setBeos([]);
       if (!silent) Alert.alert('KDS sync failed', error instanceof Error ? error.message : 'Unable to load live orders.');
@@ -238,3 +239,8 @@ const styles = StyleSheet.create({
   statusBadgeDelivered: { backgroundColor: '#16a34a', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
   statusTextDelivered: { color: '#ffffff', fontSize: 14, fontWeight: '900' },
 });
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

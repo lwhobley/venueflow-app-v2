@@ -9,6 +9,7 @@ import { canManageBilling } from '../../lib/permissions';
 import { useAuthenticatedSession } from '../../lib/auth-readiness';
 import { useI18n } from '../../lib/i18n';
 
+
 const APPLE_SUBSCRIPTIONS_URL = 'https://apps.apple.com/account/subscriptions';
 
 export default function BillingLockedScreen() {
@@ -18,7 +19,7 @@ export default function BillingLockedScreen() {
   const venue = useAuthStore((state: AuthState) => state.venue);
   const { me } = useAuthenticatedSession();
   const reason = Array.isArray(params.reason) ? params.reason[0] : params.reason ?? 'never_subscribed';
-  const canPay = Boolean(me && canManageBilling(me.profile.role, me.profile.allAccess));
+  const canPay = Boolean(me?.profile && canManageBilling(me.profile.role, me.profile.allAccess));
   const headlineByReason: Record<string, string> = {
     trial_expired: t('billingLocked.headlineTrialExpired'),
     trial_active: t('billingLocked.headlineTrialActive'),
@@ -73,3 +74,8 @@ export default function BillingLockedScreen() {
     </View>
   );
 }
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

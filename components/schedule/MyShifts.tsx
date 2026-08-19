@@ -9,6 +9,7 @@ import { accents, colors, spacing } from '../../lib/theme';
 import { useAuthStore, type AuthState } from '../../lib/auth-store';
 import { useAuthenticatedSession } from '../../lib/auth-readiness';
 import { ScheduleSkeleton } from './ScheduleSkeleton';
+import { asArray } from '../../lib/format';
 
 type Shift = {
   _id: Id<'scheduleShifts'>;
@@ -82,15 +83,15 @@ export function MyShifts() {
       router.push(`/chat/${result?.conversationId ?? result}`);
     });
 
-  const teammates = useMemo(() => (directory ?? []) as { _id: Id<'profiles'>; fullName: string; jobTitle: string }[], [directory]);
+  const teammates = useMemo(() => asArray(directory) as { _id: Id<'profiles'>; fullName: string; jobTitle: string }[], [directory]);
   const coworkersPerDay = useMemo(() => {
     const map = new Map<number, number>();
-    for (const day of (data?.roster ?? []) as RosterDay[]) {
+    for (const day of asArray(data?.roster) as RosterDay[]) {
       map.set(day.dayIndex, day.coworkers.length);
     }
     return map;
   }, [data?.roster]);
-  const mySwaps = useMemo(() => (swaps ?? []) as Array<{ _id: Id<'shiftSwaps'>; status: string; requesterName: string; targetName: string; requesterShift: string; targetShift: string | null; direction: string }>, [swaps]);
+  const mySwaps = useMemo(() => asArray(swaps) as Array<{ _id: Id<'shiftSwaps'>; status: string; requesterName: string; targetName: string; requesterShift: string; targetShift: string | null; direction: string }>, [swaps]);
   const incomingSwaps = mySwaps.filter((s) => s.direction === 'incoming' && s.status === 'proposed');
   const otherSwaps = mySwaps.filter((s) => !(s.direction === 'incoming' && s.status === 'proposed'));
 
@@ -102,10 +103,10 @@ export function MyShifts() {
       setSwapTargetShiftId(null);
     }, targetShiftId ? 'Swap offered.' : 'Coverage offer sent.');
 
-  const mine = useMemo(() => (data?.mine ?? []) as Shift[], [data]);
-  const open = useMemo(() => (data?.open ?? []) as Shift[], [data]);
-  const roster = useMemo(() => (data?.roster ?? []) as RosterDay[], [data]);
-  const blackouts = useMemo(() => (blackoutData ?? []) as Blackout[], [blackoutData]);
+  const mine = useMemo(() => asArray(data?.mine) as Shift[], [data]);
+  const open = useMemo(() => asArray(data?.open) as Shift[], [data]);
+  const roster = useMemo(() => asArray(data?.roster) as RosterDay[], [data]);
+  const blackouts = useMemo(() => asArray(blackoutData) as Blackout[], [blackoutData]);
   const coworkerShiftOptions = useMemo(
     () => roster.flatMap((day) => day.coworkers.map((coworker) => ({ ...coworker, dayLabel: day.dayLabel }))),
     [roster],

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
 import { apiRequest } from '../../lib/api-client';
+import { asArray } from '../../lib/format';
 
 export interface AuditRecord {
   workerId: string;
@@ -19,7 +20,7 @@ export default function SupervisorLaborDashboard() {
 
   useEffect(() => {
     apiRequest<Array<Omit<AuditRecord, 'agencyName' | 'violationNotes'> & { violations: Array<{ notes: string }> }>>('/v1/stadium/union-compliance/shift-summaries')
-      .then((rows) => setRecords(rows.map((row) => ({ ...row, agencyName: 'Venue Staff', violationNotes: row.violations[0]?.notes }))))
+      .then((rows) => setRecords(asArray(rows).map((row) => ({ ...row, agencyName: 'Venue Staff', violationNotes: asArray<{ notes: string }>(row.violations)[0]?.notes }))))
       .catch((error) => Alert.alert('Labor data unavailable', error instanceof Error ? error.message : 'Unable to load today’s punches.'));
   }, []);
 
@@ -121,3 +122,8 @@ const styles = StyleSheet.create({
   confirmBtn: { flex: 1, backgroundColor: '#10b981', paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
   btnText: { color: '#ffffff', fontSize: 12, fontWeight: '900' },
 });
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

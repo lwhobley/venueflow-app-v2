@@ -95,11 +95,16 @@ export const authInputProps = {
   style: { backgroundColor: authColors.surface },
 };
 
+// Screens index this list by fixed position (accents[0] .. accents[5]) for KPI
+// tiles and callout cards, so it must keep at least six entries — a shorter
+// list crashes those screens with "cannot read properties of undefined".
 export const accents = [
   { bg: designPalettes.light.primary, fg: "#FFFFFF", icon: designPalettes.light.primary },
   { bg: designPalettes.light.secondary, fg: "#FFFFFF", icon: designPalettes.light.secondary },
   { bg: designPalettes.light.info, fg: "#FFFFFF", icon: designPalettes.light.info },
   { bg: designPalettes.light.warning, fg: "#FFFFFF", icon: designPalettes.light.warning },
+  { bg: designPalettes.light.charcoal, fg: "#FFFFFF", icon: designPalettes.light.charcoal },
+  { bg: designPalettes.light.shadow, fg: "#FFFFFF", icon: designPalettes.light.shadow },
 ];
 
 export const spacing = {

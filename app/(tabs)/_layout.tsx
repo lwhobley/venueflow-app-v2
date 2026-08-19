@@ -1,13 +1,10 @@
 import { Redirect, Tabs } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { ColorValue } from "react-native";
-import { useQuery } from "../../lib/railway-hooks";
-import { api } from "../../lib/railway-api";
 import { useDesignTheme } from "../../lib/theme";
 import { useAuthStore, type AuthState } from "../../lib/auth-store";
 import { CarouselTabBar } from "../../components/CarouselTabBar";
 import { useI18n } from "../../lib/i18n";
-import { canManageVenue } from "../../lib/permissions";
 import { useAuthenticatedSession } from "../../lib/auth-readiness";
 
 const icon =
@@ -23,11 +20,7 @@ export default function TabsLayout() {
   const fullName = localUser?.full_name ?? "Profile";
   const { t } = useI18n();
   const palette = useDesignTheme();
-  const { isReady } = useAuthenticatedSession();
-  const me = useQuery(api.app.getMe, isReady ? {} : "skip");
-  const canManage = Boolean(
-    me && canManageVenue(me.profile.role, me.profile.allAccess),
-  );
+  useAuthenticatedSession();
 
   if (hydrated && !localUser) {
     return <Redirect href="/(auth)/sign-in" />;

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { Button, TextInput } from 'react-native-paper';
 import { CommandSurface, CommandText } from '../components/FutureUI';
-import { errorMessage } from '../lib/format';
+import { asArray, errorMessage } from '../lib/format';
 import { api } from '../lib/railway-api';
 import { useMutation, useQueryState } from '../lib/railway-hooks';
 import { spacing, useDesignTheme } from '../lib/theme';
@@ -52,7 +52,7 @@ export default function EventCloseoutScreen() {
 
   const closeout = query.data;
   const locked = Boolean(closeout && closeout.status && closeout.status !== 'draft');
-  const revisions = closeout?.revisions ?? [];
+  const revisions = asArray(closeout?.revisions);
 
   useEffect(() => {
     if (!closeout) return;
@@ -162,3 +162,8 @@ export default function EventCloseoutScreen() {
     </ScrollView>
   );
 }
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../components/ErrorBoundary';

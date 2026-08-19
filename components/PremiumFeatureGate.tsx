@@ -14,14 +14,14 @@ import { hasAllAccess } from '../lib/permissions';
 export function PremiumFeatureGate({ feature, children }: { feature: string; children: React.ReactNode }) {
   const { me, isAuthLoading } = useAuthenticatedSession();
   const { isPremium, isLoading } = useA0Purchases();
-  const allAccess = hasAllAccess(me?.profile.allAccess);
+  const allAccess = hasAllAccess(me?.profile?.allAccess);
 
   // Avoid flashing the upsell while entitlement or profile is still resolving.
   if (isLoading || isAuthLoading || me === undefined) {
     return <View style={{ flex: 1, backgroundColor: colors.background }} />;
   }
 
-  const trial = getTrialState(me?.profile.trialEndsAt ?? null);
+  const trial = getTrialState(me?.profile?.trialEndsAt ?? null);
   if (!config.billingEnabled || allAccess || isPremium || trial.active) {
     return <>{children}</>;
   }

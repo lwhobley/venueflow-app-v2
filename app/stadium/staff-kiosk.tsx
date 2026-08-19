@@ -170,3 +170,8 @@ const styles = StyleSheet.create({
   idleTitle: { color: '#38bdf8', fontSize: 20, fontWeight: '900' },
   idleSub: { color: '#94a3b8', fontSize: 13, marginTop: 4 },
 });
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

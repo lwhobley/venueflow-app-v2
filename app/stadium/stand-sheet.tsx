@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert } from 'react-native';
 import { apiRequest } from '../../lib/api-client';
+import { asArray } from '../../lib/format';
 
 export interface StandSheetItem {
   code: string;
@@ -40,7 +41,7 @@ export default function StandSheetAuditScreen() {
 
   const fetchSheets = async () => {
     try {
-      const data = await apiRequest<StandSheetData[]>('/v1/stadium/concourse/stand-sheets');
+      const data = asArray<StandSheetData>(await apiRequest<StandSheetData[]>('/v1/stadium/concourse/stand-sheets'));
       setSheets(data);
       if (data.length && !activeSheet) setActiveSheet(data[0]);
     } catch (error) {
@@ -207,3 +208,8 @@ const styles = StyleSheet.create({
   formulaTitle: { color: '#3b82f6', fontSize: 12, fontWeight: '900' },
   formulaText: { color: '#cbd5e1', fontSize: 12, marginTop: 4, lineHeight: 18 },
 });
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

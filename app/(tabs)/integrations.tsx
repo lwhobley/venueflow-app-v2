@@ -6,13 +6,14 @@ import { useMutation, useQuery } from '../../lib/railway-hooks';
 import { api } from '../../lib/railway-api';
 import { accents, colors, radius, spacing } from '../../lib/theme';
 import { useVenueAuth } from '../../lib/useVenueAuth';
-import { formatMoney, formatShortDateTime, errorMessage } from '../../lib/format';
+import { asArray, errorMessage, formatMoney, formatShortDateTime } from '../../lib/format';
 import { PremiumFeatureGate } from '../../components/PremiumFeatureGate';
 import { ProviderDropdown } from '../../components/ProviderDropdown';
 import { InlineMessage } from '../../components/InlineMessage';
 import { ManagerGate } from '../../components/ManagerGate';
 import { SectionHeader } from '../../components/AppCard';
 import { useI18n } from '../../lib/i18n';
+
 
 // Must stay in sync with POS_PROVIDERS in packages/api/src/modules/pos/pos.controller.ts
 // and the PosProvider enum in prisma/schema.prisma.
@@ -270,7 +271,7 @@ function IntegrationsScreenInner() {
       <Card style={{ backgroundColor: colors.surface, borderRadius: radius.sharp }}>
         <Card.Content style={{ gap: spacing.sm }}>
           <Text variant="titleMedium" style={{ fontWeight: '700' }}>{t('integrations.connections.title')}</Text>
-          {(overview?.connections ?? []).length === 0 ? (
+          {asArray(overview?.connections).length === 0 ? (
             <Text style={{ color: colors.muted }}>{t('integrations.connections.empty')}</Text>
           ) : (
             overview.connections.map((connection: any) => (
@@ -300,7 +301,7 @@ function IntegrationsScreenInner() {
       <Card style={{ backgroundColor: colors.surface, borderRadius: radius.sharp }}>
         <Card.Content style={{ gap: spacing.sm }}>
           <Text variant="titleMedium" style={{ fontWeight: '700' }}>{t('integrations.reservationConnections.title')}</Text>
-          {(reservationOverview?.connections ?? []).length === 0 ? (
+          {asArray(reservationOverview?.connections).length === 0 ? (
             <Text style={{ color: colors.muted }}>{t('integrations.reservationConnections.empty')}</Text>
           ) : (
             reservationOverview.connections.map((connection: any) => (
@@ -315,7 +316,7 @@ function IntegrationsScreenInner() {
               </View>
             ))
           )}
-          {(reservationOverview?.recentEvents ?? []).length > 0 ? (
+          {asArray(reservationOverview?.recentEvents).length > 0 ? (
             <View style={{ gap: 4 }}>
               <Text style={{ fontWeight: '700' }}>{t('integrations.reservationConnections.recentEvents')}</Text>
               {reservationOverview.recentEvents.slice(0, 5).map((event: any) => (
@@ -331,7 +332,7 @@ function IntegrationsScreenInner() {
       <Card style={{ backgroundColor: colors.surface, borderRadius: radius.sharp }}>
         <Card.Content style={{ gap: spacing.sm }}>
           <Text variant="titleMedium" style={{ fontWeight: '700' }}>{t('integrations.recentChecks.title')}</Text>
-          {(overview?.recentChecks ?? []).length === 0 ? (
+          {asArray(overview?.recentChecks).length === 0 ? (
             <Text style={{ color: colors.muted }}>{t('integrations.recentChecks.empty')}</Text>
           ) : (
             overview.recentChecks.map((check: any) => (
@@ -354,3 +355,8 @@ function IntegrationsScreenInner() {
     </ManagerGate>
   );
 }
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

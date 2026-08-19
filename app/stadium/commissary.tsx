@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { apiRequest } from '../../lib/api-client';
+import { asArray } from '../../lib/format';
 
 export interface RestockTransfer {
   id: string;
@@ -29,7 +30,7 @@ export default function CentralCommissaryDashboard() {
 
   const fetchData = async () => {
     try {
-      setTransfers(await apiRequest<RestockTransfer[]>('/v1/stadium/concourse/transfers'));
+      setTransfers(asArray<RestockTransfer>(await apiRequest<RestockTransfer[]>('/v1/stadium/concourse/transfers')));
       setHawkerSessions([]);
     } catch (error) {
       setTransfers([]);
@@ -178,3 +179,8 @@ const styles = StyleSheet.create({
   statVal: { color: '#ffffff', fontSize: 16, fontWeight: '900', marginTop: 2 },
   settleBtn: { backgroundColor: '#10b981', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
 });
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

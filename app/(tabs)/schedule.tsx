@@ -10,11 +10,12 @@ import type { Id } from '../../lib/ids';
 import { colors, radius, spacing } from '../../lib/theme';
 import { useDesktopContentStyle } from '../../lib/responsive';
 import { useVenueAuth } from '../../lib/useVenueAuth';
-import { errorMessage } from '../../lib/format';
+import { asArray, errorMessage } from '../../lib/format';
 import { ManagerCalendar } from '../../components/schedule/ManagerCalendar';
 import { MyShifts } from '../../components/schedule/MyShifts';
 import { BlackoutManager } from '../../components/schedule/BlackoutManager';
 import { LaborForecastPanel } from '../../components/schedule/LaborForecastPanel';
+
 
 type StaffRequest = {
   _id: string;
@@ -30,10 +31,10 @@ function RequestQueue({ venueId }: { venueId: Id<'venues'> }) {
   const { t } = useI18n();
   const queueQuery = useQuery(api.app.listStaffRequests, { venueId });
   const reviewRequest = useMutation(api.app.reviewStaffRequest);
-  const queue = useMemo(() => (queueQuery ?? []) as StaffRequest[], [queueQuery]);
+  const queue = useMemo(() => asArray(queueQuery) as StaffRequest[], [queueQuery]);
   const swapsQuery = useQuery(api.scheduling.listShiftSwaps, { venueId });
   const reviewSwap = useMutation(api.scheduling.reviewShiftSwap);
-  const swaps = useMemo(() => (swapsQuery ?? []) as SwapRow[], [swapsQuery]);
+  const swaps = useMemo(() => asArray(swapsQuery) as SwapRow[], [swapsQuery]);
   const [toast, setToast] = useState<string | null>(null);
 
   const safe = async (action: () => Promise<unknown>, ok?: string) => {
@@ -152,3 +153,8 @@ function ScheduleScreen() {
     </ScrollView>
   );
 }
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';
