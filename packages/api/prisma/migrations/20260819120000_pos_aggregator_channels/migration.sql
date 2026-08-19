@@ -22,3 +22,16 @@ CREATE INDEX "PosAggregatorChannel_venueId_active_idx" ON "PosAggregatorChannel"
 
 ALTER TABLE "PosAggregatorChannel" ADD CONSTRAINT "PosAggregatorChannel_venueId_fkey"
   FOREIGN KEY ("venueId") REFERENCES "Venue"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- This server-owned table is not a Supabase Data API surface.
+ALTER TABLE "PosAggregatorChannel" ENABLE ROW LEVEL SECURITY;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    REVOKE ALL ON TABLE "PosAggregatorChannel" FROM anon;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    REVOKE ALL ON TABLE "PosAggregatorChannel" FROM authenticated;
+  END IF;
+END
+$$;
