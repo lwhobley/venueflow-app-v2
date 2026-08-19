@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Alert } from 'react-native';
 import { apiRequest } from '../../lib/api-client';
+import { opsConsole } from '../../lib/theme';
 
 export interface KioskCheckInResponse {
   status: 'GREEN' | 'YELLOW' | 'RED';
@@ -91,7 +92,7 @@ export default function StaffGateKioskScreen() {
         {/* Right Column: Status Banner & Worker Details */}
         <View style={styles.statusCard}>
           {loading ? (
-            <ActivityIndicator size="large" color="#3b82f6" style={{ marginTop: 40 }} />
+            <ActivityIndicator size="large" color={opsConsole.accent} style={{ marginTop: 40 }} />
           ) : lastCheckIn ? (
             <View style={{ flex: 1 }}>
               <View style={[
@@ -121,7 +122,7 @@ export default function StaffGateKioskScreen() {
                 {lastCheckIn.worker.assignedOutlet && (
                   <>
                     <Text style={styles.detailLabel}>ASSIGNED WORKSTATION</Text>
-                    <Text style={[styles.detailValue, { color: '#10b981', fontSize: 18 }]}>
+                    <Text style={[styles.detailValue, { color: opsConsole.good, fontSize: 18 }]}>
                       📍 {lastCheckIn.worker.assignedOutlet}
                     </Text>
                   </>
@@ -141,34 +142,34 @@ export default function StaffGateKioskScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
-  header: { padding: 16, backgroundColor: '#1e293b', borderBottomWidth: 2, borderBottomColor: '#334155' },
-  headerTitle: { color: '#f8fafc', fontSize: 22, fontWeight: '900' },
-  headerSub: { color: '#94a3b8', fontSize: 11, fontWeight: '700', marginTop: 2 },
+  container: { flex: 1, backgroundColor: opsConsole.background },
+  header: { padding: 16, backgroundColor: opsConsole.surface, borderBottomWidth: 2, borderBottomColor: opsConsole.border },
+  headerTitle: { color: opsConsole.text, fontSize: 22, fontWeight: '900' },
+  headerSub: { color: opsConsole.muted, fontSize: 11, fontWeight: '700', marginTop: 2 },
   body: { flex: 1, flexDirection: 'row', padding: 16, gap: 16 },
-  keypadCard: { flex: 1, backgroundColor: '#1e293b', padding: 20, borderRadius: 16, borderWidth: 1, borderColor: '#334155', alignItems: 'center' },
-  keypadTitle: { color: '#94a3b8', fontSize: 12, fontWeight: '900', letterSpacing: 0.5 },
-  pinDisplay: { backgroundColor: '#0f172a', width: '100%', paddingVertical: 14, borderRadius: 10, marginVertical: 16, alignItems: 'center' },
-  pinText: { color: '#38bdf8', fontSize: 32, fontWeight: '900' },
+  keypadCard: { flex: 1, backgroundColor: opsConsole.surface, padding: 20, borderRadius: 16, borderWidth: 1, borderColor: opsConsole.border, alignItems: 'center' },
+  keypadTitle: { color: opsConsole.muted, fontSize: 12, fontWeight: '900', letterSpacing: 0.5 },
+  pinDisplay: { backgroundColor: opsConsole.background, width: '100%', paddingVertical: 14, borderRadius: 10, marginVertical: 16, alignItems: 'center' },
+  pinText: { color: opsConsole.accentSoft, fontSize: 32, fontWeight: '900' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', width: '100%', gap: 10, justifyContent: 'center' },
-  keyBtn: { width: '30%', height: 60, backgroundColor: '#334155', borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  keyText: { color: '#ffffff', fontSize: 24, fontWeight: '900' },
-  keyTextAux: { color: '#94a3b8', fontSize: 12, fontWeight: '900' },
+  keyBtn: { width: '30%', height: 60, backgroundColor: opsConsole.border, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  keyText: { color: opsConsole.textStrong, fontSize: 24, fontWeight: '900' },
+  keyTextAux: { color: opsConsole.muted, fontSize: 12, fontWeight: '900' },
   clearBtn: { backgroundColor: '#7f1d1d' },
   scanBtn: { backgroundColor: '#1e3a8a' },
-  statusCard: { flex: 1.2, backgroundColor: '#1e293b', padding: 20, borderRadius: 16, borderWidth: 1, borderColor: '#334155' },
+  statusCard: { flex: 1.2, backgroundColor: opsConsole.surface, padding: 20, borderRadius: 16, borderWidth: 1, borderColor: opsConsole.border },
   statusBanner: { padding: 16, borderRadius: 12, marginBottom: 16 },
   bgGreen: { backgroundColor: '#064e3b' },
   bgYellow: { backgroundColor: '#78350f' },
   bgRed: { backgroundColor: '#7f1d1d' },
-  statusBadgeText: { color: '#ffffff', fontSize: 16, fontWeight: '900' },
-  statusMessage: { color: '#f8fafc', fontSize: 13, fontWeight: '700', marginTop: 4 },
-  workerDetails: { backgroundColor: '#0f172a', padding: 16, borderRadius: 12, gap: 8 },
-  detailLabel: { color: '#64748b', fontSize: 10, fontWeight: '800' },
-  detailValue: { color: '#f8fafc', fontSize: 15, fontWeight: '800' },
+  statusBadgeText: { color: opsConsole.textStrong, fontSize: 16, fontWeight: '900' },
+  statusMessage: { color: opsConsole.text, fontSize: 13, fontWeight: '700', marginTop: 4 },
+  workerDetails: { backgroundColor: opsConsole.background, padding: 16, borderRadius: 12, gap: 8 },
+  detailLabel: { color: opsConsole.mutedDim, fontSize: 10, fontWeight: '800' },
+  detailValue: { color: opsConsole.text, fontSize: 15, fontWeight: '800' },
   idleState: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  idleTitle: { color: '#38bdf8', fontSize: 20, fontWeight: '900' },
-  idleSub: { color: '#94a3b8', fontSize: 13, marginTop: 4 },
+  idleTitle: { color: opsConsole.accentSoft, fontSize: 20, fontWeight: '900' },
+  idleSub: { color: opsConsole.muted, fontSize: 13, marginTop: 4 },
 });
 
 // Expo Router renders this boundary around this route only, so a render

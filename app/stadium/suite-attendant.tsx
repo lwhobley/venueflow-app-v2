@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert } from 'react-native';
-import { apiRequest } from '../../lib/api-client';
+import { useQueryClient } from '@tanstack/react-query';
+import { apiRequest, useApiQuery } from '../../lib/api-client';
 import { asArray } from '../../lib/format';
+import { OpsQueryState, OpsStaleNotice } from '../../components/stadium/OpsQueryState';
+import { opsConsole } from '../../lib/theme';
 
 export interface BEOItem {
   code: string;
@@ -25,28 +28,26 @@ export interface SuiteBEO {
   deliveredBy?: string;
 }
 
+// Shared with the kitchen bump screen, so both boards read one cache entry.
+const SUITE_BEOS_KEY = ['stadium', 'suite-beos'];
+
 export default function SuiteAttendantRunnerScreen() {
-  const [beos, setBeos] = useState<SuiteBEO[]>([]);
+  const queryClient = useQueryClient();
   const [selectedZone, setSelectedZone] = useState<string>('all');
   const [deliveryModalBeo, setDeliveryModalBeo] = useState<SuiteBEO | null>(null);
   const [replenishModalBeo, setReplenishModalBeo] = useState<SuiteBEO | null>(null);
   const [replenishSummary, setReplenishSummary] = useState<string>('');
   const [signatureName, setSignatureName] = useState<string>('');
 
-  const fetchRunnerOrders = async (silent = false) => {
-    try {
-      setBeos(asArray<SuiteBEO>(await apiRequest<SuiteBEO[]>('/v1/stadium/suite-beos')));
-    } catch (error) {
-      setBeos([]);
-      if (!silent) Alert.alert('Runner sync failed', error instanceof Error ? error.message : 'Unable to load suite deliveries.');
-    }
-  };
+  const query = useApiQuery<SuiteBEO[]>(SUITE_BEOS_KEY, '/v1/stadium/suite-beos', true, 4000);
+  const beos = asArray<SuiteBEO>(query.data);
+  const fetchRunnerOrders = () => void queryClient.invalidateQueries({ queryKey: SUITE_BEOS_KEY });
 
-  useEffect(() => {
-    fetchRunnerOrders();
-    const interval = setInterval(() => fetchRunnerOrders(true), 4000);
-    return () => clearInterval(interval);
-  }, []);
+  // The level chips were rendered but never applied, so every runner saw every
+  // suite on every level.
+  const visibleBeos = selectedZone === 'all'
+    ? beos
+    : beos.filter((beo) => beo.zone?.level === selectedZone);
 
   const handleMarkDelivered = async () => {
     if (!deliveryModalBeo) return;
@@ -118,8 +119,18 @@ export default function SuiteAttendantRunnerScreen() {
         ))}
       </View>
 
+      {beos.length > 0 ? <OpsStaleNotice error={query.error} onRetry={fetchRunnerOrders} /> : null}
+
+      <OpsQueryState
+        isLoading={query.isLoading}
+        error={beos.length > 0 ? null : query.error}
+        isEmpty={visibleBeos.length === 0}
+        loadingMessage="Loading suite delivery queue…"
+        emptyMessage="No suite deliveries on this level right now."
+        onRetry={fetchRunnerOrders}
+      >
       <ScrollView contentContainerStyle={styles.listContainer}>
-        {beos.map((beo) => (
+        {visibleBeos.map((beo) => (
           <View key={beo.id} style={styles.orderCard}>
             {/* Status Banner */}
             <View style={[styles.statusBanner, beo.status === 'delivered' ? styles.bgDelivered : beo.status === 'en_route' ? styles.bgEnRoute : styles.bgPrep]}>
@@ -160,6 +171,7 @@ export default function SuiteAttendantRunnerScreen() {
           </View>
         ))}
       </ScrollView>
+      </OpsQueryState>
 
       {/* Mark Delivered Modal */}
       {deliveryModalBeo && (
@@ -173,7 +185,7 @@ export default function SuiteAttendantRunnerScreen() {
               <TextInput
                 style={styles.textInput}
                 placeholder="Enter host name (e.g. John Executive)"
-                placeholderTextColor="#64748b"
+                placeholderTextColor={opsConsole.mutedDim}
                 value={signatureName}
                 onChangeText={setSignatureName}
               />
@@ -217,7 +229,7 @@ export default function SuiteAttendantRunnerScreen() {
               <TextInput
                 style={styles.textInput}
                 placeholder="e.g. Need 3x Mineral Water, 2x Fruit Platters"
-                placeholderTextColor="#64748b"
+                placeholderTextColor={opsConsole.mutedDim}
                 value={replenishSummary}
                 onChangeText={setReplenishSummary}
               />
@@ -239,57 +251,57 @@ export default function SuiteAttendantRunnerScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: opsConsole.background },
   header: {
-    padding: 16, backgroundColor: '#1e293b', borderBottomWidth: 1, borderBottomColor: '#334155',
+    padding: 16, backgroundColor: opsConsole.surface, borderBottomWidth: 1, borderBottomColor: opsConsole.border,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
   },
-  headerTitle: { color: '#f8fafc', fontSize: 18, fontWeight: '900' },
-  headerSub: { color: '#94a3b8', fontSize: 10, fontWeight: '700', marginTop: 2 },
-  refreshIconBtn: { backgroundColor: '#334155', padding: 8, borderRadius: 8 },
+  headerTitle: { color: opsConsole.text, fontSize: 18, fontWeight: '900' },
+  headerSub: { color: opsConsole.muted, fontSize: 10, fontWeight: '700', marginTop: 2 },
+  refreshIconBtn: { backgroundColor: opsConsole.border, padding: 8, borderRadius: 8 },
   refreshIconText: { fontSize: 16 },
-  zoneFilterBar: { flexDirection: 'row', padding: 12, backgroundColor: '#1e293b', gap: 8 },
-  zoneChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: '#334155' },
-  zoneChipActive: { backgroundColor: '#3b82f6' },
-  zoneChipText: { color: '#94a3b8', fontSize: 11, fontWeight: '700' },
-  zoneChipTextActive: { color: '#ffffff' },
+  zoneFilterBar: { flexDirection: 'row', padding: 12, backgroundColor: opsConsole.surface, gap: 8 },
+  zoneChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: opsConsole.border },
+  zoneChipActive: { backgroundColor: opsConsole.accent },
+  zoneChipText: { color: opsConsole.muted, fontSize: 11, fontWeight: '700' },
+  zoneChipTextActive: { color: opsConsole.textStrong },
   listContainer: { padding: 12, gap: 12 },
-  orderCard: { backgroundColor: '#1e293b', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#334155' },
+  orderCard: { backgroundColor: opsConsole.surface, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: opsConsole.border },
   statusBanner: { paddingHorizontal: 12, paddingVertical: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   bgPrep: { backgroundColor: '#eab308' },
   bgEnRoute: { backgroundColor: '#0284c7' },
   bgDelivered: { backgroundColor: '#16a34a' },
-  statusBannerText: { color: '#ffffff', fontSize: 12, fontWeight: '900' },
-  beoNumberText: { color: '#ffffff', fontSize: 11, fontWeight: '700' },
+  statusBannerText: { color: opsConsole.textStrong, fontSize: 12, fontWeight: '900' },
+  beoNumberText: { color: opsConsole.textStrong, fontSize: 11, fontWeight: '700' },
   cardContent: { padding: 12 },
-  suiteTitle: { color: '#ffffff', fontSize: 18, fontWeight: '800' },
-  hostSubtitle: { color: '#94a3b8', fontSize: 12, marginTop: 2 },
-  instructionsText: { color: '#f59e0b', fontSize: 12, fontWeight: '600', marginTop: 6, backgroundColor: '#451a03', padding: 6, borderRadius: 4 },
-  itemsHeader: { color: '#64748b', fontSize: 11, fontWeight: '800', marginTop: 10, marginBottom: 4 },
+  suiteTitle: { color: opsConsole.textStrong, fontSize: 18, fontWeight: '800' },
+  hostSubtitle: { color: opsConsole.muted, fontSize: 12, marginTop: 2 },
+  instructionsText: { color: opsConsole.warn, fontSize: 12, fontWeight: '600', marginTop: 6, backgroundColor: '#451a03', padding: 6, borderRadius: 4 },
+  itemsHeader: { color: opsConsole.mutedDim, fontSize: 11, fontWeight: '800', marginTop: 10, marginBottom: 4 },
   itemRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 2 },
-  itemBadge: { color: '#38bdf8', fontSize: 12, fontWeight: '900', width: 28 },
-  itemText: { color: '#f8fafc', fontSize: 13, fontWeight: '600' },
+  itemBadge: { color: opsConsole.accentSoft, fontSize: 12, fontWeight: '900', width: 28 },
+  itemText: { color: opsConsole.text, fontSize: 13, fontWeight: '600' },
   actionRow: { marginTop: 12, gap: 8 },
-  deliverBtn: { backgroundColor: '#10b981', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-  deliverBtnText: { color: '#ffffff', fontSize: 14, fontWeight: '900' },
-  replenishBtn: { backgroundColor: '#3b82f6', paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
-  replenishBtnText: { color: '#ffffff', fontSize: 13, fontWeight: '800' },
+  deliverBtn: { backgroundColor: opsConsole.good, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
+  deliverBtnText: { color: opsConsole.textStrong, fontSize: 14, fontWeight: '900' },
+  replenishBtn: { backgroundColor: opsConsole.accent, paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
+  replenishBtnText: { color: opsConsole.textStrong, fontSize: 13, fontWeight: '800' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', padding: 16 },
-  modalContent: { backgroundColor: '#1e293b', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#334155' },
-  modalTitle: { color: '#ffffff', fontSize: 18, fontWeight: '900' },
-  modalSub: { color: '#94a3b8', fontSize: 12, marginBottom: 16 },
-  inputLabel: { color: '#cbd5e1', fontSize: 11, fontWeight: '800', marginTop: 10, marginBottom: 6 },
-  textInput: { backgroundColor: '#0f172a', color: '#ffffff', borderRadius: 8, padding: 12, borderWidth: 1, borderColor: '#334155', fontSize: 14 },
-  sigCanvasMock: { height: 80, backgroundColor: '#0f172a', borderRadius: 8, borderWidth: 1, borderColor: '#10b981', justifyContent: 'center', alignItems: 'center', marginVertical: 12 },
-  sigMockText: { color: '#10b981', fontSize: 12, fontWeight: '800' },
+  modalContent: { backgroundColor: opsConsole.surface, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: opsConsole.border },
+  modalTitle: { color: opsConsole.textStrong, fontSize: 18, fontWeight: '900' },
+  modalSub: { color: opsConsole.muted, fontSize: 12, marginBottom: 16 },
+  inputLabel: { color: opsConsole.subtle, fontSize: 11, fontWeight: '800', marginTop: 10, marginBottom: 6 },
+  textInput: { backgroundColor: opsConsole.background, color: opsConsole.textStrong, borderRadius: 8, padding: 12, borderWidth: 1, borderColor: opsConsole.border, fontSize: 14 },
+  sigCanvasMock: { height: 80, backgroundColor: opsConsole.background, borderRadius: 8, borderWidth: 1, borderColor: opsConsole.good, justifyContent: 'center', alignItems: 'center', marginVertical: 12 },
+  sigMockText: { color: opsConsole.good, fontSize: 12, fontWeight: '800' },
   presetRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 8 },
-  presetChip: { backgroundColor: '#334155', padding: 10, borderRadius: 8 },
-  presetChipText: { color: '#38bdf8', fontSize: 12, fontWeight: '700' },
+  presetChip: { backgroundColor: opsConsole.border, padding: 10, borderRadius: 8 },
+  presetChipText: { color: opsConsole.accentSoft, fontSize: 12, fontWeight: '700' },
   modalActionRow: { flexDirection: 'row', gap: 12, marginTop: 16 },
   cancelBtn: { flex: 1, backgroundColor: '#475569', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-  cancelBtnText: { color: '#ffffff', fontSize: 13, fontWeight: '800' },
-  confirmBtn: { flex: 1, backgroundColor: '#10b981', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-  confirmBtnText: { color: '#ffffff', fontSize: 13, fontWeight: '900' },
+  cancelBtnText: { color: opsConsole.textStrong, fontSize: 13, fontWeight: '800' },
+  confirmBtn: { flex: 1, backgroundColor: opsConsole.good, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
+  confirmBtnText: { color: opsConsole.textStrong, fontSize: 13, fontWeight: '900' },
 });
 
 // Expo Router renders this boundary around this route only, so a render
