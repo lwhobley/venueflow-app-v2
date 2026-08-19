@@ -29,7 +29,9 @@ export interface StandSheetData {
   expectedSalesRevenueCents: number;
   actualPosRevenueCents: number;
   varianceAmountCents: number;
-  inventoryVariance: StandSheetItem[];
+  // Nullable server-side (`Json?` on the Prisma model): a freshly created
+  // sheet has no computed variance until it's reconciled.
+  inventoryVariance: StandSheetItem[] | null;
 }
 
 const STAND_SHEETS_KEY = ['stadium', 'concourse', 'stand-sheets'];
