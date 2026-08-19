@@ -124,6 +124,18 @@ const queryRoutes: Record<string, Route> = {
 };
 
 const mutationRoutes: Record<string, Route> = {
+  'pos.createAggregatorChannel': {
+    path: '/v1/pos/aggregator/channels',
+    method: 'POST',
+    body: stripVenue,
+    invalidate: [['pos', 'getAggregatorChannels']],
+  },
+  'pos.updateAggregatorChannelStatus': {
+    path: (args) => `/v1/pos/aggregator/channels/${args.channelId}/status`,
+    method: 'PATCH',
+    body: ({ active }) => ({ active }),
+    invalidate: [['pos', 'getAggregatorChannels']],
+  },
   'stadium.createZone': {
     path: '/v1/stadium/zones',
     method: 'POST',

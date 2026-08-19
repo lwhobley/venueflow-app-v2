@@ -1,5 +1,5 @@
-import { BadRequestException, Body, Controller, ForbiddenException, Get, Headers, NotFoundException, Param, Post, Query, Req, UnauthorizedException } from '@nestjs/common';
-import { ArrayMaxSize, IsArray, IsIn, IsInt, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Headers, NotFoundException, Param, Patch, Post, Query, Req, UnauthorizedException } from '@nestjs/common';
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { Prisma, PosProvider, PosCheckStatus } from '@prisma/client';
 import type { Request } from 'express';
@@ -33,6 +33,18 @@ const POS_PROVIDERS = [
   'generic',
 ] as const;
 const POS_CHECK_STATUSES = ['open', 'paid', 'void'] as const;
+
+class CreateAggregatorChannelDto {
+  @IsString() name!: string;
+  @IsString() zoneLabel!: string;
+  @IsIn(POS_PROVIDERS) primaryProvider!: PosProvider;
+  @IsIn(POS_PROVIDERS) fallbackProvider!: PosProvider;
+  @IsOptional() @IsInt() @Min(0) terminalCount?: number;
+}
+
+class UpdateAggregatorChannelStatusDto {
+  @IsBoolean() active!: boolean;
+}
 
 class SalesWindowQueryDto {
   @IsOptional()
@@ -860,14 +872,74 @@ export class PosController {
     if (!isAdminRole(scope.role) && !scope.allAccess) {
       throw new ForbiddenException('Only managers can view POS aggregator channels.');
     }
+    const channels = await this.prisma.posAggregatorChannel.findMany({
+      where: { venueId: scope.venueId },
+      orderBy: { createdAt: 'asc' },
+    });
+    return channels.map((channel) => this.serializeChannel(channel));
+  }
 
-    return [
-      { id: 'ch-concourse-north', name: 'North Concourse 100 Stands', primaryProvider: 'toast', fallbackProvider: 'square', terminalCount: 16, status: 'active', zone: 'North 100' },
-      { id: 'ch-concourse-east', name: 'East Sideline Concessions', primaryProvider: 'toast', fallbackProvider: 'clover', terminalCount: 14, status: 'active', zone: 'East 100' },
-      { id: 'ch-luxury-suites', name: '300 Luxury Suites & VIP Tablets', primaryProvider: 'spoton', fallbackProvider: 'toast', terminalCount: 28, status: 'active', zone: '300 Suites' },
-      { id: 'ch-in-seat-mobile', name: 'In-Seat Fan Mobile App Orders', primaryProvider: 'generic', fallbackProvider: 'square', terminalCount: 120, status: 'active', zone: 'Lower & Upper Bowl' },
-      { id: 'ch-grab-go-rfid', name: 'Express RFID Grab & Go Lanes', primaryProvider: 'shopify_pos', fallbackProvider: 'toast', terminalCount: 8, status: 'active', zone: 'Midfield Concourse' },
-    ];
+  @Post('aggregator/channels')
+  async createAggregatorChannel(@VenueScope() scope: Scope, @Body() body: CreateAggregatorChannelDto) {
+    if (!isAdminRole(scope.role) && !scope.allAccess) {
+      throw new ForbiddenException('Only managers can configure POS aggregator channels.');
+    }
+    try {
+      const channel = await this.prisma.posAggregatorChannel.create({
+        data: {
+          venueId: scope.venueId,
+          name: body.name.trim(),
+          zoneLabel: body.zoneLabel.trim(),
+          primaryProvider: body.primaryProvider,
+          fallbackProvider: body.fallbackProvider,
+          terminalCount: body.terminalCount ?? 0,
+        },
+      });
+      return this.serializeChannel(channel);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new BadRequestException('A channel with this name already exists for this venue.');
+      }
+      throw error;
+    }
+  }
+
+  @Patch('aggregator/channels/:id/status')
+  async updateAggregatorChannelStatus(
+    @VenueScope() scope: Scope,
+    @Param('id') id: string,
+    @Body() body: UpdateAggregatorChannelStatusDto,
+  ) {
+    if (!isAdminRole(scope.role) && !scope.allAccess) {
+      throw new ForbiddenException('Only managers can configure POS aggregator channels.');
+    }
+    const channel = await this.prisma.posAggregatorChannel.findFirst({ where: { id, venueId: scope.venueId } });
+    if (!channel) throw new NotFoundException('POS aggregator channel not found.');
+    const updated = await this.prisma.posAggregatorChannel.update({
+      where: { id: channel.id },
+      data: { active: body.active },
+    });
+    return this.serializeChannel(updated);
+  }
+
+  private serializeChannel(channel: {
+    id: string;
+    name: string;
+    zoneLabel: string;
+    primaryProvider: PosProvider;
+    fallbackProvider: PosProvider;
+    terminalCount: number;
+    active: boolean;
+  }) {
+    return {
+      id: channel.id,
+      name: channel.name,
+      zone: channel.zoneLabel,
+      primaryProvider: channel.primaryProvider,
+      fallbackProvider: channel.fallbackProvider,
+      terminalCount: channel.terminalCount,
+      status: channel.active ? 'active' : 'inactive',
+    };
   }
 
   @Get('aggregator/86-items')
