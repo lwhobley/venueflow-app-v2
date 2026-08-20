@@ -1817,9 +1817,14 @@ export function StadiumVenueMap({
               </View>
             </View>
 
-            {/* Actual GLB renderer in 3D mode; the architectural plan remains available in 2D mode. */}
+            {/* Actual GLB renderer in 3D mode; the architectural plan remains available in 2D mode.
+                Explicit height here (see interactiveModelFrame below for why the frame's own
+                base style can no longer carry `flex: 1`) — without it the WebGL canvas grew to
+                over 12,000px tall on web, rendering off-screen and pushing every control below
+                it, including the Stadium F&B Workflows buttons on the outer page, far out of
+                reach. */}
             {viewPerspective === '3d_isometric' ? (
-              <View style={styles.interactiveModelFrame}>
+              <View style={[styles.interactiveModelFrame, { height: isMobile ? 300 : 380 }]}>
                 <Stadium3DModel
                   dom={{
                     scrollEnabled: false,
@@ -2984,9 +2989,13 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   interactiveModelFrame: {
+    // No `flex` here: `flex: 1` sets `flex-basis: 0%`, which wins over an
+    // explicit `height` in flex sizing — the inline `height` override at the
+    // call site was being ignored, and this frame (and the WebGL canvas
+    // inside it) grew to fill whatever free space its row sibling (the
+    // unclamped, often much taller sector directory) left available on the
+    // page's ScrollView, well past 12,000px on a real venue's worth of zones.
     width: '100%',
-    minHeight: 520,
-    flex: 1,
     overflow: 'hidden',
     backgroundColor: '#08131F',
   },

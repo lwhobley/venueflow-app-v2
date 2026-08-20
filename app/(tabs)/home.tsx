@@ -51,12 +51,12 @@ export default function HomeScreen() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [goalTitle, setGoalTitle] = useState('');
 
-  const venueName = dashboard?.venue.name ?? venue?.name ?? 'Stadium F&B Operations';
-  const canManage = Boolean(dashboard && canManageVenue(dashboard.profile.role, dashboard.profile.allAccess));
+  const venueName = dashboard?.venue?.name ?? venue?.name ?? 'Stadium F&B Operations';
+  const canManage = Boolean(dashboard?.profile && canManageVenue(dashboard.profile.role, dashboard.profile.allAccess));
   const managerDashboard = useQuery(api.operations.getManagerDashboard, isReady && canManage && venue?.id ? { venueId: venue.id } : 'skip') as any;
   const dailyBrief = useQuery(api.operations.getDailyBrief, isReady && canManage && venue?.id ? { venueId: venue.id } : 'skip') as any;
   const commandCenter = useQuery(api.operations.getCommandCenter, isReady && canManage && venue?.id ? { venueId: venue.id } : 'skip') as any;
-  const notificationsList = (notifications ?? []) as NotificationItem[];
+  const notificationsList = (Array.isArray(notifications) ? notifications : []) as NotificationItem[];
   const unreadCount = notificationsList.filter((item) => !item.read).length;
   const readiness = commandCenter?.readiness;
   const pulse = dailyBrief?.profitabilityPulse;

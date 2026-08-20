@@ -18,7 +18,7 @@ export default function BillingLockedScreen() {
   const venue = useAuthStore((state: AuthState) => state.venue);
   const { me } = useAuthenticatedSession();
   const reason = Array.isArray(params.reason) ? params.reason[0] : params.reason ?? 'never_subscribed';
-  const canPay = Boolean(me && canManageBilling(me.profile.role, me.profile.allAccess));
+  const canPay = Boolean(me?.profile && canManageBilling(me.profile.role, me.profile.allAccess));
   const headlineByReason: Record<string, string> = {
     trial_expired: t('billingLocked.headlineTrialExpired'),
     trial_active: t('billingLocked.headlineTrialActive'),

@@ -26,7 +26,7 @@ export default function TabsLayout() {
   const { isReady } = useAuthenticatedSession();
   const me = useQuery(api.app.getMe, isReady ? {} : "skip");
   const canManage = Boolean(
-    me && canManageVenue(me.profile.role, me.profile.allAccess),
+    me?.profile && canManageVenue(me.profile.role, me.profile.allAccess),
   );
 
   if (hydrated && !localUser) {

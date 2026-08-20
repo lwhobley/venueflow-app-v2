@@ -32,8 +32,8 @@ export function useAuthenticatedSession() {
   }, [me?.profile?.role, me?.profile?.allAccess, venueId]);
 
   const cached = lastKnown.current?.venueId === venueId ? lastKnown.current : null;
-  const role = me?.profile.role ?? cached?.role ?? null;
-  const allAccess = me?.profile.allAccess ?? cached?.allAccess ?? false;
+  const role = me?.profile?.role ?? cached?.role ?? null;
+  const allAccess = me?.profile?.allAccess ?? cached?.allAccess ?? false;
   const canManage = canManageVenue(role, allAccess);
   const canViewBilling = canManageBilling(role, allAccess);
 
