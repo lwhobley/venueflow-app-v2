@@ -62,7 +62,7 @@
     "@types/supertest": "^7.2.0",
     "dotenv": "^17.4.2",
     "supertest": "^7.2.2",
-    "testcontainers": "^12.0.3",
+    "testcontainers": "^12.1.0",
     "typescript": "~5.9.2"
   }
 }
