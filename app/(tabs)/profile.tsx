@@ -23,9 +23,6 @@ export default function ProfileScreen() {
   const canManage = Boolean(
     serverRole && canManageVenue(serverRole, allAccess),
   );
-  const canViewBilling = Boolean(
-    serverRole && canManageBilling(serverRole, allAccess),
-  );
   const { signOut } = useAuthActions();
   const deleteAccount = useMutation(api.app.deleteMyAccount);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -44,9 +41,6 @@ export default function ProfileScreen() {
     router.push("/(tabs)/staff");
   };
 
-  const onOpenBilling = () => {
-    router.push(Platform.OS === "web" ? "/billing" : "/billing/paywall");
-  };
 
   const onDeleteAccount = async () => {
     setDeleting(true);
@@ -115,21 +109,11 @@ export default function ProfileScreen() {
         </Button>
       ) : null}
 
-      {canViewBilling ? (
-        <Button
-          mode="outlined"
-          textColor={colors.primary}
-          onPress={onOpenBilling}
-          style={{ marginBottom: spacing.sm }}
-        >
-          {t("profile.billing")}
-        </Button>
-      ) : null}
-
       <Button
         mode="outlined"
         textColor={colors.primary}
         icon="notebook-outline"
+
         onPress={() => router.push("/logbook")}
         style={{ marginBottom: spacing.sm }}
       >

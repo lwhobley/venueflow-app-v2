@@ -1,51 +1,7 @@
-import { Platform, ScrollView, View } from 'react-native';
-import { router } from 'expo-router';
-import { Button, Card, Text } from 'react-native-paper';
-import { useA0Purchases } from '../lib/a0-purchases-stub';
-import { getTrialState } from '../lib/trial';
-import { colors, spacing } from '../lib/theme';
-import { config } from '../lib/config';
-import { useAuthenticatedSession } from '../lib/auth-readiness';
-import { hasAllAccess } from '../lib/permissions';
+import React from 'react';
 
-// Wraps premium-only features (Integrations, CRM). Intro access unlocks these
-// features until it expires; after that the user must upgrade. When billing is
-// disabled (local/dev builds) the feature is always unlocked.
-export function PremiumFeatureGate({ feature, children }: { feature: string; children: React.ReactNode }) {
-  const { me, isAuthLoading } = useAuthenticatedSession();
-  const { isPremium, isLoading } = useA0Purchases();
-  const allAccess = hasAllAccess(me?.profile.allAccess);
-
-  // Avoid flashing the upsell while entitlement or profile is still resolving.
-  if (isLoading || isAuthLoading || me === undefined) {
-    return <View style={{ flex: 1, backgroundColor: colors.background }} />;
-  }
-
-  const trial = getTrialState(me?.profile.trialEndsAt ?? null);
-  if (!config.billingEnabled || allAccess || isPremium || trial.active) {
-    return <>{children}</>;
-  }
-
-  const headline = 'Intro access has ended';
-  const body = `Upgrade to a paid plan to unlock ${feature} and the rest of Venue Wrangler.`;
-
-  return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ padding: spacing.lg, flexGrow: 1, justifyContent: 'center' }}>
-      <Card style={{ backgroundColor: colors.surface, borderRadius: 16 }}>
-        <Card.Content style={{ gap: spacing.sm, alignItems: 'center' }}>
-          <Text variant="headlineSmall" style={{ fontWeight: '800', color: colors.primary, textAlign: 'center' }}>{headline}</Text>
-          <Text style={{ color: colors.muted, textAlign: 'center' }}>{body}</Text>
-          <Button
-            mode="contained"
-            buttonColor={colors.primary}
-            icon="lock-open-variant"
-            style={{ marginTop: spacing.sm }}
-            onPress={() => router.push(Platform.OS === 'web' ? '/billing' : '/billing/paywall')}
-          >
-            Upgrade now
-          </Button>
-        </Card.Content>
-      </Card>
-    </ScrollView>
-  );
+// Enterprise implementation: All features are unlocked and accessible for authenticated users.
+export function PremiumFeatureGate({ children }: { feature?: string; children: React.ReactNode }) {
+  return <>{children}</>;
 }
+

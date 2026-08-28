@@ -242,10 +242,11 @@ export class AppController {
             fullName,
             role: 'staff',
             jobTitle: body.jobTitle ?? 'Staff',
-            trialEndsAt: new Date(Date.now() + TRIAL_DURATION_MS),
+            trialEndsAt: null,
           },
           include: { venue: true },
         });
+
 
     const venueName = profile.venue?.name ?? 'your venue';
     void this.email.send({
@@ -318,31 +319,6 @@ export class AppController {
       }
 
       const isAdditionalVenue = venueIds.length > 0;
-      if (isAdditionalVenue) {
-        const hasMultiPlan = await tx.subscription.findFirst({
-          where: {
-            venueId: { in: venueIds },
-            status: { in: ['active', 'trialing'] },
-            OR: [
-              { planId: MULTI_VENUE_PLAN_ID },
-              { priceCents: { gte: MULTI_VENUE_PRICE_CENTS } },
-              { planId: { contains: 'multi' } },
-            ],
-          },
-          select: { id: true },
-        });
-        if (!hasMultiPlan) {
-          throw new HttpException(
-            {
-              statusCode: 402,
-              message: 'Registering an additional venue requires a Multi-Venue Pro subscription ($399/month for up to 5 venues).',
-              code: 'MULTI_VENUE_REQUIRED',
-            },
-            HttpStatus.PAYMENT_REQUIRED,
-          );
-        }
-      }
-
       const plan = isAdditionalVenue
         ? { planId: MULTI_VENUE_PLAN_ID, priceCents: MULTI_VENUE_PRICE_CENTS }
         : planForStaffRange(body.staffRange);
@@ -363,21 +339,21 @@ export class AppController {
           address: body.address?.trim() || null,
           venueType: body.venueType?.trim() || null,
           staffRange: body.staffRange,
-          subscriptionStatus: 'trialing',
-          subscriptionPlatform: null,
+          subscriptionStatus: 'active',
+          subscriptionPlatform: 'enterprise',
           organization: { create: { name: `${businessName} Organization`, code: `org_${venueCode}` } },
         },
       });
       await tx.subscription.create({
         data: {
           venueId: venue.id,
-          status: 'trialing',
-          platform: null,
+          status: 'active',
+          platform: 'enterprise',
           planId: plan.planId,
-          priceCents: plan.priceCents,
+          priceCents: 0,
           currency: 'USD',
-          trialStartedAt,
-          trialEndsAt,
+          trialStartedAt: null,
+          trialEndsAt: null,
           cancelAtPeriodEnd: false,
         },
       });
@@ -389,13 +365,14 @@ export class AppController {
           role: existingProfile?.allAccess ? 'platform_admin' : 'admin',
           jobTitle: existingProfile?.allAccess ? 'Platform Administrator' : 'Owner',
           venueId: venue.id,
-          trialEndsAt,
+          trialEndsAt: null,
           allAccess: existingProfile?.allAccess ?? false,
         },
       });
       await syncTeamMemberCount(tx, venue.id);
       return { profile, venue };
     }));
+
 
     const venues = await this.profiles.listUserVenues(user.sub);
     return { profile: mapProfile(result.profile, true), venue: mapVenue(result.venue), venues };
