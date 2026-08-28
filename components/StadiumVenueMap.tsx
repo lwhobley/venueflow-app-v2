@@ -1396,6 +1396,14 @@ export function StadiumVenueMap({
     return luxurySuitesZone?.units ?? [];
   }, [luxurySuitesZone]);
 
+  const activeSelectedSuite = useMemo(() => {
+    if (selectedUnitId) {
+      const found = allSuites.find((s) => s.id === selectedUnitId);
+      if (found) return found;
+    }
+    return allSuites[0] ?? null;
+  }, [selectedUnitId, allSuites]);
+
   const filteredFloorSuites = useMemo(() => {
     if (suiteFloorTab === 'all') return allSuites;
     if (suiteFloorTab === '300_west') {
@@ -2105,13 +2113,13 @@ export function StadiumVenueMap({
                           <View style={styles.suiteDropdownTriggerLeft}>
                             <MaterialCommunityIcons
                               name="format-list-bulleted-square"
-                              size={15}
+                              size={16}
                               color="#8A5D23"
                             />
                             <Text numberOfLines={1} style={styles.suiteDropdownTriggerText}>
-                              {activeSelectedUnit?.zone.id === 'zone-300-suites'
-                                ? `Selected: ${activeSelectedUnit.unit.name} (${activeSelectedUnit.unit.suiteDetails?.beoNumber ? '★ BEO Ready' : 'Open'})`
-                                : `▾ Select Suite from Floor Dropdown (${filteredFloorSuites.length} available)...`}
+                              {activeSelectedSuite
+                                ? `Selected: ${activeSelectedSuite.code} · ${activeSelectedSuite.suiteDetails?.suiteholder ?? activeSelectedSuite.name} (${activeSelectedSuite.suiteDetails?.beoNumber ? '★ BEO Ready' : 'Open'})`
+                                : `▾ Click to Select Suite from Dropdown (${filteredFloorSuites.length} available)...`}
                             </Text>
                           </View>
                           <View style={styles.suiteDropdownTriggerRight}>
@@ -2186,8 +2194,8 @@ export function StadiumVenueMap({
                                           },
                                         ]}
                                       />
-                                      <View>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                      <View style={{ flex: 1 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                                           <Text
                                             style={[
                                               styles.suiteDropdownItemNumber,
@@ -2230,62 +2238,98 @@ export function StadiumVenueMap({
                           </View>
                         ) : null}
 
-                        {/* Architectural Micro-Suite Grid (Realistic stadium suite cells) */}
-                        <View style={styles.microSuitesGridRing}>
-                          {filteredFloorSuites.map((unit) => {
-                            const isSelected = selectedUnitId === unit.id;
-                            const hasBeo = Boolean(unit.suiteDetails?.beoNumber);
-                            const suiteNum = unit.suiteDetails?.suiteNumber ?? unit.code.replace('SUITE-', '');
-                            return (
-                              <Pressable
-                                key={unit.id}
-                                onPress={() => handleUnitPress(unit, 'zone-300-suites')}
-                                style={[
-                                  styles.microSuiteCell,
-                                  isSelected ? styles.microSuiteCellActive : null,
-                                ]}
-                              >
-                                <View style={styles.microSuiteHeader}>
-                                  <View
-                                    style={[
-                                      styles.microSuiteStatusDot,
-                                      {
-                                        backgroundColor: hasBeo
-                                          ? '#2E7D32'
-                                          : isSelected
-                                            ? '#FFD700'
-                                            : '#90A4AE',
-                                      },
-                                    ]}
-                                  />
-                                  <Text
-                                    numberOfLines={1}
-                                    style={[
-                                      styles.microSuiteNumberText,
-                                      isSelected ? styles.microSuiteNumberTextActive : null,
-                                    ]}
-                                  >
-                                    {suiteNum}
+                        {/* Focused Active Suite Display Card (Clean dropdown-driven UX) */}
+                        {activeSelectedSuite ? (
+                          <View style={styles.activeSuiteFocusCard}>
+                            <View style={styles.activeSuiteFocusHeader}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                                <View style={styles.activeSuiteBadgeIcon}>
+                                  <MaterialCommunityIcons name="glass-cocktail" size={16} color="#FFD700" />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                    <Text style={styles.activeSuiteFocusTitle}>
+                                      {activeSelectedSuite.code} · {activeSelectedSuite.name}
+                                    </Text>
+                                    {activeSelectedSuite.suiteDetails?.beoNumber ? (
+                                      <View style={styles.suiteBeoActiveBadge}>
+                                        <Text style={styles.suiteBeoActiveBadgeText}>★ BEO READY</Text>
+                                      </View>
+                                    ) : (
+                                      <View style={styles.suiteOpenActiveBadge}>
+                                        <Text style={styles.suiteOpenActiveBadgeText}>OPEN SUITE</Text>
+                                      </View>
+                                    )}
+                                  </View>
+                                  <Text style={styles.activeSuiteFocusSub}>
+                                    {activeSelectedSuite.stadiumZone} · {activeSelectedSuite.suiteDetails?.tier ?? 'VIP Executive Skybox'} · Capacity: {activeSelectedSuite.capacity ?? 20} Guests
                                   </Text>
                                 </View>
-                                <Text
-                                  numberOfLines={1}
-                                  style={[
-                                    styles.microSuiteHolderMini,
-                                    isSelected ? styles.microSuiteHolderMiniActive : null,
-                                  ]}
-                                >
-                                  {unit.suiteDetails?.suiteholder?.split(' ')[0] ?? unit.code}
+                              </View>
+                            </View>
+
+                            <View style={styles.activeSuiteDetailsRow}>
+                              <View style={styles.activeSuiteDetailItem}>
+                                <Text style={styles.activeSuiteDetailLabel}>SUITEHOLDER / SPONSOR</Text>
+                                <Text style={styles.activeSuiteDetailVal}>
+                                  {activeSelectedSuite.suiteDetails?.suiteholder ?? 'Private Hospitality'}
                                 </Text>
-                                {isSelected ? (
-                                  <View style={styles.microSuiteActivePill}>
-                                    <Text style={styles.microSuiteActivePillText}>★</Text>
-                                  </View>
-                                ) : null}
+                              </View>
+                              {activeSelectedSuite.suiteDetails?.attendantName ? (
+                                <View style={styles.activeSuiteDetailItem}>
+                                  <Text style={styles.activeSuiteDetailLabel}>LEAD ATTENDANT</Text>
+                                  <Text style={styles.activeSuiteDetailVal}>
+                                    {activeSelectedSuite.suiteDetails.attendantName}
+                                  </Text>
+                                </View>
+                              ) : activeSelectedSuite.suiteDetails?.hierarchy?.assignedStaff?.[0] ? (
+                                <View style={styles.activeSuiteDetailItem}>
+                                  <Text style={styles.activeSuiteDetailLabel}>LEAD ATTENDANT</Text>
+                                  <Text style={styles.activeSuiteDetailVal}>
+                                    {activeSelectedSuite.suiteDetails.hierarchy.assignedStaff[0].name} ({activeSelectedSuite.suiteDetails.hierarchy.assignedStaff[0].role})
+                                  </Text>
+                                </View>
+                              ) : null}
+                              {activeSelectedSuite.suiteDetails?.inSuiteOrders?.[0] && (
+                                <View style={styles.activeSuiteDetailItem}>
+                                  <Text style={styles.activeSuiteDetailLabel}>CURRENT BEO / IN-SUITE ORDER</Text>
+                                  <Text numberOfLines={1} style={styles.activeSuiteDetailVal}>
+                                    {activeSelectedSuite.suiteDetails.inSuiteOrders[0].items}
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+
+                            <View style={styles.activeSuiteActionsRow}>
+                              <Pressable
+                                onPress={() => {
+                                  setActiveModalUnit(activeSelectedSuite);
+                                }}
+                                style={styles.activeSuitePrimaryBtn}
+                              >
+                                <MaterialCommunityIcons name="clipboard-text-outline" size={14} color="#013369" />
+                                <Text style={styles.activeSuitePrimaryBtnText}>View Suite Details & Staff</Text>
                               </Pressable>
-                            );
-                          })}
-                        </View>
+                              <Pressable
+                                onPress={() => setIsSuiteDropdownOpen(!isSuiteDropdownOpen)}
+                                style={styles.activeSuiteChangeBtn}
+                              >
+                                <MaterialCommunityIcons name="swap-vertical" size={14} color="#8A5D23" />
+                                <Text style={styles.activeSuiteChangeBtnText}>Switch Suite (Dropdown)</Text>
+                              </Pressable>
+                            </View>
+                          </View>
+                        ) : (
+                          <Pressable
+                            onPress={() => setIsSuiteDropdownOpen(true)}
+                            style={styles.suitePlaceholderPromptBox}
+                          >
+                            <MaterialCommunityIcons name="cursor-default-click" size={18} color="#8A5D23" />
+                            <Text style={styles.suitePlaceholderPromptText}>
+                              Click dropdown above to select and focus a luxury suite ({allSuites.length} available)
+                            </Text>
+                          </Pressable>
+                        )}
 
                         {/* ── LEVEL 200 CLUB TIER (CURVED TERRACE + 360° LED RIBBON BOARD) ── */}
                         <View style={styles.clubTierRing}>
@@ -4336,78 +4380,148 @@ const styles = StyleSheet.create({
     color: '#90A4AE',
   },
 
-  // ── ARCHITECTURAL MICRO-SUITE GRID STYLES ──
-  microSuitesGridRing: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 4,
-    padding: 8,
-    backgroundColor: '#FAF5EC',
-    justifyContent: 'flex-start',
-  },
-  microSuiteCell: {
-    width: 58,
-    height: 38,
+  // ── FOCUSED ACTIVE SUITE DISPLAY CARD (CLEAN DROPDOWN-DRIVEN UX) ──
+  activeSuiteFocusCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 5,
-    borderWidth: 1,
+    borderRadius: 10,
+    borderWidth: 1.5,
     borderColor: '#DFD2BC',
-    paddingHorizontal: 4,
-    paddingVertical: 3,
-    justifyContent: 'space-between',
-    position: 'relative',
+    padding: 12,
+    marginTop: 8,
+    gap: 10,
+    shadowColor: '#8A5D23',
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  microSuiteCellActive: {
-    borderColor: '#FFD700',
-    borderWidth: 2,
-    backgroundColor: '#013369',
-    shadowColor: '#FFD700',
-    shadowOpacity: 0.6,
-    shadowRadius: 5,
-    elevation: 3,
-    transform: [{ scale: 1.06 }],
-  },
-  microSuiteHeader: {
+  activeSuiteFocusHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0E6D2',
   },
-  microSuiteStatusDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-  },
-  microSuiteNumberText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#8A5D23',
-  },
-  microSuiteNumberTextActive: {
-    color: '#FFD700',
-  },
-  microSuiteHolderMini: {
-    fontSize: 8,
-    fontWeight: '600',
-    color: '#546E7A',
-  },
-  microSuiteHolderMiniActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  microSuiteActivePill: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#FFD700',
-    borderRadius: 6,
-    width: 12,
-    height: 12,
+  activeSuiteBadgeIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#013369',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  microSuiteActivePillText: {
-    fontSize: 8,
+  activeSuiteFocusTitle: {
+    fontSize: 14,
+    fontWeight: '800',
     color: '#013369',
-    fontWeight: '900',
+  },
+  suiteBeoActiveBadge: {
+    backgroundColor: '#E8F5E9',
+    borderColor: '#2E7D32',
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  suiteBeoActiveBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#2E7D32',
+  },
+  suiteOpenActiveBadge: {
+    backgroundColor: '#F5F5F5',
+    borderColor: '#B0BEC5',
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  suiteOpenActiveBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#546E7A',
+  },
+  activeSuiteFocusSub: {
+    fontSize: 11,
+    color: '#78909C',
+    marginTop: 2,
+  },
+  activeSuiteDetailsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    backgroundColor: '#FAF5EC',
+    padding: 10,
+    borderRadius: 8,
+  },
+  activeSuiteDetailItem: {
+    flex: 1,
+    minWidth: 140,
+  },
+  activeSuiteDetailLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#8A5D23',
+    letterSpacing: 0.5,
+  },
+  activeSuiteDetailVal: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1D2420',
+    marginTop: 2,
+  },
+  activeSuiteActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'flex-end',
+  },
+  activeSuitePrimaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 6,
+  },
+  activeSuitePrimaryBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#013369',
+  },
+  activeSuiteChangeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    borderColor: '#DFD2BC',
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 6,
+  },
+  activeSuiteChangeBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#8A5D23',
+  },
+  suitePlaceholderPromptBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 14,
+    marginTop: 8,
+    backgroundColor: '#FAF5EC',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#DFD2BC',
+  },
+  suitePlaceholderPromptText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#8A5D23',
   },
 });
