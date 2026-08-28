@@ -1,18 +1,19 @@
 // Memoized presentational cards extracted from app/(tabs)/bar-stock.tsx.
 // These render heavy query-driven data (velocity, shrinkage, purchase order,
-// aging, movement history). Wrapping them in React.memo means they no longer
-// re-render when unrelated screen state changes (e.g. every keystroke in the
-// add-item form), which was the main render-cost issue on this screen.
+// aging, movement history, location breakdown). Wrapping them in React.memo
+// means they no longer re-render when unrelated screen state changes.
 import { memo } from 'react';
 import { View } from 'react-native';
 import { Button, Card, Chip, Text } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { asArray } from '../../lib/format';
 import { useQuery } from '../../lib/railway-hooks';
 import { api } from '../../lib/railway-api';
-import { accents, colors, spacing } from '../../lib/theme';
+import { accents, colors, radius, spacing } from '../../lib/theme';
 import {
   money,
   type AgingReport,
+  type LocationStockSummary,
   type MovementRow,
   type PurchaseOrderData,
   type ShrinkageData,
@@ -20,11 +21,11 @@ import {
 } from '../../lib/bar-inventory-types';
 
 const MOVEMENT_LABELS: Record<string, string> = {
-  count: 'Count',
-  received: 'Received',
-  waste: 'Waste',
-  comp: 'Comp',
-  transfer: 'Transfer',
+  count: 'Count Audit',
+  received: 'Stock Received',
+  waste: 'Waste Logged',
+  comp: 'Comp / Spill',
+  transfer: 'Inter-Location Transfer',
   correction: 'Correction',
 };
 
@@ -33,7 +34,7 @@ const MOVEMENT_COLORS: Record<string, string> = {
   received: colors.success,
   waste: colors.danger,
   comp: colors.warning,
-  transfer: colors.muted,
+  transfer: '#6366F1', // Indigo for transfers
   correction: colors.muted,
 };
 
@@ -50,6 +51,7 @@ export const MovementTimeline = memo(function MovementTimeline({ itemId }: { ite
       {movements.map((m) => {
         const color = MOVEMENT_COLORS[m.movementType] ?? colors.muted;
         const date = new Date(m.createdAt);
+        const isTransfer = m.movementType === 'transfer' || m.notes?.includes('[transfer:');
         return (
           <View key={m._id} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors.border }}>
             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color, marginTop: 5 }} />
@@ -57,7 +59,7 @@ export const MovementTimeline = memo(function MovementTimeline({ itemId }: { ite
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text style={{ fontWeight: '700', color, fontSize: 13 }}>
                   {MOVEMENT_LABELS[m.movementType] ?? m.movementType}
-                  {m.movementType !== 'count' ? ` ${m.quantity > 0 ? '+' : ''}${m.quantity}` : ` → ${m.nextOnHand}`}
+                  {m.movementType !== 'count' && !isTransfer ? ` ${m.quantity > 0 ? '+' : ''}${m.quantity}` : ` → ${m.nextOnHand}`}
                 </Text>
                 <Text style={{ color: colors.muted, fontSize: 11 }}>
                   {m.previousOnHand} → {m.nextOnHand}
@@ -66,12 +68,155 @@ export const MovementTimeline = memo(function MovementTimeline({ itemId }: { ite
               <Text style={{ color: colors.muted, fontSize: 11 }}>
                 {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} {date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} · {m.createdBy}
               </Text>
-              {m.notes ? <Text style={{ color: colors.charcoal, fontSize: 12 }}>{m.notes}</Text> : null}
+              {m.notes ? (
+                <View style={{ marginTop: 2 }}>
+                  <Text style={{ color: colors.charcoal, fontSize: 12 }}>{m.notes}</Text>
+                </View>
+              ) : null}
             </View>
           </View>
         );
       })}
     </View>
+  );
+});
+
+export const LocationBreakdownCard = memo(function LocationBreakdownCard({
+  summaries,
+  activeArea,
+  onSelectArea,
+}: {
+  summaries: LocationStockSummary[] | undefined;
+  activeArea: string;
+  onSelectArea: (area: string) => void;
+}) {
+  const locList = asArray<LocationStockSummary>(summaries);
+  if (locList.length === 0) return null;
+  return (
+    <Card style={{ backgroundColor: colors.surface, borderRadius: 16 }}>
+      <Card.Content style={{ gap: spacing.sm }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <MaterialCommunityIcons name="domain" size={20} color={colors.primary} />
+            <Text variant="titleMedium" style={{ fontWeight: '700' }}>Venue Outlet Breakdown</Text>
+          </View>
+          <Chip compact style={{ backgroundColor: accents[0].bg }}>
+            {locList.length} Locations
+          </Chip>
+        </View>
+        <Text style={{ color: colors.muted, fontSize: 12 }}>
+          Live stock distribution across concession stands, suites, bars, and central warehouse.
+        </Text>
+
+        <View style={{ gap: spacing.xs, marginTop: 4 }}>
+          {locList.map((loc) => {
+            const isSelected = activeArea.toLowerCase() === loc.area.toLowerCase();
+            return (
+              <View
+                key={loc.area}
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  paddingVertical: 8,
+                  paddingHorizontal: 10,
+                  backgroundColor: isSelected ? `${colors.primary}12` : 'transparent',
+                  borderRadius: radius.sharp,
+                  borderWidth: 1,
+                  borderColor: isSelected ? colors.primary : colors.border,
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ fontWeight: '700', fontSize: 13, color: isSelected ? colors.primary : colors.charcoal }}>
+                      {loc.area}
+                    </Text>
+                    {loc.belowParCount > 0 && (
+                      <Chip compact style={{ backgroundColor: accents[4].bg, height: 20 }}>
+                        <Text style={{ color: accents[4].fg, fontSize: 10, fontWeight: '700' }}>{loc.belowParCount} low</Text>
+                      </Chip>
+                    )}
+                  </View>
+                  <Text style={{ color: colors.muted, fontSize: 11 }}>
+                    {loc.itemCount} items · {loc.totalUnits} total units · {money(loc.totalValueCents)}
+                  </Text>
+                </View>
+                <Button
+                  compact
+                  mode={isSelected ? 'contained' : 'outlined'}
+                  buttonColor={isSelected ? colors.primary : undefined}
+                  textColor={isSelected ? '#fff' : colors.primary}
+                  onPress={() => onSelectArea(isSelected ? 'all' : loc.area)}
+                  style={{ borderRadius: 6 }}
+                >
+                  {isSelected ? 'Viewing' : 'Filter'}
+                </Button>
+              </View>
+            );
+          })}
+        </View>
+      </Card.Content>
+    </Card>
+  );
+});
+
+export const EventStockoutRiskCard = memo(function EventStockoutRiskCard({
+  velocity,
+  activeMultiplier,
+}: {
+  velocity: VelocityRow[] | null | undefined;
+  activeMultiplier: number;
+}) {
+  const rows = asArray<VelocityRow>(velocity);
+  if (rows.length === 0) return null;
+
+  // Filter items with burn rate or low days until empty
+  const riskItems = rows
+    .filter((v) => v.daysUntilEmpty !== null && v.daysUntilEmpty <= (7 * activeMultiplier))
+    .sort((a, b) => (a.daysUntilEmpty ?? 999) - (b.daysUntilEmpty ?? 999))
+    .slice(0, 8);
+
+  if (riskItems.length === 0) return null;
+
+  return (
+    <Card style={{ backgroundColor: '#FEF2F2', borderColor: '#FECACA', borderWidth: 1, borderRadius: 16 }}>
+      <Card.Content style={{ gap: spacing.sm }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <MaterialCommunityIcons name="alert-decagram" size={20} color={colors.danger} />
+            <Text variant="titleMedium" style={{ fontWeight: '800', color: colors.danger }}>
+              Event Stockout Warnings
+            </Text>
+          </View>
+          <Chip compact style={{ backgroundColor: `${colors.danger}22` }}>
+            <Text style={{ color: colors.danger, fontWeight: '700', fontSize: 11 }}>
+              {activeMultiplier > 1 ? `${activeMultiplier}x Event Surge` : 'High Velocity'}
+            </Text>
+          </Chip>
+        </View>
+        <Text style={{ color: '#991B1B', fontSize: 12 }}>
+          Items projected to deplete rapidly based on active 4-week consumption and event par multiplier.
+        </Text>
+
+        <View style={{ gap: 4, marginTop: 4 }}>
+          {riskItems.map((item) => (
+            <View key={item._id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#FEE2E2' }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: '700', fontSize: 13, color: '#7F1D1D' }}>{item.name}</Text>
+                <Text style={{ color: '#991B1B', fontSize: 11 }}>
+                  On hand: {item.onHand} {item.unit} · Par: {Math.round(item.parLevel * activeMultiplier)} · Velocity: {item.perWeek}/wk
+                </Text>
+              </View>
+              <View style={{ backgroundColor: '#EF4444', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
+                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 11 }}>
+                  {item.daysUntilEmpty !== null ? `${item.daysUntilEmpty}d left` : 'Critical'}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      </Card.Content>
+    </Card>
   );
 });
 
@@ -81,8 +226,8 @@ export const VelocityCard = memo(function VelocityCard({ velocity }: { velocity:
   return (
     <Card style={{ backgroundColor: colors.surface, borderRadius: 16 }}>
       <Card.Content style={{ gap: spacing.sm }}>
-        <Text variant="titleMedium" style={{ fontWeight: '700' }}>Usage velocity</Text>
-        <Text style={{ color: colors.muted, fontSize: 12 }}>4-week rolling consumption. Items with no recorded usage are hidden.</Text>
+        <Text variant="titleMedium" style={{ fontWeight: '700' }}>Usage Velocity & Depletion</Text>
+        <Text style={{ color: colors.muted, fontSize: 12 }}>4-week rolling consumption across all stadium outlets.</Text>
         {rows
           .filter((v) => v.perWeek > 0)
           .sort((a, b) => (a.daysUntilEmpty ?? Infinity) - (b.daysUntilEmpty ?? Infinity))
@@ -113,13 +258,34 @@ export const ShrinkageCard = memo(function ShrinkageCard({ data }: { data: Shrin
   return (
     <Card style={{ backgroundColor: colors.surface, borderRadius: 16 }}>
       <Card.Content style={{ gap: spacing.sm }}>
-        <Text variant="titleMedium" style={{ fontWeight: '700' }}>Shrinkage report (30 days)</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text variant="titleMedium" style={{ fontWeight: '700' }}>Shrinkage & Waste Report (30 days)</Text>
+          {data?.totals.totalShrinkageCents ? (
+            <Text style={{ color: colors.danger, fontWeight: '800', fontSize: 16 }}>
+              {money(data.totals.totalShrinkageCents)}
+            </Text>
+          ) : null}
+        </View>
+
         {!data ? (
           <Text style={{ color: colors.muted }}>Loading...</Text>
         ) : asArray(data.rows).length === 0 ? (
           <Text style={{ color: colors.muted }}>No waste or comp movements recorded in the past 30 days.</Text>
         ) : (
           <>
+            {data.reasonBreakdown && data.reasonBreakdown.length > 0 && (
+              <View style={{ backgroundColor: colors.background, padding: spacing.sm, borderRadius: radius.sharp, gap: 6, marginVertical: 4 }}>
+                <Text style={{ fontWeight: '700', fontSize: 12, color: colors.charcoal }}>Loss Breakdown by Reason:</Text>
+                {data.reasonBreakdown.map((rb) => (
+                  <View key={rb.reason} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 12, color: colors.muted }}>• {rb.label} ({rb.count} logs / {rb.units} units)</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.danger }}>{money(rb.costCents)}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            <Text style={{ fontWeight: '700', fontSize: 12, color: colors.muted, marginTop: 4 }}>Category Summary:</Text>
             {asArray<ShrinkageData['rows'][number]>(data.rows).map((row) => (
               <View key={row.category} style={{ paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors.border }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -138,10 +304,6 @@ export const ShrinkageCard = memo(function ShrinkageCard({ data }: { data: Shrin
                 </Text>
               </View>
             ))}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: spacing.sm }}>
-              <Text style={{ fontWeight: '700' }}>Total shrinkage cost</Text>
-              <Text style={{ fontWeight: '700', color: colors.danger }}>{money(data.totals.totalShrinkageCents)}</Text>
-            </View>
           </>
         )}
       </Card.Content>
@@ -185,10 +347,10 @@ export const PurchaseOrderCard = memo(function PurchaseOrderCard({
         ) : (
           <>
             <Text style={{ color: colors.muted }}>{purchaseOrder.itemCount} items below par across {asArray(purchaseOrder.groups).length} supplier{asArray(purchaseOrder.groups).length !== 1 ? 's' : ''}</Text>
-            {asArray<any>(purchaseOrder.groups).map((group: any) => (
+            {asArray<PurchaseOrderData['groups'][number]>(purchaseOrder.groups).map((group) => (
               <View key={group.supplier} style={{ gap: 4 }}>
                 <Text style={{ fontWeight: '700', color: colors.primary, marginTop: spacing.sm }}>{group.supplier}</Text>
-                {asArray<any>(group.lines).map((line: any) => (
+                {asArray<PurchaseOrderData['groups'][number]['lines'][number]>(group.lines).map((line) => (
                   <View key={line._id} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: colors.border }}>
                     <View style={{ flex: 1 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -248,10 +410,10 @@ export const AgingCard = memo(function AgingCard({ report }: { report: AgingRepo
           <Text style={{ color: colors.muted }}>Loading...</Text>
         ) : (
           <>
-            <Text style={{ fontWeight: '700', color: asArray<any>(report.uncountedItems).length > 0 ? colors.warning : colors.muted }}>
-              {asArray<any>(report.uncountedItems).length} item{asArray<any>(report.uncountedItems).length !== 1 ? 's' : ''} not counted in 7+ days
+            <Text style={{ fontWeight: '700', color: asArray(report.uncountedItems).length > 0 ? colors.warning : colors.muted }}>
+              {asArray(report.uncountedItems).length} item{asArray(report.uncountedItems).length !== 1 ? 's' : ''} not counted in 7+ days
             </Text>
-            {asArray<any>(report.uncountedItems).slice(0, 8).map((item) => (
+            {asArray<AgingReport['uncountedItems'][number]>(report.uncountedItems).slice(0, 8).map((item) => (
               <View key={item._id} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3, borderBottomWidth: 1, borderBottomColor: colors.border }}>
                 <Text style={{ fontSize: 13 }}>{item.name}</Text>
                 <Text style={{ color: colors.muted, fontSize: 12 }}>
@@ -259,16 +421,16 @@ export const AgingCard = memo(function AgingCard({ report }: { report: AgingRepo
                 </Text>
               </View>
             ))}
-            {asArray<any>(report.uncountedItems).length > 8 && (
-              <Text style={{ color: colors.muted, fontSize: 12 }}>+{asArray<any>(report.uncountedItems).length - 8} more</Text>
+            {asArray(report.uncountedItems).length > 8 && (
+              <Text style={{ color: colors.muted, fontSize: 12 }}>+{asArray(report.uncountedItems).length - 8} more</Text>
             )}
 
-            {asArray<any>(report.noActivityItems).length > 0 && (
+            {asArray(report.noActivityItems).length > 0 && (
               <>
                 <Text style={{ fontWeight: '700', color: colors.muted, marginTop: spacing.sm }}>
-                  {asArray<any>(report.noActivityItems).length} item{asArray<any>(report.noActivityItems).length !== 1 ? 's' : ''} with no movement in 30 days
+                  {asArray(report.noActivityItems).length} item{asArray(report.noActivityItems).length !== 1 ? 's' : ''} with no movement in 30 days
                 </Text>
-                {asArray<any>(report.noActivityItems).slice(0, 6).map((item) => (
+                {asArray<AgingReport['noActivityItems'][number]>(report.noActivityItems).slice(0, 6).map((item) => (
                   <Text key={item._id} style={{ color: colors.charcoal, fontSize: 12 }}>
                     {item.name} — {item.onHand} on hand
                   </Text>
@@ -276,18 +438,18 @@ export const AgingCard = memo(function AgingCard({ report }: { report: AgingRepo
               </>
             )}
 
-            {asArray<any>(report.staleCostItems).length > 0 && (
+            {asArray(report.staleCostItems).length > 0 && (
               <>
                 <Text style={{ fontWeight: '700', color: colors.muted, marginTop: spacing.sm }}>
-                  {asArray<any>(report.staleCostItems).length} item{asArray<any>(report.staleCostItems).length !== 1 ? 's' : ''} missing unit cost
+                  {asArray(report.staleCostItems).length} item{asArray(report.staleCostItems).length !== 1 ? 's' : ''} missing unit cost
                 </Text>
-                {asArray<any>(report.staleCostItems).slice(0, 6).map((item) => (
+                {asArray<AgingReport['staleCostItems'][number]>(report.staleCostItems).slice(0, 6).map((item) => (
                   <Text key={item._id} style={{ color: colors.charcoal, fontSize: 12 }}>{item.name}</Text>
                 ))}
               </>
             )}
 
-            {asArray<any>(report.uncountedItems).length === 0 && asArray<any>(report.noActivityItems).length === 0 && asArray<any>(report.staleCostItems).length === 0 && (
+            {asArray(report.uncountedItems).length === 0 && asArray(report.noActivityItems).length === 0 && asArray(report.staleCostItems).length === 0 && (
               <Text style={{ color: colors.muted }}>All items are up to date.</Text>
             )}
           </>

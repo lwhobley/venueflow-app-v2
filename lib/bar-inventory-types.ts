@@ -1,6 +1,23 @@
 // Shared types + helpers for the Bar Stock screen and its extracted cards.
 // Kept in one place so the screen and the memoized card components agree on shapes.
 
+export type WasteReason =
+  | 'draft_flush'
+  | 'spoilage'
+  | 'breakage'
+  | 'comp'
+  | 'temperature_loss'
+  | 'unaccounted';
+
+export const WASTE_REASON_LABELS: Record<WasteReason, string> = {
+  draft_flush: 'Draft Line Flush / Foam',
+  spoilage: 'Expired / Spoilage',
+  breakage: 'Bottle / Glass Breakage',
+  comp: 'Customer Spill / Comp',
+  temperature_loss: 'Cold Storage / Temp Loss',
+  unaccounted: 'Unaccounted Variance',
+};
+
 export type VelocityRow = {
   _id: string;
   name: string;
@@ -11,6 +28,9 @@ export type VelocityRow = {
   usageLast4Weeks: number;
   perWeek: number;
   daysUntilEmpty: number | null;
+  area?: string | null;
+  eventBurnRatePerHour?: number;
+  projectedStockoutHours?: number | null;
 };
 
 export type MovementRow = {
@@ -22,6 +42,17 @@ export type MovementRow = {
   notes: string | null;
   createdBy: string;
   createdAt: number;
+  wasteReason?: WasteReason | null;
+  fromArea?: string | null;
+  toArea?: string | null;
+};
+
+export type ShrinkageReasonBreakdown = {
+  reason: WasteReason;
+  label: string;
+  count: number;
+  units: number;
+  costCents: number;
 };
 
 export type ShrinkageRow = {
@@ -39,6 +70,7 @@ export type ShrinkageRow = {
 export type ShrinkageData = {
   rows: ShrinkageRow[];
   totals: { receivedUnits: number; totalShrinkageUnits: number; totalShrinkageCents: number };
+  reasonBreakdown?: ShrinkageReasonBreakdown[];
   windowDays: number;
 };
 
@@ -89,6 +121,28 @@ export type AgingReport = {
   uncountedItems: AgingItem[];
   noActivityItems: Array<{ _id: string; name: string; category: string; onHand: number }>;
   staleCostItems: Array<{ _id: string; name: string; category: string; onHand: number }>;
+};
+
+export type LocationStockSummary = {
+  area: string;
+  itemCount: number;
+  totalUnits: number;
+  totalValueCents: number;
+  belowParCount: number;
+};
+
+export type StockTransferPayload = {
+  venueId: string;
+  itemId: string;
+  quantity: number;
+  fromArea: string;
+  toArea: string;
+  notes?: string;
+};
+
+export type BatchCountItem = {
+  itemId: string;
+  countedQuantity: number;
 };
 
 export function money(cents: number | null | undefined) {
