@@ -76,7 +76,15 @@ const queryRoutes: Record<string, Route> = {
   'reservations.exportReservationsCsv': { path: (args) => `/v1/reservations/export-csv${args?.startDate ? `?startDate=${args.startDate}&endDate=${args.endDate ?? ''}` : ''}` },
   'payroll.getPayrollSummary': { path: (args) => `/v1/payroll/summary${args.startDate ? `?startDate=${args.startDate}&endDate=${args.endDate ?? ''}` : ''}` },
   'payroll.exportPayrollCsv': { path: (args) => `/v1/payroll/export-csv${args.startDate ? `?startDate=${args.startDate}&endDate=${args.endDate ?? ''}` : ''}` },
-  'barInventory.getBarStock': { path: '/v1/bar-inventory' },
+  'barInventory.getBarStock': {
+    path: (args) => {
+      const params = new URLSearchParams();
+      if (args?.area) params.set('area', String(args.area));
+      if (args?.multiplier) params.set('multiplier', String(args.multiplier));
+      const q = params.toString();
+      return `/v1/bar-inventory${q ? `?${q}` : ''}`;
+    },
+  },
   'barInventory.getUsageVelocity': { path: '/v1/bar-inventory/velocity' },
   'barInventory.getItemMovements': { path: (args) => `/v1/bar-inventory/${args.itemId}/movements?limit=${args.limit ?? 50}` },
   'barInventory.exportStockCsv': { path: '/v1/bar-inventory/export-csv' },
@@ -498,7 +506,25 @@ const mutationRoutes: Record<string, Route> = {
   'guests.rotateLeadsWebhookSecret': { path: '/v1/guests/rotate-webhook-secret', method: 'POST', body: () => ({}), invalidate: [['guests', 'listGuests']] },
   'operations.upsertManagerGoal': { path: '/v1/operations/manager-goal', method: 'PATCH', body: stripVenue, invalidate: [['operations', 'getManagerDashboard']] },
   'barInventory.upsertBarItem': { path: '/v1/bar-inventory', method: 'POST', body: stripVenue, invalidate: [['barInventory', 'getBarStock']] },
-  'barInventory.recordBarStockMovement': { path: (args) => `/v1/bar-inventory/${args.itemId}/movement`, method: 'POST', body: ({ movementType, quantity, notes }) => ({ movementType, quantity, notes }), invalidate: [['barInventory', 'getBarStock']], idempotent: true },
+  'barInventory.recordBarStockMovement': {
+    path: (args) => `/v1/bar-inventory/${args.itemId}/movement`,
+    method: 'POST',
+    body: ({ movementType, quantity, notes, wasteReason, fromArea, toArea }) => ({ movementType, quantity, notes, wasteReason, fromArea, toArea }),
+    invalidate: [['barInventory', 'getBarStock'], ['barInventory', 'getShrinkageReport'], ['barInventory', 'getItemMovements']],
+    idempotent: true,
+  },
+  'barInventory.recordLocationTransfer': {
+    path: '/v1/bar-inventory/transfer',
+    method: 'POST',
+    body: ({ itemId, quantity, fromArea, toArea, notes }) => ({ itemId, quantity, fromArea, toArea, notes }),
+    invalidate: [['barInventory', 'getBarStock'], ['barInventory', 'getItemMovements']],
+  },
+  'barInventory.recordBatchCount': {
+    path: '/v1/bar-inventory/batch-count',
+    method: 'POST',
+    body: ({ counts, area }) => ({ counts, area }),
+    invalidate: [['barInventory', 'getBarStock']],
+  },
   'barInventory.importParsedBarItems': { path: '/v1/bar-inventory/import', method: 'POST', body: ({ items }) => ({ items }), invalidate: [['barInventory', 'getBarStock']] },
   'barInventory.parseBarInventoryInput': { path: '/v1/bar-inventory/parse', method: 'POST', body: ({ text, imageBase64, imageMimeType }) => ({ text, imageBase64, imageMimeType }) },
   'barInventory.updateItemCost': { path: (args) => `/v1/bar-inventory/${args.itemId}/cost`, method: 'PATCH', body: ({ unitCostCents }) => ({ unitCostCents }), invalidate: [['barInventory', 'getBarStock']] },

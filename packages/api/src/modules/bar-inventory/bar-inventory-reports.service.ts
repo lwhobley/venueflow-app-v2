@@ -15,13 +15,13 @@ import { csvCell } from '../../common/csv';
 export class BarInventoryReportsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // ── Shrinkage / variance report (30-day waste+comp by category) ──────
+  // ── Shrinkage / variance report (30-day waste+comp by category & reason) ──────
   async shrinkageReport(venueId: string) {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const [movements, items] = await Promise.all([
       this.prisma.barInventoryMovement.findMany({
         where: { venueId, createdAt: { gte: thirtyDaysAgo } },
-        select: { itemId: true, movementType: true, quantity: true, createdAt: true },
+        select: { itemId: true, movementType: true, quantity: true, notes: true, createdAt: true },
       }),
       this.prisma.barInventoryItem.findMany({
         where: { venueId },
@@ -32,6 +32,16 @@ export class BarInventoryReportsService {
 
     const byCategory = new Map<string, { received: number; waste: number; comp: number; wasteCents: number; compCents: number }>();
     const initCat = () => ({ received: 0, waste: 0, comp: 0, wasteCents: 0, compCents: 0 });
+
+    const reasonCounts = new Map<string, { count: number; units: number; costCents: number }>();
+    const REASON_LABELS: Record<string, string> = {
+      draft_flush: 'Draft Line Flush / Foam',
+      spoilage: 'Expired / Spoilage',
+      breakage: 'Bottle / Glass Breakage',
+      comp: 'Customer Spill / Comp',
+      temperature_loss: 'Cold Storage / Temp Loss',
+      unaccounted: 'Unaccounted Variance',
+    };
 
     for (const m of movements) {
       const item = itemMap.get(m.itemId);
@@ -49,6 +59,23 @@ export class BarInventoryReportsService {
         entry.compCents += Math.abs(m.quantity) * costCents;
       }
       byCategory.set(cat, entry);
+
+      if (m.movementType === 'waste' || m.movementType === 'comp') {
+        let reasonKey = 'unaccounted';
+        if (m.notes?.includes('[waste:')) {
+          const match = m.notes.match(/\[waste:([a-z_]+)\]/);
+          if (match && match[1]) {
+            reasonKey = match[1];
+          }
+        } else if (m.movementType === 'comp') {
+          reasonKey = 'comp';
+        }
+        const rStats = reasonCounts.get(reasonKey) ?? { count: 0, units: 0, costCents: 0 };
+        rStats.count += 1;
+        rStats.units += Math.abs(m.quantity);
+        rStats.costCents += Math.abs(m.quantity) * costCents;
+        reasonCounts.set(reasonKey, rStats);
+      }
     }
 
     const rows = Array.from(byCategory.entries()).map(([category, data]) => {
@@ -73,7 +100,15 @@ export class BarInventoryReportsService {
       totalShrinkageCents: acc.totalShrinkageCents + r.totalShrinkageCents,
     }), { receivedUnits: 0, totalShrinkageUnits: 0, totalShrinkageCents: 0 });
 
-    return { rows, totals, windowDays: 30 };
+    const reasonBreakdown = Array.from(reasonCounts.entries()).map(([reason, stats]) => ({
+      reason: reason as any,
+      label: REASON_LABELS[reason] ?? reason,
+      count: stats.count,
+      units: Math.round(stats.units * 10) / 10,
+      costCents: Math.round(stats.costCents),
+    })).sort((a, b) => b.costCents - a.costCents);
+
+    return { rows, totals, reasonBreakdown, windowDays: 30 };
   }
 
   // ── Purchase order draft (below-par items grouped by supplier with AI POS Sync velocity) ──

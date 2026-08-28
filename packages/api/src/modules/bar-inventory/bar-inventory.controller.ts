@@ -36,6 +36,14 @@ const CATEGORIES = [
   'protein', 'produce', 'dairy', 'dry_goods', 'bakery', 'frozen'
 ] as const;
 const MOVEMENT_TYPES = ['count', 'received', 'waste', 'comp', 'transfer', 'correction'] as const;
+const WASTE_REASONS = [
+  'draft_flush',
+  'spoilage',
+  'breakage',
+  'comp',
+  'temperature_loss',
+  'unaccounted',
+] as const;
 const PREP_ITEM_KINDS = ['prep', 'eighty_six'] as const;
 const PREP_ITEM_STATUSES = ['open', 'done', 'cancelled'] as const;
 const MAX_IMPORT_ITEMS = 100;
@@ -44,6 +52,7 @@ const AI_PARSE_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 
 type BarStockCategory = (typeof CATEGORIES)[number];
 type BarStockMovementType = (typeof MOVEMENT_TYPES)[number];
+type WasteReason = (typeof WASTE_REASONS)[number];
 type PrepItemKind = (typeof PREP_ITEM_KINDS)[number];
 type PrepItemStatus = (typeof PREP_ITEM_STATUSES)[number];
 
@@ -101,6 +110,58 @@ class RecordMovementDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @IsIn(WASTE_REASONS)
+  @IsOptional()
+  wasteReason?: WasteReason;
+
+  @IsString()
+  @IsOptional()
+  fromArea?: string;
+
+  @IsString()
+  @IsOptional()
+  toArea?: string;
+}
+
+class RecordTransferDto {
+  @IsString()
+  itemId!: string;
+
+  @IsNumber()
+  @Min(0.01)
+  quantity!: number;
+
+  @IsString()
+  fromArea!: string;
+
+  @IsString()
+  toArea!: string;
+
+  @IsString()
+  @IsOptional()
+  notes?: string;
+}
+
+class BatchCountItemDto {
+  @IsString()
+  itemId!: string;
+
+  @IsNumber()
+  @Min(0)
+  countedQuantity!: number;
+}
+
+class BatchCountDto {
+  @IsArray()
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => BatchCountItemDto)
+  counts!: BatchCountItemDto[];
+
+  @IsString()
+  @IsOptional()
+  area?: string;
 }
 
 class ParsedItemDto {
@@ -314,25 +375,62 @@ export class BarInventoryController {
 
   @RequireSubscription('active')
   @Get()
-  async getBarStock(@CurrentUser() user: AuthUser) {
+  async getBarStock(
+    @CurrentUser() user: AuthUser,
+    @Query('area') area?: string,
+    @Query('multiplier') multiplierStr?: string,
+  ) {
     // Read-only inventory is visible to any venue member; mutations below
     // still require a manager profile.
     const profile = await this.requireVenueProfile(user);
-    const items = await this.prisma.barInventoryItem.findMany({
+    const multiplier = Math.max(0.1, Math.min(10, parseFloat(multiplierStr || '1') || 1));
+    const allItems = await this.prisma.barInventoryItem.findMany({
       where: { venueId: profile.venueId! },
       // Do not silently truncate inventory: totals and count workflows must be
       // based on the full venue catalog. Deterministic ordering also keeps the
       // count sequence stable between refreshes.
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
     });
-    const sorted = items.slice().sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+
+    const locationMap = new Map<string, { count: number; totalUnits: number; totalValueCents: number; belowParCount: number }>();
+    for (const item of allItems) {
+      const loc = item.area?.trim() || 'Unassigned';
+      const entry = locationMap.get(loc) ?? { count: 0, totalUnits: 0, totalValueCents: 0, belowParCount: 0 };
+      entry.count += 1;
+      entry.totalUnits += item.onHand;
+      entry.totalValueCents += Math.round(item.onHand * (item.unitCostCents ?? 0));
+      if (item.onHand <= item.parLevel * multiplier) {
+        entry.belowParCount += 1;
+      }
+      locationMap.set(loc, entry);
+    }
+
+    const locationSummaries = Array.from(locationMap.entries()).map(([areaName, stats]) => ({
+      area: areaName,
+      itemCount: stats.count,
+      totalUnits: Math.round(stats.totalUnits * 10) / 10,
+      totalValueCents: stats.totalValueCents,
+      belowParCount: stats.belowParCount,
+    })).sort((a, b) => a.area.localeCompare(b.area));
+
+    const cleanArea = area?.trim().toLowerCase();
+    const filtered = (cleanArea && cleanArea !== 'all')
+      ? allItems.filter(item => {
+          const itemArea = (item.area?.trim() || 'unassigned').toLowerCase();
+          return itemArea === cleanArea;
+        })
+      : allItems;
+
+    const sorted = filtered.slice().sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
     return {
       items: sorted.map(mapItem),
-      lowStockCount: items.filter((item) => item.onHand <= item.parLevel).length,
-      totalValueCents: items.reduce(
+      lowStockCount: filtered.filter((item) => item.onHand <= item.parLevel * multiplier).length,
+      totalValueCents: filtered.reduce(
         (sum, item) => sum + Math.round(item.onHand * (item.unitCostCents ?? 0)),
         0,
       ),
+      locationSummaries,
+      activeMultiplier: multiplier,
     };
   }
 
@@ -395,13 +493,22 @@ export class BarInventoryController {
   ) {
     const profile = await this.requireManagerProfile(user);
     const venueId = profile.venueId!;
+    // Format notes with waste reasons or transfer details if provided
+    let formattedNotes = cleanText(body.notes) ?? null;
+    if (body.wasteReason) {
+      formattedNotes = `[waste:${body.wasteReason}] ${formattedNotes || ''}`.trim();
+    }
+    if (body.fromArea || body.toArea) {
+      formattedNotes = `[transfer:${body.fromArea || 'any'}->${body.toArea || 'any'}] ${formattedNotes || ''}`.trim();
+    }
+
     // Counts are reconciliation records and remain synchronous. Negative movements
     // are the halftime hot path and are persisted by the consumer in order.
     if (this.asyncWrites?.isEnabled?.() && body.movementType !== 'count' && body.quantity < 0) {
       const key = (idempotencyKey ?? '').trim() || crypto.randomUUID();
       return this.asyncWrites.enqueue('inventory_decrement', key, {
         itemId, venueId, movementType: body.movementType, quantity: body.quantity,
-        notes: cleanText(body.notes), createdBy: profile.id,
+        notes: formattedNotes, createdBy: profile.id,
       });
     }
     const { movement, item, previousOnHand, nextOnHand } = await this.prisma.$transaction(async (tx) => {
@@ -434,7 +541,7 @@ export class BarInventoryController {
           appliedQuantity,
           previousOnHand,
           nextOnHand,
-          notes: cleanText(body.notes) ?? null,
+          notes: formattedNotes,
           createdBy: profile.id,
           createdAt: now,
         },
@@ -446,6 +553,102 @@ export class BarInventoryController {
     void this.fireInventoryAlerts({ venueId, item, previousOnHand, nextOnHand, movementType: body.movementType, quantity: body.quantity });
 
     return { _id: movement.id };
+  }
+
+  @RequireSubscription('active')
+  @Post('transfer')
+  async recordLocationTransfer(
+    @CurrentUser() user: AuthUser,
+    @Body() body: RecordTransferDto,
+  ) {
+    const profile = await this.requireManagerProfile(user);
+    const venueId = profile.venueId!;
+    const item = await this.prisma.barInventoryItem.findFirst({
+      where: { id: body.itemId, venueId },
+    });
+    if (!item) throw new NotFoundException('Item not found');
+
+    const now = new Date();
+    const transferNotes = `[transfer:${body.fromArea}->${body.toArea}] (qty: ${body.quantity}) ${body.notes ? body.notes.trim() : ''}`.trim();
+    const movement = await this.prisma.barInventoryMovement.create({
+      data: {
+        venueId,
+        itemId: item.id,
+        movementType: 'transfer',
+        quantity: 0, // In-venue redistribution
+        requestedQuantity: body.quantity,
+        appliedQuantity: 0,
+        previousOnHand: item.onHand,
+        nextOnHand: item.onHand,
+        notes: transferNotes,
+        createdBy: profile.id,
+        createdAt: now,
+      },
+    });
+    return { _id: movement.id, success: true };
+  }
+
+  @RequireSubscription('active')
+  @Post('batch-count')
+  async recordBatchCount(
+    @CurrentUser() user: AuthUser,
+    @Body() body: BatchCountDto,
+  ) {
+    const profile = await this.requireManagerProfile(user);
+    const venueId = profile.venueId!;
+    const now = new Date();
+
+    const counts = body.counts ?? [];
+    if (!counts.length) {
+      return { updatedCount: 0, success: true };
+    }
+
+    const itemIds = counts.map((c) => c.itemId);
+    const items = await this.prisma.barInventoryItem.findMany({
+      where: { id: { in: itemIds }, venueId },
+    });
+    const itemMap = new Map(items.map((i) => [i.id, i]));
+
+    const countResults = await this.prisma.$transaction(async (tx) => {
+      const movements = [];
+      for (const count of counts) {
+        const item = itemMap.get(count.itemId);
+        if (!item) continue;
+
+        const previousOnHand = item.onHand;
+        const nextOnHand = Math.max(0, count.countedQuantity);
+        const appliedQuantity = nextOnHand - previousOnHand;
+
+        await tx.barInventoryItem.update({
+          where: { id: item.id },
+          data: {
+            onHand: nextOnHand,
+            lastCountedAt: now,
+            updatedAt: now,
+          },
+        });
+
+        const movement = await tx.barInventoryMovement.create({
+          data: {
+            venueId,
+            itemId: item.id,
+            movementType: 'count',
+            quantity: appliedQuantity,
+            requestedQuantity: count.countedQuantity,
+            appliedQuantity,
+            previousOnHand,
+            nextOnHand,
+            notes: body.area ? `[zone_audit:${body.area}]` : '[batch_count]',
+            createdBy: profile.id,
+            createdAt: now,
+          },
+        });
+        movements.push(movement);
+      }
+      return movements;
+    });
+
+    return { updatedCount: countResults.length, success: true };
   }
 
   @RequireSubscription('active')
