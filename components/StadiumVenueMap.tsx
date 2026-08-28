@@ -1832,7 +1832,7 @@ export function StadiumVenueMap({
                 it, including the Stadium F&B Workflows buttons on the outer page, far out of
                 reach. */}
             {viewPerspective === '3d_isometric' ? (
-              <View style={[styles.interactiveModelFrame, { height: isMobile ? 300 : 380 }]}>
+              <View style={[styles.interactiveModelFrame, { height: isMobile ? 440 : 540 }]}>
                 <Stadium3DModel
                   dom={{
                     scrollEnabled: false,
