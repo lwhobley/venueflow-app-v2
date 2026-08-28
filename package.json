@@ -78,13 +78,24 @@
     "install": {
       "exclude": [
         "expo",
+        "expo-camera",
         "expo-constants",
+        "expo-crypto",
+        "expo-document-picker",
+        "expo-file-system",
+        "expo-font",
+        "expo-haptics",
         "expo-image-picker",
+        "expo-linking",
         "expo-location",
         "expo-notifications",
         "expo-router",
+        "expo-secure-store",
         "expo-splash-screen",
-        "expo-updates"
+        "expo-sqlite",
+        "expo-status-bar",
+        "expo-updates",
+        "react-native"
       ]
     }
   }
