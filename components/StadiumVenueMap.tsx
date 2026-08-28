@@ -554,9 +554,8 @@ export function StadiumVenueMap({
 
             {/* Actual GLB renderer in 3D mode; the architectural plan remains available in 2D mode. */}
             {viewPerspective === '3d_isometric' ? (
-              <View style={[styles.interactiveModelFrame, { height: isMobile ? 300 : 380 }]}>
+              <View style={[styles.interactiveModelFrame, { height: isMobile ? 440 : 540 }]}>
                 <Stadium3DModel
-                  highlightCategory={activeSelectedUnit?.zone?.category ?? null}
                   dom={{
                     scrollEnabled: false,
                     contentInsetAdjustmentBehavior: 'never',
