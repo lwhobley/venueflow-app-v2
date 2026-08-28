@@ -123,6 +123,14 @@ export function StadiumVenueMap({
     return asArray(luxurySuitesZone?.units);
   }, [luxurySuitesZone]);
 
+  const activeSelectedSuite = useMemo(() => {
+    if (selectedUnitId) {
+      const found = allSuites.find((s) => s.id === selectedUnitId);
+      if (found) return found;
+    }
+    return allSuites[0] ?? null;
+  }, [selectedUnitId, allSuites]);
+
   const filteredFloorSuites = useMemo(() => {
     if (suiteFloorTab === 'all') return allSuites;
     if (suiteFloorTab === '300_west') {
@@ -828,13 +836,13 @@ export function StadiumVenueMap({
                           <View style={styles.suiteDropdownTriggerLeft}>
                             <MaterialCommunityIcons
                               name="format-list-bulleted-square"
-                              size={15}
+                              size={16}
                               color="#8A5D23"
                             />
                             <Text numberOfLines={1} style={styles.suiteDropdownTriggerText}>
-                              {activeSelectedUnit?.zone?.id === 'zone-300-suites'
-                                ? `${activeSelectedUnit.unit.name} · ${activeSelectedUnit.unit.suiteDetails?.beoNumber ? 'BEO ready' : 'Open'}`
-                                : `Select a suite (${filteredFloorSuites.length} available)`}
+                              {activeSelectedSuite
+                                ? `Selected: ${activeSelectedSuite.code} · ${activeSelectedSuite.suiteDetails?.suiteholder ?? activeSelectedSuite.name} (${activeSelectedSuite.suiteDetails?.beoNumber ? '★ BEO Ready' : 'Open'})`
+                                : `▾ Click to Select Suite from Dropdown (${filteredFloorSuites.length} available)...`}
                             </Text>
                           </View>
                           <View style={styles.suiteDropdownTriggerRight}>
@@ -909,8 +917,8 @@ export function StadiumVenueMap({
                                           },
                                         ]}
                                       />
-                                      <View>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                      <View style={{ flex: 1 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                                           <Text
                                             style={[
                                               styles.suiteDropdownItemNumber,
@@ -952,6 +960,99 @@ export function StadiumVenueMap({
                             </ScrollView>
                           </View>
                         ) : null}
+
+                        {/* Focused Active Suite Display Card (Clean dropdown-driven UX) */}
+                        {activeSelectedSuite ? (
+                          <View style={styles.activeSuiteFocusCard}>
+                            <View style={styles.activeSuiteFocusHeader}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                                <View style={styles.activeSuiteBadgeIcon}>
+                                  <MaterialCommunityIcons name="glass-cocktail" size={16} color="#FFD700" />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                    <Text style={styles.activeSuiteFocusTitle}>
+                                      {activeSelectedSuite.code} · {activeSelectedSuite.name}
+                                    </Text>
+                                    {activeSelectedSuite.suiteDetails?.beoNumber ? (
+                                      <View style={styles.suiteBeoActiveBadge}>
+                                        <Text style={styles.suiteBeoActiveBadgeText}>★ BEO READY</Text>
+                                      </View>
+                                    ) : (
+                                      <View style={styles.suiteOpenActiveBadge}>
+                                        <Text style={styles.suiteOpenActiveBadgeText}>OPEN SUITE</Text>
+                                      </View>
+                                    )}
+                                  </View>
+                                  <Text style={styles.activeSuiteFocusSub}>
+                                    {activeSelectedSuite.stadiumZone} · {activeSelectedSuite.suiteDetails?.tier ?? 'VIP Executive Skybox'} · Capacity: {activeSelectedSuite.capacity ?? 20} Guests
+                                  </Text>
+                                </View>
+                              </View>
+                            </View>
+
+                            <View style={styles.activeSuiteDetailsRow}>
+                              <View style={styles.activeSuiteDetailItem}>
+                                <Text style={styles.activeSuiteDetailLabel}>SUITEHOLDER / SPONSOR</Text>
+                                <Text style={styles.activeSuiteDetailVal}>
+                                  {activeSelectedSuite.suiteDetails?.suiteholder ?? 'Private Hospitality'}
+                                </Text>
+                              </View>
+                              {activeSelectedSuite.suiteDetails?.attendantName ? (
+                                <View style={styles.activeSuiteDetailItem}>
+                                  <Text style={styles.activeSuiteDetailLabel}>LEAD ATTENDANT</Text>
+                                  <Text style={styles.activeSuiteDetailVal}>
+                                    {activeSelectedSuite.suiteDetails.attendantName}
+                                  </Text>
+                                </View>
+                              ) : activeSelectedSuite.suiteDetails?.hierarchy?.assignedStaff?.[0] ? (
+                                <View style={styles.activeSuiteDetailItem}>
+                                  <Text style={styles.activeSuiteDetailLabel}>LEAD ATTENDANT</Text>
+                                  <Text style={styles.activeSuiteDetailVal}>
+                                    {activeSelectedSuite.suiteDetails.hierarchy.assignedStaff[0].name} ({activeSelectedSuite.suiteDetails.hierarchy.assignedStaff[0].role})
+                                  </Text>
+                                </View>
+                              ) : null}
+                              {activeSelectedSuite.suiteDetails?.inSuiteOrders?.[0] && (
+                                <View style={styles.activeSuiteDetailItem}>
+                                  <Text style={styles.activeSuiteDetailLabel}>CURRENT BEO / IN-SUITE ORDER</Text>
+                                  <Text numberOfLines={1} style={styles.activeSuiteDetailVal}>
+                                    {activeSelectedSuite.suiteDetails.inSuiteOrders[0].items}
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+
+                            <View style={styles.activeSuiteActionsRow}>
+                              <Pressable
+                                onPress={() => {
+                                  setActiveModalUnit(activeSelectedSuite);
+                                }}
+                                style={styles.activeSuitePrimaryBtn}
+                              >
+                                <MaterialCommunityIcons name="clipboard-text-outline" size={14} color="#013369" />
+                                <Text style={styles.activeSuitePrimaryBtnText}>View Suite Details & Staff</Text>
+                              </Pressable>
+                              <Pressable
+                                onPress={() => setIsSuiteDropdownOpen(!isSuiteDropdownOpen)}
+                                style={styles.activeSuiteChangeBtn}
+                              >
+                                <MaterialCommunityIcons name="swap-vertical" size={14} color="#8A5D23" />
+                                <Text style={styles.activeSuiteChangeBtnText}>Switch Suite (Dropdown)</Text>
+                              </Pressable>
+                            </View>
+                          </View>
+                        ) : (
+                          <Pressable
+                            onPress={() => setIsSuiteDropdownOpen(true)}
+                            style={styles.suitePlaceholderPromptBox}
+                          >
+                            <MaterialCommunityIcons name="cursor-default-click" size={18} color="#8A5D23" />
+                            <Text style={styles.suitePlaceholderPromptText}>
+                              Click dropdown above to select and focus a luxury suite ({allSuites.length} available)
+                            </Text>
+                          </Pressable>
+                        )}
 
                         {/* ── LEVEL 200 CLUB TIER (CURVED TERRACE + 360° LED RIBBON BOARD) ── */}
                         <View style={styles.clubTierRing}>
@@ -1538,4 +1639,4 @@ export function StadiumVenueMap({
       ) : null}
     </View>
   );
-}
+}
