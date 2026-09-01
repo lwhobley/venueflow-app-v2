@@ -63,7 +63,7 @@
     "zustand": "^4.5.7"
   },
   "devDependencies": {
-    "@babel/core": "^7.25.0",
+    "@babel/core": "^8.0.1",
     "@emnapi/core": "1.11.3",
     "@emnapi/runtime": "1.11.3",
     "@emnapi/wasi-threads": "1.2.3",
