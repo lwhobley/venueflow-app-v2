@@ -46,7 +46,7 @@
     "openid-client": "^6.8.5",
     "passport": "^0.7.0",
     "passport-openidconnect": "^0.1.2",
-    "prisma": "^6.19.0",
+    "prisma": "^7.10.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
   },
