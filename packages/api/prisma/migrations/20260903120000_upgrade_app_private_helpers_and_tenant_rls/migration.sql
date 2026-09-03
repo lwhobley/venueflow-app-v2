@@ -196,18 +196,32 @@ BEGIN
       USING (app_private.scope_matches("organizationId", "id", NULL) AND app_private.can_manage_memberships())
       WITH CHECK (app_private.scope_matches("organizationId", "id", NULL) AND app_private.can_manage_memberships());
 
-    -- Zone policies
-    ALTER TABLE "Zone" ENABLE ROW LEVEL SECURITY;
-    DROP POLICY IF EXISTS zone_read_scope ON "Zone";
-    CREATE POLICY zone_read_scope ON "Zone"
-      FOR SELECT TO stadium_api
-      USING (app_private.scope_matches("organizationId", "facilityId", "id"));
+    -- Zone policies. The zone table was renamed "Zone" -> "FacilityZone" in
+    -- migration 20260812120000_hierarchical_facility_scope, which already
+    -- ENABLEs + FORCEs RLS and defines facility_zone_read_scope /
+    -- facility_zone_write_scope on "FacilityZone". These statements referenced
+    -- the pre-rename name and therefore failed with `relation "Zone" does not
+    -- exist` on any database that never carried the legacy table (i.e. every
+    -- clean deploy), blocking the whole migration. Guard on the legacy table's
+    -- existence so this is a no-op on current schemas and still applies on any
+    -- environment that predates the rename, without altering FacilityZone's
+    -- existing authorization (see venue-wrangler-sweep report VW-SWEEP-019).
+    IF EXISTS (
+      SELECT 1 FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = 'Zone'
+    ) THEN
+      ALTER TABLE "Zone" ENABLE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS zone_read_scope ON "Zone";
+      CREATE POLICY zone_read_scope ON "Zone"
+        FOR SELECT TO stadium_api
+        USING (app_private.scope_matches("organizationId", "facilityId", "id"));
 
-    DROP POLICY IF EXISTS zone_write_scope ON "Zone";
-    CREATE POLICY zone_write_scope ON "Zone"
-      FOR ALL TO stadium_api
-      USING (app_private.scope_matches("organizationId", "facilityId", "id") AND app_private.can_operate_scope())
-      WITH CHECK (app_private.scope_matches("organizationId", "facilityId", "id") AND app_private.can_operate_scope());
+      DROP POLICY IF EXISTS zone_write_scope ON "Zone";
+      CREATE POLICY zone_write_scope ON "Zone"
+        FOR ALL TO stadium_api
+        USING (app_private.scope_matches("organizationId", "facilityId", "id") AND app_private.can_operate_scope())
+        WITH CHECK (app_private.scope_matches("organizationId", "facilityId", "id") AND app_private.can_operate_scope());
+    END IF;
 
     -- Venue policies
     ALTER TABLE "Venue" ENABLE ROW LEVEL SECURITY;
@@ -254,13 +268,24 @@ BEGIN
       USING ("organizationId" = app_private.current_organization_id() AND app_private.can_manage_memberships())
       WITH CHECK ("organizationId" = app_private.current_organization_id() AND app_private.can_manage_memberships());
 
-    -- ConcourseOutlet policies
-    ALTER TABLE "ConcourseOutlet" ENABLE ROW LEVEL SECURITY;
-    DROP POLICY IF EXISTS concourse_outlet_scope ON "ConcourseOutlet";
-    CREATE POLICY concourse_outlet_scope ON "ConcourseOutlet"
-      FOR ALL TO stadium_api
-      USING (app_private.scope_matches("organizationId", "facilityId", "zoneId"))
-      WITH CHECK (app_private.scope_matches("organizationId", "facilityId", "zoneId"));
+    -- ConcourseOutlet policies. No "ConcourseOutlet" relation exists in the
+    -- current schema; concourse outlets are the "Outlet" table, which already
+    -- carries stadium_api ENABLE/FORCE RLS + scope policies from migration
+    -- 20260812120000_hierarchical_facility_scope. This stale name failed with
+    -- `relation "ConcourseOutlet" does not exist` on every clean deploy. Guard
+    -- on existence so it is a no-op on current schemas without weakening the
+    -- already-protected Outlet table (see report VW-SWEEP-019).
+    IF EXISTS (
+      SELECT 1 FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = 'ConcourseOutlet'
+    ) THEN
+      ALTER TABLE "ConcourseOutlet" ENABLE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS concourse_outlet_scope ON "ConcourseOutlet";
+      CREATE POLICY concourse_outlet_scope ON "ConcourseOutlet"
+        FOR ALL TO stadium_api
+        USING (app_private.scope_matches("organizationId", "facilityId", "zoneId"))
+        WITH CHECK (app_private.scope_matches("organizationId", "facilityId", "zoneId"));
+    END IF;
 
     -- StandSheet policies
     ALTER TABLE "StandSheet" ENABLE ROW LEVEL SECURITY;
@@ -318,13 +343,25 @@ BEGIN
       USING (app_private.venue_matches("venueId"))
       WITH CHECK (app_private.venue_matches("venueId"));
 
-    -- Table policies
-    ALTER TABLE "Table" ENABLE ROW LEVEL SECURITY;
-    DROP POLICY IF EXISTS table_scope ON "Table";
-    CREATE POLICY table_scope ON "Table"
-      FOR ALL TO stadium_api
-      USING (app_private.venue_matches("venueId"))
-      WITH CHECK (app_private.venue_matches("venueId"));
+    -- Table policies. No "Table" relation exists; the floor/dining domain uses
+    -- "TableState", "TableAssignment", "TableStateHistory" and "FloorChair".
+    -- This stale name failed with `relation "Table" does not exist` on every
+    -- clean deploy. Guarded to a no-op here. NOTE (report VW-SWEEP-020): the
+    -- real floor tables have RLS enabled but do NOT yet carry stadium_api
+    -- policies, so they will fail-closed (return zero rows) under a NOBYPASSRLS
+    -- runtime role — a follow-up migration must add their policies before the
+    -- role cutover, or the floor feature breaks for the stadium_api role.
+    IF EXISTS (
+      SELECT 1 FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = 'Table'
+    ) THEN
+      ALTER TABLE "Table" ENABLE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS table_scope ON "Table";
+      CREATE POLICY table_scope ON "Table"
+        FOR ALL TO stadium_api
+        USING (app_private.venue_matches("venueId"))
+        WITH CHECK (app_private.venue_matches("venueId"));
+    END IF;
 
     -- Reservation policies
     ALTER TABLE "Reservation" ENABLE ROW LEVEL SECURITY;
