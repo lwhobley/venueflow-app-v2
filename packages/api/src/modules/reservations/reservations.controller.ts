@@ -13,6 +13,7 @@ import {
   Req,
   ServiceUnavailableException,
   UnauthorizedException,
+  UseInterceptors,
 } from '@nestjs/common';
 import { IsArray, IsBoolean, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -27,6 +28,7 @@ import { assertWithinSharedRateLimit } from '../../common/rate-limit';
 import { zonedDateBounds, zonedIsoDate } from '../../common/venue-time';
 import { secretsMatch } from '../../common/webhook-auth';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 import { ReservationMutationService } from './reservation-mutation.service';
@@ -227,6 +229,7 @@ class ReservationHoldDto {
   reason!: string;
 }
 
+@UseInterceptors(TenantRequestTransactionInterceptor)
 @Controller('v1/reservations')
 export class ReservationsController {
   constructor(

@@ -11,6 +11,7 @@ import {
   Param,
   Post,
   Query,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   IsArray,
@@ -30,6 +31,8 @@ import { assertWithinSharedRateLimit } from '../../common/rate-limit';
 import { RequireSubscription } from '../../billing/require-subscription.decorator';
 import { EmailService } from '../../email/email.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
+import { SkipTenantTransaction } from '../../prisma/skip-tenant-transaction.decorator';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 import { randomUUID } from 'crypto';
@@ -406,6 +409,7 @@ ${intro}
 </body></html>`;
 }
 
+@UseInterceptors(TenantRequestTransactionInterceptor)
 @Controller('v1/crm')
 export class CrmController {
   private readonly logger = new Logger(CrmController.name);
@@ -1035,6 +1039,9 @@ export class CrmController {
   // Email BEO to a recipient with the rendered event details.
   // ============================================================
   @RequireSubscription('active')
+  // Awaits EmailService.sendOrThrow (blocking) — must not hold the request
+  // transaction open for that external call. See TenantRequestTransactionInterceptor's doc.
+  @SkipTenantTransaction()
   @Post('beos/:id/email')
   async emailBeo(@VenueScope() scope: Scope, @Param('id') id: string, @Body() body: EmailBeoDto) {
     requireManager(scope);

@@ -7,6 +7,7 @@ import {
   NotFoundException,
   Param,
   Post,
+  UseInterceptors,
 } from '@nestjs/common';
 import { IsArray, IsDateString, IsEmail, IsIn, IsOptional, IsString } from 'class-validator';
 import { Prisma, Role } from '@prisma/client';
@@ -15,6 +16,7 @@ import { RequireSubscription } from '../../billing/require-subscription.decorato
 import { mapProfile } from '../../common/mappers';
 import { EmailService } from '../../email/email.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 import { syncTeamMemberCount } from '../../common/team-sync';
@@ -60,6 +62,7 @@ class UpsertStaffDto {
   certifications?: string[];
 }
 
+@UseInterceptors(TenantRequestTransactionInterceptor)
 @Controller('v1/staff')
 export class StaffController {
   constructor(

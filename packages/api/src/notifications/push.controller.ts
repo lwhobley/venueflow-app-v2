@@ -1,6 +1,7 @@
-import { Body, ConflictException, Controller, ForbiddenException, Post } from '@nestjs/common';
+import { Body, ConflictException, Controller, ForbiddenException, Post, UseInterceptors } from '@nestjs/common';
 import { IsIn, IsString } from 'class-validator';
 import { PrismaService } from '../prisma/prisma.service';
+import { TenantRequestTransactionInterceptor } from '../prisma/tenant-request-transaction.interceptor';
 import { VenueScope } from '../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../venue/venue-scope.interceptor';
 
@@ -16,6 +17,7 @@ class RegisterPushTokenDto {
   platform!: (typeof PUSH_PLATFORMS)[number];
 }
 
+@UseInterceptors(TenantRequestTransactionInterceptor)
 @Controller('v1/push')
 export class PushController {
   constructor(private readonly prisma: PrismaService) {}

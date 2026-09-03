@@ -1,9 +1,10 @@
-import { Body, Controller, ForbiddenException, Get, Headers, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Headers, Param, Patch, Post, Query, UseInterceptors } from '@nestjs/common';
 import { ConcourseInventoryService, CreateStandSheetDto, RecordCountOutDto, CreateTransferDto, HawkerCheckoutDto, HawkerSettleDto } from './concourse-inventory.service';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 import { canManageVenue } from '../../auth/roles';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
 import { RequireSubscription } from '../../billing/require-subscription.decorator';
 import { IsIn, IsString } from 'class-validator';
 
@@ -16,6 +17,7 @@ class UpdateTransferStatusDto {
 
 class SeedOutletsDto { @IsString() zoneId!: string; }
 
+@UseInterceptors(TenantRequestTransactionInterceptor)
 @Controller('v1/stadium/concourse')
 @RequireSubscription()
 export class ConcourseInventoryController {

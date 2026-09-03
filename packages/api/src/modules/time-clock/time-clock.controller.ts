@@ -6,6 +6,7 @@ import {
   Get,
   Headers,
   Post,
+  UseInterceptors,
 } from '@nestjs/common';
 import { IsBoolean, IsNumber, IsOptional, IsString, IsIn, Max, Min } from 'class-validator';
 import { CurrentUser } from '../../auth/current-user.decorator';
@@ -18,6 +19,8 @@ import { todayInZone, weekStartFor } from '../../common/pay-period';
 import { mapClockEntry, minutesToTime } from '../../common/mappers';
 import { zonedDayOfWeek, zonedMinutesOfDay, zonedDayBounds } from '../../common/venue-time';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
+import { withTenantTransaction } from '../../prisma/tenant-transaction';
 import { AsyncWriteService } from '../../async-write/async-write.service';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
@@ -61,6 +64,14 @@ class AdjustPunchDto {
   @IsString() adjustmentReason!: string;
 }
 
+// The clock-in route's asyncWrites.enqueue() path (Redis GET + RabbitMQ
+// publish-confirm, when HIGH_VOLUME_QUEUE_ENABLED) is bounded and fast by
+// design (the queue system's whole purpose is a sub-second write path) —
+// unlike the AI/S3/Stripe calls TenantRequestTransactionInterceptor's own
+// doc warns about, so this controller does not need a route-level
+// @SkipTenantTransaction(). The actual clock_in row is written later by
+// async-write/worker.ts, which already binds its own GUCs — see that file.
+@UseInterceptors(TenantRequestTransactionInterceptor)
 @Controller('v1/time-clock')
 export class TimeClockController {
   constructor(private readonly prisma: PrismaService, private readonly asyncWrites: AsyncWriteService) {}
@@ -413,7 +424,11 @@ export class TimeClockController {
       approval,
     };
 
-    await this.prisma.$transaction(async (tx) => {
+    // An explicit nested transaction is not redirected by the class-level
+    // TenantRequestTransactionInterceptor (that only covers direct model
+    // calls, not $transaction itself — see its own doc), so bind GUCs here
+    // directly rather than relying on the outer wrap.
+    await withTenantTransaction(this.prisma, async (tx) => {
       await tx.timeEntry.update({
         where: { id: entry.id },
         data: {
@@ -439,7 +454,7 @@ export class TimeClockController {
           },
         },
       });
-    });
+    }, { venueId: scope.venueId });
 
     return { status: 'approved', punchId: entry.id, approvedBy: scope.profileId, approvedAt: approval.approvedAt };
   }

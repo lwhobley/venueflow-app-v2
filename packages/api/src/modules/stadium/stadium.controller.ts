@@ -1,10 +1,11 @@
-import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, NotFoundException, Param, Patch, Post, Query, UseInterceptors } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { PartialType } from '@nestjs/mapped-types';
 import { IsBoolean, IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 import { canFinalizeCloseout, canManageAssignedScope, canManageVenue, canOverrideEventState, canViewPilotHealth } from '../../auth/roles';
 import { RequireSubscription } from '../../billing/require-subscription.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
 import { Prisma } from '@prisma/client';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
@@ -139,6 +140,7 @@ class UpsertPartnerDto {
   @IsOptional() @IsString() brandStandardsNotes?: string;
 }
 
+@UseInterceptors(TenantRequestTransactionInterceptor)
 @Controller('v1/stadium')
 @RequireSubscription()
 export class StadiumController {

@@ -1,15 +1,17 @@
-import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Query, UseInterceptors } from '@nestjs/common';
 import { EventMenuService, CreateMenuOverlayDto } from './event-menu.service';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 import { canManageVenue } from '../../auth/roles';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
 import { RequireSubscription } from '../../billing/require-subscription.decorator';
 import { IsBoolean } from 'class-validator';
 
 type Scope = NonNullable<VenueScopedRequest['venueScope']>;
 class ToggleOverlayDto { @IsBoolean() active!: boolean; }
 
+@UseInterceptors(TenantRequestTransactionInterceptor)
 @Controller('v1/stadium/event-menus')
 @RequireSubscription()
 export class EventMenuController {

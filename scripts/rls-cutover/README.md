@@ -69,26 +69,51 @@ behind a cutover-only branch. Nothing here creates policies.
   `stadium_api` — `Session`/`User` carry RLS with zero policies (global, not
   tenant-owned), and `Profile`'s/`Venue`'s own policies need the very venueId
   this lookup exists to determine.
-- **Universal GUC binding — mechanism built, `GuestsController` is the first
-  slice.** `TenantRequestTransactionInterceptor`
+- **Universal GUC binding — mechanism built and rolled out to 18 of 35
+  controllers.** `TenantRequestTransactionInterceptor`
   (`packages/api/src/prisma/tenant-request-transaction.interceptor.ts`) opens
   one GUC-bound transaction per request, and the tenant-isolation extension
   redirects every `this.prisma.<model>.<op>()` call anywhere downstream onto
   it — zero call-site changes required in controllers/services. Apply it with
   `@UseInterceptors(TenantRequestTransactionInterceptor)` per controller.
+  Applied to: `guests`, `floor`, `insights`, `payroll`, `integrations`,
+  `notifications/push`, `stadium` (concourse-inventory, event-menu, stadium,
+  suite-hospitality, temp-staffing, union-compliance, stadium-realtime),
+  `staff`, `reservations`, `crm`, `staff-requests`, `time-clock`. Two routes
+  need `@SkipTenantTransaction()` (they await a blocking Expo push send):
+  `staff-requests`'s `createStaffRequest`/`reviewStaffRequest` — their own
+  writes were converted from a bare/absent `$transaction` to
+  `withTenantTransaction` instead, since skipping the route also skips the
+  outer wrap. `crm`'s `emailBeo` is skipped similarly (awaits
+  `EmailService.sendOrThrow`). `stadium-realtime`'s `@Sse` streaming route is
+  explicitly skipped too — a long-lived response must never carry this
+  interceptor, since `next.handle()` won't resolve until the client
+  disconnects, holding the transaction open indefinitely; see the
+  interceptor's own doc for this whole category. Proven end-to-end (not just
+  typechecked) via `guests-tenant-request-transaction.integration.spec.ts` and
+  `staff-requests-tenant-transaction.integration.spec.ts` — full suite: 910
+  unit + 26 integration, all green.
 
 ### Still required before step 5 (owner review — apply module by module, gated by the test suite + the isolation gate)
 
-- **Roll `TenantRequestTransactionInterceptor` out to the rest of the app.**
-  Track progress against `VENUE_SCOPED_MODELS` / `FACILITY_SCOPED_MODELS` in
-  `packages/api/src/prisma/tenant-scope.ts`. For each controller: confirm it
-  makes no slow external call (AI, S3, Stripe, outbound webhook) mid-handler —
-  if it does, either skip that route with `@SkipTenantTransaction()` or leave
-  the controller for later. Controllers already known to need care: `chat`
-  (S3), `documents` (S3), `bar-inventory` (AI parser), `app`
-  (staff-import AI parser), `integrations` (webhooks/external POS),
-  `operations/wrangler` (AI), `billing` (Stripe), `notifications` (push).
-  Verify each addition with `npm run lint`, the full `npx vitest run` +
+- **Roll `TenantRequestTransactionInterceptor` out to the remaining
+  controllers.** Track progress against `VENUE_SCOPED_MODELS` /
+  `FACILITY_SCOPED_MODELS` in `packages/api/src/prisma/tenant-scope.ts`. Not
+  yet done, and why: `chat` (S3), `documents` (S3), `bar-inventory` (AI
+  parser), `app` / `app-staff` (bootstrap flows + AI staff-import parser —
+  handle alongside the carve-out work below, not separately), `pos` (external
+  POS + mostly `@Public()` webhooks — lower value), `scheduling` (AI
+  scheduler), `operations/wrangler` (AI), `billing` / `app-billing` (Stripe),
+  `auth` / `enterprise-sso*` (auth flows, mostly no tenant context bound
+  anyway), `workforce` (bootstrap-adjacent join-request flows — handle
+  alongside the carve-out work below), `support` (single `@Public()` route,
+  not worth it), `health` (no meaningful DB access). For each: confirm no
+  slow external call (AI, S3, Stripe, outbound webhook, **or a long-lived
+  `@Sse`/streaming response**) sits in the request path — if one does, either
+  `@SkipTenantTransaction()` that specific route (and check whether its own
+  writes need converting to `withTenantTransaction`, the way
+  `staff-requests` did) or leave the controller for later. Verify each
+  addition with `npm run lint`, the full `npx vitest run` +
   `npx vitest run --config vitest.integration.config.ts` suites, and — for a
   meaningful slice — a real cross-tenant integration test through the actual
   HTTP pipeline (see `guests-tenant-request-transaction.integration.spec.ts`

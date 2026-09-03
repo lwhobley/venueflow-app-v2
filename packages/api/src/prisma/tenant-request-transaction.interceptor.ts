@@ -31,6 +31,16 @@ import { SKIP_TENANT_TRANSACTION_KEY } from './skip-tenant-transaction.decorator
  * such call in the request path, or mark the specific route
  * `@SkipTenantTransaction()`.
  *
+ * A second, distinct category: a long-lived streaming response (`@Sse(...)`,
+ * or anything else whose handler doesn't resolve until the client
+ * disconnects) must NEVER carry this interceptor — `next.handle()` wouldn't
+ * complete until the stream ends, holding the transaction (and pool
+ * connection) open for the connection's entire lifetime, potentially
+ * indefinitely. `@SkipTenantTransaction()` such routes explicitly even when
+ * they happen to be `@Public()` and would already no-op today (see
+ * StadiumRealtimeController.streamFacilityEvents) — belt-and-suspenders,
+ * since the no-op is incidental to auth, not a property of this interceptor.
+ *
  * A handler that does not touch the database at all (or explicitly manages
  * its own transaction, e.g. via withTenantTransaction) is unaffected either
  * way: an unused transaction just commits a no-op, and an explicit nested

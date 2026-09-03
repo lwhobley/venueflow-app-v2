@@ -1,4 +1,4 @@
-import { Controller, ForbiddenException, MessageEvent, Param, Post, Query, Sse, UnauthorizedException } from '@nestjs/common';
+import { Controller, ForbiddenException, MessageEvent, Param, Post, Query, Sse, UnauthorizedException, UseInterceptors } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { SuiteHospitalityGateway } from './suite-hospitality.gateway';
 import { Public } from '../../auth/public.decorator';
@@ -7,9 +7,12 @@ import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 import { canAccessCrossFacilityRealtime, canManageAssignedScope, canViewPilotHealth } from '../../auth/roles';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
+import { SkipTenantTransaction } from '../../prisma/skip-tenant-transaction.decorator';
 
 type Scope = NonNullable<VenueScopedRequest['venueScope']>;
 
+@UseInterceptors(TenantRequestTransactionInterceptor)
 @Controller('v1/stadium')
 @RequireSubscription()
 export class StadiumRealtimeController {
@@ -52,6 +55,7 @@ export class StadiumRealtimeController {
   }
 
   @Public()
+  @SkipTenantTransaction()
   @Sse('facilities/:facilityId/live-stream')
   async streamFacilityEvents(
     @VenueScope() scope: Scope,
