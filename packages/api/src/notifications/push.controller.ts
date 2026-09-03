@@ -2,6 +2,7 @@ import { Body, ConflictException, Controller, ForbiddenException, Post, UseInter
 import { IsIn, IsString } from 'class-validator';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantRequestTransactionInterceptor } from '../prisma/tenant-request-transaction.interceptor';
+import { withTenantTransaction } from '../prisma/tenant-transaction';
 import { VenueScope } from '../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../venue/venue-scope.interceptor';
 
@@ -35,7 +36,11 @@ export class PushController {
       lastSeenAt: new Date(),
     };
 
-    const pushToken = await this.prisma.$transaction(async (tx) => {
+    // An explicit nested transaction is not redirected by the class-level
+    // TenantRequestTransactionInterceptor (that only covers direct model
+    // calls, not $transaction itself — see its own doc), so bind GUCs here
+    // directly rather than relying on the outer wrap.
+    const pushToken = await withTenantTransaction(this.prisma, async (tx) => {
       // Serialize registration by token so a token already owned by another
       // profile cannot be rebound during a concurrent request.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${token}))`;
@@ -46,7 +51,7 @@ export class PushController {
       return existing
         ? tx.pushToken.update({ where: { token }, data })
         : tx.pushToken.create({ data: { token, ...data } });
-    });
+    }, { venueId: scope.venueId });
 
     return { id: pushToken.id, ok: true };
   }

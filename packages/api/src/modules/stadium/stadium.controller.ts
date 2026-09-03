@@ -6,6 +6,7 @@ import { canFinalizeCloseout, canManageAssignedScope, canManageVenue, canOverrid
 import { RequireSubscription } from '../../billing/require-subscription.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
+import { withTenantTransaction } from '../../prisma/tenant-transaction';
 import { Prisma } from '@prisma/client';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
@@ -281,7 +282,7 @@ export class StadiumController {
   @Post('events')
   async createEvent(@VenueScope() scope: Scope, @Body() body: CreateEventDto) {
     this.assertManager(scope);
-    return this.prisma.$transaction(async (tx) => {
+    return withTenantTransaction(this.prisma, async (tx) => {
       const venue = await tx.venue.findUniqueOrThrow({ where: { id: scope.venueId }, select: { organizationId: true } });
       const event = await tx.venueEvent.create({
         data: {
@@ -307,7 +308,7 @@ export class StadiumController {
       }
       await tx.eventAuditLog.create({ data: { organizationId: venue.organizationId, venueId: scope.venueId, eventId: event.id, actorProfileId: scope.profileId, entityType: 'event', entityId: event.id, action: 'event_created', metadata: { eventType: event.eventType, expectedAttendance: event.expectedGuests } } });
       return event;
-    });
+    }, { venueId: scope.venueId });
   }
 
   @Patch('events/:id/status')
@@ -330,7 +331,7 @@ export class StadiumController {
       canOverride: canOverrideEventState(scope.role, scope.allAccess),
     });
     const organizationId = await this.organizationIdFor(scope.venueId);
-    return this.prisma.$transaction(async (tx) => {
+    return withTenantTransaction(this.prisma, async (tx) => {
       const cas = await tx.venueEvent.updateMany({
         where: { id, venueId: scope.venueId, operationalState: event.operationalState },
         data: {
@@ -346,7 +347,7 @@ export class StadiumController {
       const updated = await tx.venueEvent.findUniqueOrThrow({ where: { id } });
       await tx.eventAuditLog.create({ data: { organizationId, venueId: scope.venueId, eventId: id, actorProfileId: scope.profileId, entityType: 'event', entityId: id, action: 'event_state_changed', reason: reason?.trim() || null, metadata: { from: event.operationalState, to: target } } });
       return updated;
-    });
+    }, { venueId: scope.venueId });
   }
 
   @Get('events/:id/issues')
@@ -375,7 +376,7 @@ export class StadiumController {
     if (body.outletId && !outlet) throw new NotFoundException('F&B outlet not found.');
     if (['closed', 'archived'].includes(event.operationalState)) throw new ForbiddenException('Issues cannot be opened after event closeout. Use an authorized adjustment workflow.');
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      return await withTenantTransaction(this.prisma, async (tx) => {
         if (body.clientMutationId) {
           const existing = await tx.eventIssue.findFirst({ where: { organizationId, clientMutationId: body.clientMutationId } });
           if (existing) return existing;
@@ -383,7 +384,7 @@ export class StadiumController {
         const issue = await tx.eventIssue.create({ data: { organizationId, venueId: scope.venueId, eventId, outletId: body.outletId ?? null, issueType: body.issueType.trim(), severity: body.severity, title: body.title.trim(), description: body.description.trim(), reportedByUserId: scope.profileId, ownerUserId: body.ownerUserId?.trim() || null, clientMutationId: body.clientMutationId ?? null } });
         await tx.eventAuditLog.create({ data: { organizationId, venueId: scope.venueId, eventId, issueId: issue.id, actorProfileId: scope.profileId, entityType: 'event_issue', entityId: issue.id, action: 'issue_created', metadata: { issueType: issue.issueType, severity: issue.severity, outletId: issue.outletId } } });
         return issue;
-      });
+      }, { venueId: scope.venueId });
     } catch (error) {
       if ((error as { code?: string }).code === 'P2002' && body.clientMutationId) {
         const existing = await this.prisma.eventIssue.findFirst({ where: { organizationId, clientMutationId: body.clientMutationId } });
@@ -403,13 +404,13 @@ export class StadiumController {
     const issue = await this.prisma.eventIssue.findFirst({ where: { id, venueId: scope.venueId }, select: { id: true, eventId: true, organizationId: true, status: true } });
     if (!issue) throw new NotFoundException('Event issue not found.');
     if (issue.status === 'resolved') throw new BadRequestException('A resolved issue cannot be acknowledged.');
-    return this.prisma.$transaction(async (tx) => {
+    return withTenantTransaction(this.prisma, async (tx) => {
       const transition = await tx.eventIssue.updateMany({ where: { id, venueId: scope.venueId, status: 'open' }, data: { status: 'acknowledged', acknowledgedAt: new Date(), ownerUserId: scope.profileId } });
       if (transition.count !== 1) throw new ConflictException('Issue state changed. Refresh and try again.');
       const updated = await tx.eventIssue.findUniqueOrThrow({ where: { id } });
       await tx.eventAuditLog.create({ data: { organizationId: issue.organizationId, venueId: scope.venueId, eventId: issue.eventId, issueId: id, actorProfileId: scope.profileId, entityType: 'event_issue', entityId: id, action: 'issue_acknowledged' } });
       return updated;
-    });
+    }, { venueId: scope.venueId });
   }
 
   @Patch('issues/:id/resolve')
@@ -418,13 +419,13 @@ export class StadiumController {
     const issue = await this.prisma.eventIssue.findFirst({ where: { id, venueId: scope.venueId }, select: { id: true, eventId: true, organizationId: true, status: true } });
     if (!issue) throw new NotFoundException('Event issue not found.');
     if (issue.status === 'resolved') throw new BadRequestException('Event issue is already resolved.');
-    return this.prisma.$transaction(async (tx) => {
+    return withTenantTransaction(this.prisma, async (tx) => {
       const transition = await tx.eventIssue.updateMany({ where: { id, venueId: scope.venueId, status: { in: ['open', 'acknowledged'] } }, data: { status: 'resolved', resolvedAt: new Date(), resolutionNotes: body.resolutionNotes.trim(), ownerUserId: scope.profileId } });
       if (transition.count !== 1) throw new ConflictException('Issue state changed. Refresh and try again.');
       const updated = await tx.eventIssue.findUniqueOrThrow({ where: { id } });
       await tx.eventAuditLog.create({ data: { organizationId: issue.organizationId, venueId: scope.venueId, eventId: issue.eventId, issueId: id, actorProfileId: scope.profileId, entityType: 'event_issue', entityId: id, action: 'issue_resolved', metadata: { resolutionNotes: body.resolutionNotes.trim() } } });
       return updated;
-    });
+    }, { venueId: scope.venueId });
   }
 
   @Post('event-plan')
@@ -460,10 +461,10 @@ export class StadiumController {
       checklists: options.include_checklists === false ? [] : outlets.map((outlet) => ({ outletId: outlet.id, outletName: outlet.name, tasks: ['Confirm outlet activation and POS readiness.', 'Verify product transfer, cold/hot holding controls, and allergen information.', ...(outlet.type === 'bar' || outlet.type === 'beer_cart' ? ['Confirm alcohol inventory, ID-check process, and responsible-service staffing.'] : [])] })),
       dataGaps,
     };
-    await this.prisma.$transaction(async (tx) => {
+    await withTenantTransaction(this.prisma, async (tx) => {
       await tx.eventPlanSnapshot.upsert({ where: { eventId: event.id }, create: { id: `plan_${event.id}`, organizationId: venue.organizationId, venueId: scope.venueId, eventId: event.id, generatedBy: scope.profileId, attendance, estimatedSalesCents, plan: plan as unknown as Prisma.InputJsonValue, dataGaps }, update: { generatedBy: scope.profileId, generatedAt: new Date(), attendance, estimatedSalesCents, plan: plan as unknown as Prisma.InputJsonValue, dataGaps } });
       await tx.eventAuditLog.create({ data: { organizationId: venue.organizationId, venueId: scope.venueId, eventId: event.id, actorProfileId: scope.profileId, entityType: 'event_plan', entityId: event.id, action: 'plan_generated', metadata: { options: options as unknown as Prisma.InputJsonValue } } });
-    });
+    }, { venueId: scope.venueId });
     return plan;
   }
 
@@ -481,7 +482,7 @@ export class StadiumController {
     ]);
     if (!event || !zone) throw new NotFoundException('Event or facility zone not found.');
     const organizationId = await this.organizationIdFor(scope.venueId);
-    return this.prisma.$transaction(async (tx) => {
+    return withTenantTransaction(this.prisma, async (tx) => {
       const readiness = await tx.eventFnbReadiness.upsert({
         where: { eventId_zoneId: { eventId, zoneId } },
         create: { organizationId: organizationId, venueId: scope.venueId, eventId, zoneId, status: body.status, notes: body.notes?.trim() || null, checkedBy: scope.profileId, checkedAt: new Date() },
@@ -489,7 +490,7 @@ export class StadiumController {
       });
       await tx.eventAuditLog.create({ data: { organizationId, venueId: scope.venueId, eventId, actorProfileId: scope.profileId, entityType: 'event_readiness', entityId: readiness.id, action: 'outlet_readiness_updated', metadata: { zoneId, status: body.status } } });
       return readiness;
-    });
+    }, { venueId: scope.venueId });
   }
 
   @Post('partners')
@@ -532,7 +533,7 @@ export class StadiumController {
     if (!event) throw new NotFoundException('Stadium event not found.');
     const organizationId = await this.organizationIdFor(scope.venueId);
 
-    return this.prisma.$transaction(async (tx) => {
+    return withTenantTransaction(this.prisma, async (tx) => {
       const existing = await tx.eventCloseout.findUnique({ where: { eventId } });
       if (existing && existing.status !== 'draft' && !isFinalizing) {
         throw new ConflictException('Finalized or adjusted closeouts must be modified via immutable revisions.');
@@ -628,7 +629,7 @@ export class StadiumController {
         where: { id: closeout.id },
         include: { revisions: { orderBy: { version: 'desc' } } },
       });
-    });
+    }, { venueId: scope.venueId });
   }
 
   @Post('events/:id/closeout/revisions')
@@ -651,7 +652,7 @@ export class StadiumController {
     const latestRevision = closeout.revisions[0];
     const parentHash = latestRevision?.revisionHash ?? null;
 
-    return this.prisma.$transaction(async (tx) => {
+    return withTenantTransaction(this.prisma, async (tx) => {
       const payload = {
         actualAttendance: body.actualAttendance ?? closeout.actualAttendance,
         actualSalesCents: body.actualSalesCents ?? closeout.actualSalesCents,
@@ -717,7 +718,7 @@ export class StadiumController {
         where: { id: closeout.id },
         include: { revisions: { orderBy: { version: 'desc' } } },
       });
-    });
+    }, { venueId: scope.venueId });
   }
 }
 

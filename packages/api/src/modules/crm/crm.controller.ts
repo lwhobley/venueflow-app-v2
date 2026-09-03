@@ -32,6 +32,7 @@ import { RequireSubscription } from '../../billing/require-subscription.decorato
 import { EmailService } from '../../email/email.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
+import { withTenantTransaction } from '../../prisma/tenant-transaction';
 import { SkipTenantTransaction } from '../../prisma/skip-tenant-transaction.decorator';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
@@ -683,7 +684,7 @@ export class CrmController {
       // Update the BEO and sync its reservation atomically. A hold conflict
       // throws inside syncBeoToReservation, which rolls back the BEO update so
       // we never leave a confirmed BEO without its blocking reservation.
-      const updated = await this.prisma.$transaction(async (tx) => {
+      const updated = await withTenantTransaction(this.prisma, async (tx) => {
         const u = await tx.crmBeo.update({ where: { id: body.beoId }, data: patch });
         // Sync confirmed BEOs to a reservation so private events block the
         // floor plan instead of letting another booking overlap the same space.
@@ -702,7 +703,7 @@ export class CrmController {
           await this.ensureBeoExecutionWorkspace(tx, scope.venueId, u);
         }
         return u;
-      });
+      }, { venueId: scope.venueId });
       if (existing.leadId && body.status !== undefined && body.status !== existing.status) {
         await this.logActivity(scope.venueId, existing.leadId, scope.profileId, 'beo_status_changed', `${existing.status} -> ${body.status}`);
       }
@@ -711,7 +712,7 @@ export class CrmController {
 
     // Create the BEO and (if confirmed) its blocking reservation atomically so
     // a hold conflict can't leave an orphaned confirmed BEO behind.
-    const beo = await this.prisma.$transaction(async (tx) => {
+    const beo = await withTenantTransaction(this.prisma, async (tx) => {
       const created = await tx.crmBeo.create({
         data: {
           ...fields,
@@ -725,7 +726,7 @@ export class CrmController {
         await this.ensureBeoExecutionWorkspace(tx, scope.venueId, created);
       }
       return created;
-    });
+    }, { venueId: scope.venueId });
 
     if (body.leadId) {
       await this.prisma.crmLead.update({
