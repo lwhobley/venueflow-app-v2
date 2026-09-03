@@ -6,12 +6,14 @@ import {
   ForbiddenException,
   Get,
   Headers,
+  NotFoundException,
   Param,
   Post,
   Query,
   Req,
   UnauthorizedException,
 } from '@nestjs/common';
+import type { ReservationStatus } from '@prisma/client';
 import { IsArray, IsBoolean, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import type { Request } from 'express';
@@ -143,6 +145,28 @@ function mergeTags(existing: string[], incoming: string[]): string[] {
   return cleanTags([...existing, ...incoming]);
 }
 
+type GuestStats = {
+  reservationCount: number;
+  visitCount: number;
+  lastVisitAt: number | null;
+  upcomingReservationAt: number | null;
+  totalSpendCents: number;
+  averageSpendCents: number;
+};
+
+const EMPTY_GUEST_STATS: GuestStats = {
+  reservationCount: 0,
+  visitCount: 0,
+  lastVisitAt: null,
+  upcomingReservationAt: null,
+  totalSpendCents: 0,
+  averageSpendCents: 0,
+};
+
+// A reservation counts as an actual visit once the guest has arrived —
+// upcoming/cancelled/no-show reservations aren't "visits" yet.
+const VISITED_STATUSES: ReservationStatus[] = ['checked_in', 'seated', 'completed'];
+
 @Controller('v1/guests')
 export class GuestsController {
   constructor(private readonly prisma: PrismaService) {}
@@ -178,30 +202,199 @@ export class GuestsController {
       }),
       this.prisma.guest.count({ where: where as any }),
     ]);
+    const stats = await this.computeGuestStats(scope.venueId, guests.map((g) => g.id));
     return {
-      guests: guests.map((g) => ({
-        id: g.id,
-        venueId: g.venueId,
-        fullName: g.fullName,
-        phone: g.phone ?? null,
-        email: g.email ?? null,
-        lifecycleStage: g.lifecycleStage ?? 'lead',
-        source: g.source ?? null,
-        birthday: g.birthday ?? null,
-        company: g.company ?? null,
-        marketingOptIn: g.marketingOptIn ?? false,
-        favoriteTable: g.favoriteTable ?? null,
-        preferredServer: g.preferredServer ?? null,
-        dietaryNotes: g.dietaryNotes ?? null,
-        tags: g.tags,
-        notes: g.notes ?? null,
-        createdAt: g.createdAt.getTime(),
-        updatedAt: g.updatedAt.getTime(),
-      })),
+      guests: guests.map((g) => this.mapGuestRow(g, stats.get(g.id) ?? EMPTY_GUEST_STATS)),
       totalCount,
       page,
       limit,
     };
+  }
+
+  @RequireSubscription('active')
+  @Get(':guestId')
+  async getGuestProfile(@VenueScope() scope: Scope, @Param('guestId') guestId: string) {
+    this.requireManager(scope);
+    const guest = await this.prisma.guest.findFirst({
+      where: { id: guestId, venueId: scope.venueId, deletedAt: null },
+    });
+    if (!guest) throw new NotFoundException('Guest not found');
+
+    const [stats, reservations, checks] = await Promise.all([
+      this.computeGuestStats(scope.venueId, [guest.id]),
+      this.prisma.reservation.findMany({
+        where: { guestId: guest.id, venueId: scope.venueId, deletedAt: null },
+        orderBy: { reservationTime: 'desc' },
+        take: 50,
+      }),
+      this.prisma.posCheck.findMany({
+        where: { guestId: guest.id, venueId: scope.venueId },
+        orderBy: { openedAt: 'desc' },
+        take: 50,
+      }),
+    ]);
+
+    return {
+      guest: this.mapGuestRow(guest, stats.get(guest.id) ?? EMPTY_GUEST_STATS),
+      reservations: reservations.map((r) => ({
+        _id: r.id,
+        partySize: r.partySize,
+        reservationTime: r.reservationTime.getTime(),
+        status: r.status,
+        tags: r.tags,
+        notes: r.notes ?? null,
+        isPrivateEvent: r.isPrivateEvent ?? false,
+        eventName: r.eventName ?? null,
+        eventStatus: r.eventStatus ?? null,
+        eventSpace: r.eventSpace ?? null,
+        setupStyle: r.setupStyle ?? null,
+        menuNotes: r.menuNotes ?? null,
+        beverageNotes: r.beverageNotes ?? null,
+        billingNotes: r.billingNotes ?? null,
+        estimatedValueCents: r.estimatedValueCents ?? null,
+        depositDueCents: r.depositDueCents ?? null,
+      })),
+      checks: checks.map((c) => ({
+        _id: c.id,
+        provider: c.provider,
+        openedAt: c.openedAt.getTime(),
+        closedAt: c.closedAt ? c.closedAt.getTime() : null,
+        totalCents: c.totalCents,
+        tipCents: c.tipCents,
+        status: c.status,
+        revenueCenter: c.revenueCenter ?? null,
+        tenderType: c.tenderType ?? null,
+        guestCount: c.guestCount ?? null,
+        menuItems: Array.isArray(c.menuItems)
+          ? (c.menuItems as any[]).map((item) => ({
+              name: item.name,
+              category: item.category ?? null,
+              quantity: item.quantity,
+              priceCents: item.priceCents,
+            }))
+          : [],
+      })),
+    };
+  }
+
+  private mapGuestRow(
+    g: {
+      id: string;
+      venueId: string;
+      fullName: string;
+      phone: string | null;
+      email: string | null;
+      lifecycleStage: string | null;
+      source: string | null;
+      birthday: string | null;
+      company: string | null;
+      marketingOptIn: boolean | null;
+      favoriteTable: string | null;
+      preferredServer: string | null;
+      dietaryNotes: string | null;
+      tags: string[];
+      notes: string | null;
+      createdAt: Date;
+      updatedAt: Date;
+    },
+    stats: GuestStats,
+  ) {
+    return {
+      _id: g.id,
+      id: g.id,
+      venueId: g.venueId,
+      fullName: g.fullName,
+      phone: g.phone ?? null,
+      email: g.email ?? null,
+      lifecycleStage: g.lifecycleStage ?? 'lead',
+      source: g.source ?? null,
+      birthday: g.birthday ?? null,
+      company: g.company ?? null,
+      marketingOptIn: g.marketingOptIn ?? false,
+      favoriteTable: g.favoriteTable ?? null,
+      preferredServer: g.preferredServer ?? null,
+      dietaryNotes: g.dietaryNotes ?? null,
+      tags: g.tags,
+      notes: g.notes ?? null,
+      createdAt: g.createdAt.getTime(),
+      updatedAt: g.updatedAt.getTime(),
+      reservationCount: stats.reservationCount,
+      visitCount: stats.visitCount,
+      lastVisitAt: stats.lastVisitAt,
+      upcomingReservationAt: stats.upcomingReservationAt,
+      totalSpendCents: stats.totalSpendCents,
+      averageSpendCents: stats.averageSpendCents,
+      daysSinceLastVisit: stats.lastVisitAt ? Math.floor((Date.now() - stats.lastVisitAt) / 86_400_000) : null,
+    };
+  }
+
+  /**
+   * Per-guest CRM stats (visit history, spend) computed via groupBy over the
+   * current page of guests only — not the whole venue — so this stays cheap
+   * regardless of how many guests the venue has on file.
+   */
+  private async computeGuestStats(venueId: string, guestIds: string[]): Promise<Map<string, GuestStats>> {
+    const stats = new Map<string, GuestStats>();
+    if (guestIds.length === 0) return stats;
+    const now = new Date();
+
+    const [totals, pastVisits, upcoming, spend] = await Promise.all([
+      this.prisma.reservation.groupBy({
+        by: ['guestId'],
+        where: { venueId, guestId: { in: guestIds }, deletedAt: null },
+        _count: { _all: true },
+      }),
+      this.prisma.reservation.groupBy({
+        by: ['guestId'],
+        where: { venueId, guestId: { in: guestIds }, deletedAt: null, reservationTime: { lt: now }, status: { in: VISITED_STATUSES } },
+        _count: { _all: true },
+        _max: { reservationTime: true },
+      }),
+      this.prisma.reservation.groupBy({
+        by: ['guestId'],
+        where: { venueId, guestId: { in: guestIds }, deletedAt: null, reservationTime: { gte: now }, status: { notIn: ['cancelled', 'no_show'] } },
+        _min: { reservationTime: true },
+      }),
+      this.prisma.posCheck.groupBy({
+        by: ['guestId'],
+        where: { venueId, guestId: { in: guestIds }, status: { not: 'void' } },
+        _sum: { totalCents: true },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const entry = (guestId: string): GuestStats => {
+      const existing = stats.get(guestId);
+      if (existing) return existing;
+      const created = { ...EMPTY_GUEST_STATS };
+      stats.set(guestId, created);
+      return created;
+    };
+
+    for (const row of totals) {
+      if (!row.guestId) continue;
+      entry(row.guestId).reservationCount = row._count._all;
+    }
+    for (const row of pastVisits) {
+      if (!row.guestId) continue;
+      const e = entry(row.guestId);
+      e.visitCount = row._count._all;
+      e.lastVisitAt = row._max.reservationTime ? row._max.reservationTime.getTime() : null;
+    }
+    for (const row of upcoming) {
+      if (!row.guestId) continue;
+      entry(row.guestId).upcomingReservationAt = row._min.reservationTime ? row._min.reservationTime.getTime() : null;
+    }
+    for (const row of spend) {
+      if (!row.guestId) continue;
+      const e = entry(row.guestId);
+      const sum = row._sum.totalCents ?? 0;
+      const count = row._count._all;
+      e.totalSpendCents = sum;
+      e.averageSpendCents = count > 0 ? Math.round(sum / count) : 0;
+    }
+
+    return stats;
   }
 
   @RequireSubscription('active')

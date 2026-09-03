@@ -205,6 +205,33 @@ export class UnionComplianceService {
       if (!allowed[previous?.punchType ?? 'NONE'].includes(punchType)) {
         throw new BadRequestException(`Invalid punch transition from ${previous?.punchType ?? 'no punch'} to ${punchType}.`);
       }
+
+      let resolvedZoneId = zoneId;
+      if (outletId) {
+        const outlet = await tx.concourseOutlet.findFirst({
+          where: { id: outletId, facilityId },
+          select: { id: true, zoneId: true },
+        });
+        if (!outlet) {
+          throw new BadRequestException('Specified outlet does not belong to this facility.');
+        }
+        if (zoneId && outlet.zoneId && outlet.zoneId !== zoneId) {
+          throw new BadRequestException('Specified outlet does not match the provided zone.');
+        }
+        if (!resolvedZoneId && outlet.zoneId) {
+          resolvedZoneId = outlet.zoneId;
+        }
+      }
+      if (resolvedZoneId) {
+        const zone = await tx.zone.findFirst({
+          where: { id: resolvedZoneId, facilityId },
+          select: { id: true },
+        });
+        if (!zone) {
+          throw new BadRequestException('Specified zone does not belong to this facility.');
+        }
+      }
+
       return tx.shiftPunch.create({
         data: {
           organizationId,
@@ -213,7 +240,7 @@ export class UnionComplianceService {
           punchType,
           verifiedVia,
           idempotencyKey: idempotencyKey ?? null,
-          zoneId: zoneId ?? null,
+          zoneId: resolvedZoneId ?? null,
           outletId: outletId ?? null,
           overrideReason: overrideReason ?? null,
         },

@@ -238,7 +238,7 @@ export class ConcourseInventoryService {
       },
     });
 
-    this.wsGateway.broadcastReplenishment(dto.facilityId, 'zone-central', {
+    await this.wsGateway.broadcastReplenishment(dto.facilityId, 'zone-central', {
       transferId: transfer.id,
       fromOutletId: dto.fromOutletId,
       toOutletId: dto.toOutletId,

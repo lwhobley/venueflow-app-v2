@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import Redis from 'ioredis';
 
 const REDIS_CHANNEL = 'stadium:realtime:events';
+const REDIS_SEQUENCE_KEY = 'stadium:realtime:seq';
 
 export interface BufferedStadiumEvent {
   seq: number;
@@ -83,6 +84,11 @@ export class SuiteHospitalityGateway implements OnModuleDestroy {
   }
 
   async createTicket(payload: StreamTicketPayload): Promise<string> {
+    // A ticket that is issued but never consumed (client backgrounds, loses
+    // connectivity, or never connects) previously stayed in this Map forever
+    // — only the Redis copy had a TTL. Sweep expired entries on every write
+    // so the in-process map cannot grow unbounded over a long-lived instance.
+    this.evictExpiredTickets();
     const ticketId = randomUUID();
     this.tickets.set(ticketId, payload);
     if (this.pubClient) {
@@ -90,6 +96,35 @@ export class SuiteHospitalityGateway implements OnModuleDestroy {
       await this.pubClient.set(redisKey, JSON.stringify(payload), 'PX', 60_000).catch(() => undefined);
     }
     return ticketId;
+  }
+
+  private evictExpiredTickets(now = Date.now()): void {
+    for (const [id, payload] of this.tickets) {
+      if (payload.expiresAt < now) this.tickets.delete(id);
+    }
+  }
+
+  /**
+   * Assigns the next sequence number. With Redis configured (multi-replica
+   * deployments), this is a shared INCR — a per-instance counter would let
+   * two replicas broadcasting concurrently assign the same seq to different
+   * events, and getEventsSince's `seq <= lastSeq` gap-recovery filter would
+   * then silently skip whichever event a reconnecting client saw as "already
+   * delivered". Falls back to the local counter if Redis is unavailable or
+   * the INCR fails, so a broadcast never blocks on a Redis outage.
+   */
+  private async nextSequence(): Promise<number> {
+    if (this.pubClient) {
+      try {
+        const next = await this.pubClient.incr(REDIS_SEQUENCE_KEY);
+        this.sequence = Math.max(this.sequence, next);
+        return next;
+      } catch (error) {
+        this.logger.warn(`Redis sequence INCR failed, falling back to local counter: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+    this.sequence += 1;
+    return this.sequence;
   }
 
   async verifyAndConsumeTicket(ticketId: string): Promise<StreamTicketPayload | null> {
@@ -154,11 +189,11 @@ export class SuiteHospitalityGateway implements OnModuleDestroy {
     this.emitter.off(event, listener);
   }
 
-  broadcastBeoUpdate(facilityId: string, zoneId: string, beoOrder: Record<string, unknown>) {
-    this.sequence += 1;
+  async broadcastBeoUpdate(facilityId: string, zoneId: string, beoOrder: Record<string, unknown>) {
+    const seq = await this.nextSequence();
     const timestamp = new Date().toISOString();
     const item: BufferedStadiumEvent = {
-      seq: this.sequence,
+      seq,
       facilityId,
       zoneId,
       event: 'suite_beo_updated',
@@ -169,16 +204,16 @@ export class SuiteHospitalityGateway implements OnModuleDestroy {
     if (this.eventBuffer.length > this.MAX_BUFFER) {
       this.eventBuffer.shift();
     }
-    const payload = { event: 'suite_beo_updated', data: beoOrder, seq: this.sequence, timestamp };
+    const payload = { event: 'suite_beo_updated', data: beoOrder, seq, timestamp };
     this.publishCrossReplica(facilityId, zoneId, payload);
-    this.logger.log(`Broadcasted suite_beo_updated for BEO ${(beoOrder as any).beoNumber} (seq: ${this.sequence}) to zone:${zoneId}`);
+    this.logger.log(`Broadcasted suite_beo_updated for BEO ${(beoOrder as any).beoNumber} (seq: ${seq}) to zone:${zoneId}`);
   }
 
-  broadcastReplenishment(facilityId: string, zoneId: string, replenishment: Record<string, unknown>) {
-    this.sequence += 1;
+  async broadcastReplenishment(facilityId: string, zoneId: string, replenishment: Record<string, unknown>) {
+    const seq = await this.nextSequence();
     const timestamp = new Date().toISOString();
     const item: BufferedStadiumEvent = {
-      seq: this.sequence,
+      seq,
       facilityId,
       zoneId,
       event: 'replenishment_requested',
@@ -189,9 +224,9 @@ export class SuiteHospitalityGateway implements OnModuleDestroy {
     if (this.eventBuffer.length > this.MAX_BUFFER) {
       this.eventBuffer.shift();
     }
-    const payload = { event: 'replenishment_requested', data: replenishment, seq: this.sequence, timestamp };
+    const payload = { event: 'replenishment_requested', data: replenishment, seq, timestamp };
     this.publishCrossReplica(facilityId, zoneId, payload);
-    this.logger.log(`Broadcasted replenishment_requested (seq: ${this.sequence}) to zone:${zoneId}`);
+    this.logger.log(`Broadcasted replenishment_requested (seq: ${seq}) to zone:${zoneId}`);
   }
 
   async onModuleDestroy() {

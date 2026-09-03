@@ -44,9 +44,8 @@ export class AuthService {
   }
 
   async issueSession(userId: string, email: string, fullName?: string, inviteToken?: string, rawPhone?: string) {
-    const trialEndsAt: Date | null = null;
+    const trialEndsAt = new Date(Date.now() + TRIAL_DURATION_MS);
     const account = await this.prisma.user.findUnique({
-
       where: { id: userId },
       select: { emailVerifiedAt: true },
     });

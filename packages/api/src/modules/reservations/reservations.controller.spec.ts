@@ -595,5 +595,30 @@ describe('ReservationsController', () => {
       expect(csv).toContain('Alex Guest');
       expect(csv.split('\n')[0]).toBe('"Name","Party","Time","Status","Phone","Email","Notes"');
     });
+
+    it('applies a bounded default window instead of the venue\'s entire history when no dates are supplied', async () => {
+      const { controller, prisma } = makeController();
+      prisma.reservation.findMany.mockResolvedValue([]);
+
+      await controller.exportReservationsCsv(managerScope);
+
+      const call = prisma.reservation.findMany.mock.calls[0][0];
+      const timeFilter = call.where.reservationTime;
+      expect(timeFilter.gte).toBeInstanceOf(Date);
+      expect(timeFilter.lt).toBeInstanceOf(Date);
+      expect(timeFilter.lt.getTime() - timeFilter.gte.getTime()).toBeLessThanOrEqual(181 * 24 * 60 * 60 * 1000);
+    });
+
+    it('leaves an explicit caller-supplied range uncapped', async () => {
+      const { controller, prisma } = makeController();
+      prisma.reservation.findMany.mockResolvedValue([]);
+
+      await controller.exportReservationsCsv(managerScope, '2020-01-01', '2026-01-01');
+
+      const call = prisma.reservation.findMany.mock.calls[0][0];
+      expect(call.where.reservationTime.gte).toBeInstanceOf(Date);
+      expect(call.where.reservationTime.lt).toBeInstanceOf(Date);
+      expect(call.where.reservationTime.gte.getUTCFullYear()).toBe(2020);
+    });
   });
 });

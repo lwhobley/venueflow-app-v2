@@ -879,41 +879,43 @@ export class CrmController {
   @Get('forecast')
   async getPipelineForecast(@VenueScope() scope: Scope) {
     requireManager(scope);
-    const leads = await this.prisma.crmLead.findMany({
+    // Aggregate in Postgres rather than pulling every lead row: only the
+    // per-status count/sum crosses the wire, so this stays flat as the venue's
+    // lead history grows instead of scaling with it on every dashboard load.
+    const rows = await this.prisma.crmLead.groupBy({
+      by: ['status'],
       where: { venueId: scope.venueId, deletedAt: null },
-      select: { status: true, estimatedValueCents: true },
+      _count: { _all: true },
+      _sum: { estimatedValueCents: true },
     });
 
-    const byStage = new Map<string, { count: number; rawValueCents: number; weightedValueCents: number }>();
     let totalWeighted = 0;
     let totalRaw = 0;
     let wonCount = 0;
     let wonValueCents = 0;
-    for (const lead of leads) {
-      const status = lead.status as string;
-      const value = lead.estimatedValueCents ?? 0;
-      const probability = STAGE_PROBABILITY[status] ?? 0;
-      const weighted = Math.round(value * probability);
-      const row = byStage.get(status) ?? { count: 0, rawValueCents: 0, weightedValueCents: 0 };
-      row.count += 1;
-      row.rawValueCents += value;
-      row.weightedValueCents += weighted;
-      byStage.set(status, row);
-      totalRaw += value;
-      totalWeighted += weighted;
-      if (status === 'won') {
-        wonCount += 1;
-        wonValueCents += value;
+    const byStage = rows.map((row) => {
+      const stage = row.status as string;
+      const count = row._count._all;
+      const rawValueCents = row._sum.estimatedValueCents ?? 0;
+      const probability = STAGE_PROBABILITY[stage] ?? 0;
+      // Rounding once per stage (not once per lead) is equivalent here since
+      // probability is constant within a stage: round(p * sum(v_i)) tracks
+      // sum(round(p * v_i)) to within a cent, which is immaterial for a
+      // forecast estimate.
+      const weightedValueCents = Math.round(rawValueCents * probability);
+      totalRaw += rawValueCents;
+      totalWeighted += weightedValueCents;
+      if (stage === 'won') {
+        wonCount += count;
+        wonValueCents += rawValueCents;
       }
-    }
+      return { stage, probability, count, rawValueCents, weightedValueCents };
+    });
+
     return {
-      byStage: Array.from(byStage.entries()).map(([stage, row]) => ({
-        stage,
-        probability: STAGE_PROBABILITY[stage] ?? 0,
-        ...row,
-      })),
+      byStage,
       totals: {
-        leadCount: leads.length,
+        leadCount: byStage.reduce((sum, row) => sum + row.count, 0),
         rawValueCents: totalRaw,
         weightedValueCents: totalWeighted,
         wonCount,
@@ -929,22 +931,29 @@ export class CrmController {
   @Get('source-roi')
   async getSourceRoi(@VenueScope() scope: Scope) {
     requireManager(scope);
-    const leads = await this.prisma.crmLead.findMany({
+    // Aggregate in Postgres rather than pulling every lead row (see
+    // getPipelineForecast above for the same rationale). Grouping by
+    // (source, status) keeps the win/loss counts separable per source while
+    // still avoiding a per-lead round trip.
+    const rows = await this.prisma.crmLead.groupBy({
+      by: ['source', 'status'],
       where: { venueId: scope.venueId, deletedAt: null },
-      select: { source: true, status: true, estimatedValueCents: true },
+      _count: { _all: true },
+      _sum: { estimatedValueCents: true },
     });
     const bySource = new Map<string, { source: string; leadCount: number; wonCount: number; lostCount: number; pipelineValueCents: number; wonValueCents: number }>();
-    for (const lead of leads) {
-      const source = lead.source ?? '(unspecified)';
+    for (const group of rows) {
+      const source = group.source ?? '(unspecified)';
       const row = bySource.get(source) ?? { source, leadCount: 0, wonCount: 0, lostCount: 0, pipelineValueCents: 0, wonValueCents: 0 };
-      row.leadCount += 1;
-      const value = lead.estimatedValueCents ?? 0;
+      const count = group._count._all;
+      const value = group._sum.estimatedValueCents ?? 0;
+      row.leadCount += count;
       row.pipelineValueCents += value;
-      if (lead.status === 'won') {
-        row.wonCount += 1;
+      if (group.status === 'won') {
+        row.wonCount += count;
         row.wonValueCents += value;
-      } else if (lead.status === 'lost' || lead.status === 'unqualified') {
-        row.lostCount += 1;
+      } else if (group.status === 'lost' || group.status === 'unqualified') {
+        row.lostCount += count;
       }
       bySource.set(source, row);
     }

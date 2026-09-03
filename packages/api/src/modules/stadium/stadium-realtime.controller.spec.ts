@@ -2,10 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { SuiteHospitalityGateway } from './suite-hospitality.gateway';
 import { StadiumRealtimeController } from './stadium-realtime.controller';
 
+function makePrismaStub(overrides: Record<string, unknown> = {}) {
+  return {
+    venue: { findUniqueOrThrow: async () => ({ organizationId: 'org-1' }) },
+    scopeAssignment: { findFirst: async () => null },
+    ...overrides,
+  } as any;
+}
+
 describe('StadiumRealtimeController SSE teardown and sequence numbering', () => {
   it('attaches monotonic seq numbers and removes event listener on unsubscription', async () => {
     const gateway = new SuiteHospitalityGateway();
-    const controller = new StadiumRealtimeController(gateway);
+    const controller = new StadiumRealtimeController(gateway, makePrismaStub());
 
     const scope = {
       userId: 'user-1',
@@ -26,8 +34,8 @@ describe('StadiumRealtimeController SSE teardown and sequence numbering', () => 
       received.push(event);
     });
 
-    gateway.broadcastBeoUpdate('facility-1', 'zone-1', { beoNumber: 'BEO-1001' });
-    gateway.broadcastReplenishment('facility-1', 'zone-1', { itemId: 'item-1' });
+    await gateway.broadcastBeoUpdate('facility-1', 'zone-1', { beoNumber: 'BEO-1001' });
+    await gateway.broadcastReplenishment('facility-1', 'zone-1', { itemId: 'item-1' });
 
     expect(received.length).toBe(2);
     expect(received[0].id).toBe('1');
@@ -42,7 +50,7 @@ describe('StadiumRealtimeController SSE teardown and sequence numbering', () => 
     subscription.unsubscribe();
 
     // Broadcast another event after unsubscription
-    gateway.broadcastBeoUpdate('facility-1', 'zone-1', { beoNumber: 'BEO-1002' });
+    await gateway.broadcastBeoUpdate('facility-1', 'zone-1', { beoNumber: 'BEO-1002' });
 
     // Should NOT receive event after teardown
     expect(received.length).toBe(2);
@@ -50,7 +58,7 @@ describe('StadiumRealtimeController SSE teardown and sequence numbering', () => 
 
   it('generates short-lived stream ticket and allows ticket-based streaming with gap recovery', async () => {
     const gateway = new SuiteHospitalityGateway();
-    const controller = new StadiumRealtimeController(gateway);
+    const controller = new StadiumRealtimeController(gateway, makePrismaStub());
 
     const scope = {
       userId: 'user-1',
@@ -69,8 +77,8 @@ describe('StadiumRealtimeController SSE teardown and sequence numbering', () => 
     expect(ticket).toBeDefined();
 
     // 2. Broadcast events into the gateway buffer before connection
-    gateway.broadcastBeoUpdate('facility-1', 'zone-1', { beoNumber: 'BEO-2001' });
-    gateway.broadcastBeoUpdate('facility-1', 'zone-1', { beoNumber: 'BEO-2002' });
+    await gateway.broadcastBeoUpdate('facility-1', 'zone-1', { beoNumber: 'BEO-2001' });
+    await gateway.broadcastBeoUpdate('facility-1', 'zone-1', { beoNumber: 'BEO-2002' });
 
     // 3. Connect with ticket and lastEventId = "1" to request missed event #2
     const stream$ = await controller.streamFacilityEvents(null as any, 'facility-1', undefined, '1', ticket);
@@ -85,10 +93,90 @@ describe('StadiumRealtimeController SSE teardown and sequence numbering', () => 
     expect(received[0].data.beoNumber).toBe('BEO-2002');
 
     // 4. Now broadcast live event #3
-    gateway.broadcastReplenishment('facility-1', 'zone-1', { itemId: 'item-live-3' });
+    await gateway.broadcastReplenishment('facility-1', 'zone-1', { itemId: 'item-live-3' });
     expect(received.length).toBe(2);
     expect(received[1].id).toBe('3');
 
     subscription.unsubscribe();
+  });
+});
+
+describe('StadiumRealtimeController zone-assignment enforcement', () => {
+  const assignedScopeUser = {
+    userId: 'user-2',
+    profileId: 'profile-2',
+    fullName: 'Suite Manager',
+    venueId: 'facility-1',
+    venueName: 'Facility',
+    role: 'suite_manager',
+    allAccess: false,
+    subscriptionStatus: 'active',
+    trialEndsAt: null,
+  };
+
+  it('rejects a ticket request for a zone the caller has no ScopeAssignment for', async () => {
+    const gateway = new SuiteHospitalityGateway();
+    const prisma = makePrismaStub({ scopeAssignment: { findFirst: async () => null } });
+    const controller = new StadiumRealtimeController(gateway, prisma);
+
+    await expect(controller.createStreamTicket(assignedScopeUser, 'facility-1', 'zone-other')).rejects.toThrow(
+      'This realtime stream is outside your assigned facility or zone.',
+    );
+  });
+
+  it('rejects an omitted zoneId (facility-wide ticket) unless the caller holds a facility-wide ScopeAssignment', async () => {
+    const gateway = new SuiteHospitalityGateway();
+    const prisma = makePrismaStub({ scopeAssignment: { findFirst: async () => null } });
+    const controller = new StadiumRealtimeController(gateway, prisma);
+
+    await expect(controller.createStreamTicket(assignedScopeUser, 'facility-1')).rejects.toThrow(
+      'This realtime stream is outside your assigned facility or zone.',
+    );
+  });
+
+  it('issues a ticket when a matching ScopeAssignment exists', async () => {
+    const gateway = new SuiteHospitalityGateway();
+    const prisma = makePrismaStub({ scopeAssignment: { findFirst: async () => ({ id: 'assignment-1' }) } });
+    const controller = new StadiumRealtimeController(gateway, prisma);
+
+    const { ticket } = await controller.createStreamTicket(assignedScopeUser, 'facility-1', 'zone-mine');
+    expect(ticket).toBeDefined();
+  });
+
+  it('rejects streaming when the ticket zone does not match the requested zone', async () => {
+    const gateway = new SuiteHospitalityGateway();
+    const prisma = makePrismaStub({ scopeAssignment: { findFirst: async () => ({ id: 'assignment-1' }) } });
+    const controller = new StadiumRealtimeController(gateway, prisma);
+
+    const { ticket } = await controller.createStreamTicket(assignedScopeUser, 'facility-1', 'zone-mine');
+
+    // Replaying the ticket with a different zoneId query param must not widen
+    // its grant to another zone.
+    await expect(
+      controller.streamFacilityEvents(null as any, 'facility-1', 'zone-other', undefined, ticket),
+    ).rejects.toThrow('Invalid or expired streaming ticket.');
+  });
+
+  it('narrows cross-facility ticket access to platform-wide roles', async () => {
+    const gateway = new SuiteHospitalityGateway();
+    const controller = new StadiumRealtimeController(gateway, makePrismaStub());
+
+    const auditorAtOtherVenue = {
+      userId: 'user-3',
+      profileId: 'profile-3',
+      fullName: 'Auditor',
+      venueId: 'facility-2',
+      venueName: 'Other Facility',
+      role: 'auditor',
+      allAccess: false,
+      subscriptionStatus: 'active',
+      trialEndsAt: null,
+    };
+
+    // An auditor at their own venue is not platform-wide, so viewing a
+    // different facility must be rejected even though canViewPilotHealth('auditor') is true.
+    await expect(controller.createStreamTicket(auditorAtOtherVenue, 'facility-1')).rejects.toThrow(
+      'Realtime stream is restricted to assigned facility scope.',
+    );
   });
 });

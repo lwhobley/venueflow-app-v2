@@ -52,6 +52,9 @@ export class TempStaffingController {
 
   @Post('seed-200')
   async seed200Workers(@VenueScope() scope: Scope) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new ForbiddenException('Demo workforce seeding is disabled in production.');
+    }
     this.assertManager(scope);
     return this.service.seedTempAgencyAndWorkers(
       await this.organizationIdFor(scope.venueId),

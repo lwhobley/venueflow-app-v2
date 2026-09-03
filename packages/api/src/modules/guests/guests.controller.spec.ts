@@ -18,6 +18,14 @@ function makeController() {
       create: vi.fn().mockResolvedValue({ id: 'guest-new' }),
       update: vi.fn().mockResolvedValue({ id: 'guest-updated' }),
     },
+    reservation: {
+      groupBy: vi.fn().mockResolvedValue([]),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    posCheck: {
+      groupBy: vi.fn().mockResolvedValue([]),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     venue: {
       findUnique: vi.fn().mockResolvedValue(null),
       update: vi.fn().mockResolvedValue({}),
@@ -94,6 +102,11 @@ describe('GuestsController', () => {
       const { controller } = makeController();
       await expect(controller.rotateLeadsWebhookSecret(staffScope)).rejects.toThrow(ForbiddenException);
     });
+
+    it('rejects staff from reading a guest profile', async () => {
+      const { controller } = makeController();
+      await expect(controller.getGuestProfile(staffScope, 'guest-1')).rejects.toThrow(ForbiddenException);
+    });
   });
 
   describe('listGuests', () => {
@@ -158,6 +171,12 @@ describe('GuestsController', () => {
 
       expect(result.guests).toEqual([
         expect.objectContaining({
+          // Both keys are populated: _id is what the mobile client's GuestRow
+          // type reads (a prior mismatch here left the guest list unable to
+          // render — FlatList's keyExtractor collapsed every row onto the
+          // same "undefined" key), id is kept for callers using the REST
+          // convention directly.
+          _id: 'guest-1',
           id: 'guest-1',
           lifecycleStage: 'lead',
           marketingOptIn: false,
@@ -169,6 +188,54 @@ describe('GuestsController', () => {
       expect(result.totalCount).toBe(1);
     });
 
+    it('defaults CRM stats to zero/null when a guest has no reservations or checks', async () => {
+      const { controller, prisma } = makeController();
+      prisma.guest.findMany.mockResolvedValue([makeGuestRow()]);
+      prisma.guest.count.mockResolvedValue(1);
+
+      const result = await controller.listGuests(managerScope, {});
+
+      expect(result.guests[0]).toEqual(
+        expect.objectContaining({
+          reservationCount: 0,
+          visitCount: 0,
+          lastVisitAt: null,
+          upcomingReservationAt: null,
+          totalSpendCents: 0,
+          averageSpendCents: 0,
+          daysSinceLastVisit: null,
+        }),
+      );
+    });
+
+    it('merges per-guest visit and spend stats from the groupBy aggregates', async () => {
+      const { controller, prisma } = makeController();
+      prisma.guest.findMany.mockResolvedValue([makeGuestRow()]);
+      prisma.guest.count.mockResolvedValue(1);
+      const lastVisit = new Date('2026-07-15T18:00:00Z');
+      const nextVisit = new Date('2026-08-20T18:00:00Z');
+      prisma.reservation.groupBy
+        .mockResolvedValueOnce([{ guestId: 'guest-1', _count: { _all: 5 } }]) // total
+        .mockResolvedValueOnce([{ guestId: 'guest-1', _count: { _all: 3 }, _max: { reservationTime: lastVisit } }]) // past visits
+        .mockResolvedValueOnce([{ guestId: 'guest-1', _min: { reservationTime: nextVisit } }]); // upcoming
+      prisma.posCheck.groupBy.mockResolvedValue([
+        { guestId: 'guest-1', _sum: { totalCents: 30_000 }, _count: { _all: 3 } },
+      ]);
+
+      const result = await controller.listGuests(managerScope, {});
+
+      expect(result.guests[0]).toEqual(
+        expect.objectContaining({
+          reservationCount: 5,
+          visitCount: 3,
+          lastVisitAt: lastVisit.getTime(),
+          upcomingReservationAt: nextVisit.getTime(),
+          totalSpendCents: 30_000,
+          averageSpendCents: 10_000,
+        }),
+      );
+    });
+
     it('returns an empty list when the venue has no guests', async () => {
       const { controller } = makeController();
 
@@ -176,6 +243,113 @@ describe('GuestsController', () => {
 
       expect(result.guests).toEqual([]);
       expect(result.totalCount).toBe(0);
+    });
+
+    it('does not query stats at all when the page has no guests', async () => {
+      const { controller, prisma } = makeController();
+
+      await controller.listGuests(managerScope, {});
+
+      expect(prisma.reservation.groupBy).not.toHaveBeenCalled();
+      expect(prisma.posCheck.groupBy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getGuestProfile', () => {
+    it('throws NotFoundException when the guest does not exist in this venue', async () => {
+      const { controller, prisma } = makeController();
+      prisma.guest.findFirst.mockResolvedValue(null);
+
+      await expect(controller.getGuestProfile(managerScope, 'guest-missing')).rejects.toThrow('Guest not found');
+    });
+
+    it('scopes the guest lookup to the venue and excludes soft-deleted guests', async () => {
+      const { controller, prisma } = makeController();
+      prisma.guest.findFirst.mockResolvedValue(makeGuestRow());
+
+      await controller.getGuestProfile(managerScope, 'guest-1');
+
+      expect(prisma.guest.findFirst).toHaveBeenCalledWith({
+        where: { id: 'guest-1', venueId: 'venue-1', deletedAt: null },
+      });
+    });
+
+    it('returns the guest, reservations, and checks in the shape the mobile client expects', async () => {
+      const { controller, prisma } = makeController();
+      prisma.guest.findFirst.mockResolvedValue(makeGuestRow());
+      prisma.reservation.findMany.mockResolvedValue([
+        {
+          id: 'res-1',
+          partySize: 4,
+          reservationTime: new Date('2026-07-15T18:00:00Z'),
+          status: 'completed',
+          tags: ['anniversary'],
+          notes: null,
+          isPrivateEvent: false,
+          eventName: null,
+          eventStatus: null,
+          eventSpace: null,
+          setupStyle: null,
+          menuNotes: null,
+          beverageNotes: null,
+          billingNotes: null,
+          estimatedValueCents: null,
+          depositDueCents: null,
+        },
+      ]);
+      prisma.posCheck.findMany.mockResolvedValue([
+        {
+          id: 'check-1',
+          provider: 'toast',
+          openedAt: new Date('2026-07-15T18:05:00Z'),
+          closedAt: new Date('2026-07-15T19:30:00Z'),
+          totalCents: 12_000,
+          tipCents: 2_000,
+          status: 'paid',
+          revenueCenter: 'Dining Room',
+          tenderType: 'card',
+          guestCount: 4,
+          menuItems: [{ name: 'Ribeye', category: 'Entree', quantity: 1, priceCents: 6000 }],
+        },
+      ]);
+
+      const result = await controller.getGuestProfile(managerScope, 'guest-1');
+
+      expect(result.guest).toEqual(expect.objectContaining({ _id: 'guest-1', id: 'guest-1' }));
+      expect(result.reservations).toEqual([
+        expect.objectContaining({ _id: 'res-1', partySize: 4, status: 'completed', tags: ['anniversary'] }),
+      ]);
+      expect(result.checks).toEqual([
+        expect.objectContaining({
+          _id: 'check-1',
+          totalCents: 12_000,
+          menuItems: [{ name: 'Ribeye', category: 'Entree', quantity: 1, priceCents: 6000 }],
+        }),
+      ]);
+    });
+
+    it('defaults a check with no menu items to an empty array, not null', async () => {
+      const { controller, prisma } = makeController();
+      prisma.guest.findFirst.mockResolvedValue(makeGuestRow());
+      prisma.posCheck.findMany.mockResolvedValue([
+        {
+          id: 'check-1',
+          provider: 'toast',
+          openedAt: new Date('2026-07-15T18:05:00Z'),
+          closedAt: null,
+          totalCents: 5_000,
+          tipCents: 0,
+          status: 'open',
+          revenueCenter: null,
+          tenderType: null,
+          guestCount: null,
+          menuItems: null,
+        },
+      ]);
+
+      const result = await controller.getGuestProfile(managerScope, 'guest-1');
+
+      expect(result.checks[0].menuItems).toEqual([]);
     });
   });
 

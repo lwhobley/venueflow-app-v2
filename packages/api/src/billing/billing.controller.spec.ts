@@ -1,6 +1,12 @@
-import { expect, it, vi } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { BillingController } from './billing.controller';
 import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+
+const originalNodeEnv = process.env.NODE_ENV;
+afterEach(() => {
+  if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = originalNodeEnv;
+});
 
 function makeController(secret?: string) {
   const config = { get: vi.fn().mockReturnValue(secret) } as any;
@@ -37,4 +43,18 @@ it('accepts a revenuecat webhook with a matching bearer secret', async () => {
   const controller = makeController('expected-secret');
   const res = await controller.handleRevenueCatWebhook({}, { authorization: 'Bearer expected-secret' });
   expect(res).toEqual({ received: true, mode: 'enterprise' });
+});
+
+it('rejects an unconfigured revenuecat webhook in production instead of accepting unauthenticated requests', async () => {
+  process.env.NODE_ENV = 'production';
+  const controller = makeController(undefined);
+  await expect(controller.handleRevenueCatWebhook({}, {})).rejects.toBeInstanceOf(UnauthorizedException);
+});
+
+it('rejects an unconfigured stripe webhook in production instead of accepting unauthenticated requests', async () => {
+  process.env.NODE_ENV = 'production';
+  const controller = makeController(undefined);
+  await expect(
+    controller.handleStripeWebhook({}, {}, { rawBody: Buffer.from('{}') } as any),
+  ).rejects.toBeInstanceOf(UnauthorizedException);
 });

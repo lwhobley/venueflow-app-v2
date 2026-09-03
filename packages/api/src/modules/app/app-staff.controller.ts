@@ -329,19 +329,12 @@ export class AppStaffController {
       ["owner", "admin", "platform_admin", "organization_admin"].includes(
         viewer.role,
       );
+    // Every staff member signs in with email + a 6-digit PIN — there is no
+    // separate email/password flow. Any administrator can assign or reset a
+    // teammate's PIN regardless of that teammate's own role.
     if (body.onboardingPin && !isAdministrator) {
       throw new ForbiddenException(
         "Only venue administrators can assign access PINs.",
-      );
-    }
-    if (
-      body.onboardingPin &&
-      !["owner", "admin", "platform_admin", "organization_admin"].includes(
-        body.role,
-      )
-    ) {
-      throw new BadRequestException(
-        "Access PINs can only be assigned to venue administrator accounts.",
       );
     }
     const row = await this.upsertOneStaffMember(viewer, body);
@@ -576,9 +569,9 @@ export class AppStaffController {
           `— The Venue Wrangler Team`
         : `Hi ${row.fullName},\n\n` +
           `Welcome! You have been added to the team at ${venueName} as a ${row.jobTitle}.\n\n` +
-          `To view your schedule, request unavailable days, and request shift swaps, please join the venue using the steps below:\n\n` +
-          `1. Create a Venue Wrangler account or sign in using your email: ${row.email}\n` +
-          `2. You will be automatically linked to the venue and can access your dashboard right away.\n\n` +
+          (pinCredential
+            ? `Sign in with your email (${row.email}) and the 6-digit PIN your administrator assigned you.\n\n`
+            : `Your administrator will give you a 6-digit sign-in PIN to use with your email (${row.email}).\n\n`) +
           `We're excited to have you on board!\n\n` +
           `Questions? support@venuewrangler.com\n\n` +
           `— The Venue Wrangler Team`,

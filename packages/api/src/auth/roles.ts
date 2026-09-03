@@ -34,6 +34,15 @@ export function canViewPilotHealth(role?: string | null, allAccess = false): boo
   return allAccess || ['platform_admin', 'organization_admin', 'owner', 'admin', 'fnb_director', 'event_manager', 'finance_viewer', 'auditor'].includes(role ?? '');
 }
 
+/**
+ * Viewing a facility other than your own is a platform-wide capability, not a
+ * venue-manager one — being an owner/admin/auditor of venue A must not grant
+ * visibility into venue B's live operational stream.
+ */
+export function canAccessCrossFacilityRealtime(role?: string | null, allAccess = false): boolean {
+  return allAccess || ['platform_admin', 'organization_admin'].includes(role ?? '');
+}
+
 /** Only leadership may use a reason-required recovery transition after approval. */
 export function canOverrideEventState(role?: string | null, allAccess = false): boolean {
   return allAccess || ['platform_admin', 'organization_admin', 'owner', 'admin', 'fnb_director', 'event_manager'].includes(role ?? '');
@@ -44,15 +53,37 @@ export function canFinalizeCloseout(role?: string | null, allAccess = false): bo
   return allAccess || ['platform_admin', 'organization_admin', 'owner', 'admin', 'fnb_director'].includes(role ?? '');
 }
 
-const ROLE_RANK: Record<string, number> = {
+/**
+ * Ranks every role in the Prisma Role enum. A role missing here makes
+ * canManageRole() fail closed for it (actorRank/targetRank both undefined),
+ * which previously left platform_admin, organization_admin, and the other
+ * enterprise/stadium roles silently unable to re-role or remove staff.
+ *
+ * Tiers mirror the groupings this file already draws elsewhere:
+ *  - Tier 3 matches isAdminRole (admin, owner, manager's superiors, plus the
+ *    enterprise/org roles isAdminRole already treats identically).
+ *  - Tier 2 is the remaining canManageVenue roles — operational managers
+ *    scoped to a department rather than full venue configuration.
+ *  - Tier 1 is non-manager staff with elevated read visibility.
+ */
+export const ROLE_RANK: Record<string, number> = {
   staff: 0,
   server: 1,
+  auditor: 1,
+  finance_viewer: 1,
   manager: 2,
   concourse_supervisor: 2,
   suite_manager: 2,
-  auditor: 1,
+  event_manager: 2,
+  outlet_manager: 2,
+  executive_chef: 2,
+  warehouse_manager: 2,
+  premium_manager: 2,
   owner: 3,
   admin: 3,
+  platform_admin: 3,
+  organization_admin: 3,
+  fnb_director: 3,
 };
 
 /**
@@ -77,5 +108,5 @@ export function canManageRole(actorRole: string | null | undefined, targetRole: 
 }
 
 export function isOwnerOrAdminRole(role?: string | null): boolean {
-  return role === 'admin' || role === 'owner';
+  return role === 'admin' || role === 'owner' || role === 'platform_admin' || role === 'organization_admin';
 }

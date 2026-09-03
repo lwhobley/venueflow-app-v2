@@ -42,7 +42,11 @@ export class S3ImageService {
     const { GetObjectCommand } = await import('@aws-sdk/client-s3');
     return getSignedUrl(
       this.s3,
-      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        ResponseContentDisposition: 'inline',
+      }),
       { expiresIn: expiresInSeconds },
     );
   }

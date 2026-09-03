@@ -22,6 +22,8 @@ describe('CORS origin allowlist', () => {
     'https://6716c575.venue-wrangler.pages.dev',
     'https://attacker.example',
     'file:///tmp/index.html',
+    'http://localhost:9999',
+    'https://localhost:8081',
   ])('rejects an untrusted production origin: %s', (origin) => {
     expect(isAllowedOrigin(origin, true)).toBe(false);
   });

@@ -24,7 +24,7 @@ import { RequireSubscription } from '../../billing/require-subscription.decorato
 import { csvCell } from '../../common/csv';
 import { getClientIp } from '../../common/http';
 import { assertWithinSharedRateLimit } from '../../common/rate-limit';
-import { zonedDateBounds } from '../../common/venue-time';
+import { zonedDateBounds, zonedIsoDate } from '../../common/venue-time';
 import { secretsMatch } from '../../common/webhook-auth';
 import { PrismaService } from '../../prisma/prisma.service';
 import { VenueScope } from '../../venue/venue-scope.decorator';
@@ -37,6 +37,9 @@ const RESERVATION_STATUSES = ['requested', 'confirmed', 'checked_in', 'seated', 
 const RESERVATION_SOURCES = ['direct', 'opentable', 'resy', 'phone', 'walk_in', 'sevenrooms', 'tock', 'google', 'generic'] as const;
 const SYNC_SOURCES = ['opentable', 'resy', 'sevenrooms', 'tock', 'google', 'generic'] as const;
 const MAX_INGEST_EVENTS = 500;
+// Bound applied to the reservations CSV export only when the caller supplies
+// no date range at all (an explicit range is left uncapped).
+const DEFAULT_EXPORT_WINDOW_DAYS = 90;
 const INGEST_RATE_LIMIT_MAX = 120;
 const INGEST_RATE_LIMIT_WINDOW_MS = 60_000;
 
@@ -698,6 +701,20 @@ export class ReservationsController {
         timeFilter['lt'] = new Date(zonedDateBounds(timezone, endDate).end);
       }
       where['reservationTime'] = timeFilter;
+    } else {
+      // No range at all previously meant "every reservation this venue has
+      // ever had" materialized into memory on one request. Default to a
+      // bounded window (90 days back, 90 days forward) instead — wide enough
+      // to cover typical "recent activity" reporting without an unbounded
+      // full-table scan. An explicit range from the caller is left as-is.
+      const timezone = await this.getVenueTimezone(scope.venueId);
+      const nowMs = Date.now();
+      const todayIso = zonedIsoDate(timezone, nowMs);
+      const dayMs = 24 * 60 * 60 * 1000;
+      where['reservationTime'] = {
+        gte: new Date(zonedDateBounds(timezone, todayIso).start - DEFAULT_EXPORT_WINDOW_DAYS * dayMs),
+        lt: new Date(zonedDateBounds(timezone, todayIso).end + DEFAULT_EXPORT_WINDOW_DAYS * dayMs),
+      };
     }
     const reservations = await this.prisma.reservation.findMany({
       where: where as any,
