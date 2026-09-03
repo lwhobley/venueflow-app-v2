@@ -4,7 +4,7 @@ import { defer, firstValueFrom, type Observable } from 'rxjs';
 import { defaultIfEmpty } from 'rxjs/operators';
 import { PrismaService } from './prisma.service';
 import { tenantIsolationEnforced } from './tenant-isolation-config';
-import { getTenantContext } from './tenant-context';
+import { exitTenant, getTenantContext } from './tenant-context';
 import { applyTenantSessionSettings } from './tenant-transaction';
 import { runWithTenantTx } from './tenant-request-transaction';
 import { SKIP_TENANT_TRANSACTION_KEY } from './skip-tenant-transaction.decorator';
@@ -88,7 +88,13 @@ export class TenantRequestTransactionInterceptor implements NestInterceptor {
           // the AsyncLocalStorage-bound tx stays attached through the whole
           // downstream call chain — same convention as tenant-context.ts's
           // own callers (see tenant-isolation.integration.spec.ts).
-          return runWithTenantTx(tx, async () => await firstValueFrom(next.handle().pipe(defaultIfEmpty(undefined))));
+          return runWithTenantTx(tx, async () => {
+            try {
+              return await firstValueFrom(next.handle().pipe(defaultIfEmpty(undefined)));
+            } finally {
+              exitTenant();
+            }
+          });
         },
         // Default interactive-transaction timeout (5s) is tight for a full
         // HTTP handler that may run several sequential queries; give it real

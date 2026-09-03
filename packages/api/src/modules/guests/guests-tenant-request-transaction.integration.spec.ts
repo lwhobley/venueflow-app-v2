@@ -70,7 +70,13 @@ describe('TenantRequestTransactionInterceptor via GuestsController (integration)
     // Use 24 hour expiration to ensure sessions remain valid throughout test execution
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const session = await prisma.session.create({ data: { userId: user.id, expiresAt } });
-    const token = signTestToken(jwt, { sub: user.id, sid: session.id, venueId: venue.id, profileId: profile.id });
+    const token = signTestToken(jwt, {
+      sub: user.id,
+      sid: session.id,
+      venueId: venue.id,
+      profileId: profile.id,
+      role: 'manager',
+    });
     await prisma.session.update({
       where: { id: session.id },
       data: { tokenHash: createHash('sha256').update(token).digest('hex') },
@@ -118,8 +124,11 @@ describe('TenantRequestTransactionInterceptor via GuestsController (integration)
     const resB = await request(app.getHttpServer())
       .get('/api/v1/guests')
       .set('Authorization', `Bearer ${tenantB.token}`)
-      .set('x-venue-id', tenantB.venueId)
-      .expect(200);
+      .set('x-venue-id', tenantB.venueId);
+    if (resB.status !== 200) {
+      console.error('DEBUG RES B FAILURE:', resB.status, JSON.stringify(resB.body));
+    }
+    expect(resB.status).toBe(200);
     const namesB = resB.body.guests.map((g: any) => g.fullName);
     expect(namesB).toContain(tenantB.guestName);
     expect(namesB).not.toContain(tenantA.guestName);
