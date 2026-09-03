@@ -38,6 +38,8 @@ export const FACILITY_SCOPED_MODELS: ReadonlySet<string> = new Set([
   'UnionRuleConfig', 'UnionComplianceViolation',
   'FacilityZone', 'Outlet', 'SubVenue', 'Terminal',
   'KitchenFulfillmentTicket', 'KitchenFulfillmentStatusHistory',
+  'Department', 'DepartmentMembership', 'DepartmentAreaRule', 'UserAreaOverride',
+  'DailyTemporaryRoster', 'DailyTemporaryRosterWorker', 'DailyTemporaryRosterHistory',
 ]);
 
 /**

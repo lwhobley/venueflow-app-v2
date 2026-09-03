@@ -44,6 +44,7 @@ import { WranglerOperatorService } from './modules/operations/wrangler/wrangler-
 import { SafeWranglerOperatorService } from './modules/operations/wrangler/safe-wrangler-operator.service';
 import { StadiumModule } from './modules/stadium/stadium.module';
 import { AsyncWriteModule } from './async-write/async-write.module';
+import { DepartmentsModule } from './modules/departments/departments.module';
 
 @Module({
   imports: [
@@ -80,6 +81,7 @@ import { AsyncWriteModule } from './async-write/async-write.module';
     DocumentsModule,
     StadiumModule,
     AsyncWriteModule,
+    DepartmentsModule,
   ],
   controllers: [
     HealthController,

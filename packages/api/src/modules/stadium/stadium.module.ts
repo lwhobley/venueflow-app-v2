@@ -17,6 +17,8 @@ import { UnionComplianceService } from './union-compliance.service';
 import { StadiumRealtimeController } from './stadium-realtime.controller';
 import { KitchenDistroFulfillmentController } from './kitchen-distro-fulfillment.controller';
 import { KitchenDistroFulfillmentService } from './kitchen-distro-fulfillment.service';
+import { DailyRosterController } from './daily-roster.controller';
+import { DailyRosterService } from './daily-roster.service';
 
 @Module({
   imports: [PrismaModule, NotificationsModule],
@@ -29,6 +31,7 @@ import { KitchenDistroFulfillmentService } from './kitchen-distro-fulfillment.se
     TempStaffingController,
     UnionComplianceController,
     KitchenDistroFulfillmentController,
+    DailyRosterController,
   ],
   providers: [
     SuiteHospitalityService,
@@ -39,6 +42,7 @@ import { KitchenDistroFulfillmentService } from './kitchen-distro-fulfillment.se
     TempStaffingService,
     UnionComplianceService,
     KitchenDistroFulfillmentService,
+    DailyRosterService,
   ],
   exports: [
     SuiteHospitalityService,
@@ -49,6 +53,7 @@ import { KitchenDistroFulfillmentService } from './kitchen-distro-fulfillment.se
     TempStaffingService,
     UnionComplianceService,
     KitchenDistroFulfillmentService,
+    DailyRosterService,
   ],
 })
 export class StadiumModule {}
