@@ -53,7 +53,7 @@ describe('TenantRequestTransactionInterceptor via GuestsController (integration)
     const user = await prisma.user.create({ data: { email: `itx-${suffix}@test.local` } });
     userIds.push(user.id);
     venueIds.push(venue.id);
-    await prisma.profile.create({
+    const profile = await prisma.profile.create({
       data: {
         userId: user.id,
         email: user.email!,
@@ -70,7 +70,7 @@ describe('TenantRequestTransactionInterceptor via GuestsController (integration)
     // Use 24 hour expiration to ensure sessions remain valid throughout test execution
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const session = await prisma.session.create({ data: { userId: user.id, expiresAt } });
-    const token = signTestToken(jwt, { sub: user.id, sid: session.id });
+    const token = signTestToken(jwt, { sub: user.id, sid: session.id, venueId: venue.id, profileId: profile.id });
     await prisma.session.update({
       where: { id: session.id },
       data: { tokenHash: createHash('sha256').update(token).digest('hex') },
