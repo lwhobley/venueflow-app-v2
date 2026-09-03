@@ -67,7 +67,8 @@ describe('TenantRequestTransactionInterceptor via GuestsController (integration)
     const guest = await prisma.guest.create({
       data: { venueId: venue.id, fullName: guestName, nameLower: guestName.toLowerCase() },
     });
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    // Use 1 hour expiration instead of 24 hours to ensure sessions remain valid throughout test execution
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
     const session = await prisma.session.create({ data: { userId: user.id, expiresAt } });
     const token = signTestToken(jwt, { sub: user.id, sid: session.id });
     await prisma.session.update({
