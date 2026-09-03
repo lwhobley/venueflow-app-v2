@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiRequest, useApiQuery } from '../../lib/api-client';
 import { useStadiumLiveStream } from '../../lib/stadium-live-stream';
@@ -34,6 +35,7 @@ export interface SuiteBEO {
 const SUITE_BEOS_KEY = ['stadium', 'suite-beos'];
 
 export default function KitchenBumpScreen() {
+  const router = useRouter();
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const queryClient = useQueryClient();
 
@@ -83,6 +85,12 @@ export default function KitchenBumpScreen() {
         </View>
         <View style={styles.headerRight}>
           <Text style={styles.syncText}>LAST SYNC: {lastSynced || 'LIVE'}</Text>
+          <TouchableOpacity
+            style={[styles.seedBtn, { backgroundColor: '#0284C7', borderColor: '#0369A1' }]}
+            onPress={() => router.push('/stadium/distro-pickup')}
+          >
+            <Text style={styles.seedBtnText}>DISTRO PICKUP</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.seedBtn} onPress={refresh}>
             <Text style={styles.seedBtnText}>REFRESH</Text>
           </TouchableOpacity>

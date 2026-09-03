@@ -18,6 +18,7 @@ const ALLOWED_WRANGLER_ROUTES = new Set([
   '/stadium/stand-sheet',
   '/stadium/suite-attendant',
   '/stadium/kds',
+  '/stadium/distro-pickup',
   '/stadium/commissary',
   '/stadium/labor-dashboard',
   '/event-issues',

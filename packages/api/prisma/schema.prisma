@@ -476,6 +476,8 @@ model Organization {
   venueEvents        VenueEvent[]
   eventCloseouts     EventCloseout[]
   eventPlanSnapshots EventPlanSnapshot[]
+  kitchenFulfillmentTickets KitchenFulfillmentTicket[]
+  kitchenFulfillmentHistories KitchenFulfillmentStatusHistory[]
 }
 
 model Facility {
@@ -509,6 +511,8 @@ model Facility {
   shiftPunches       ShiftPunch[]
   unionRuleConfigs   UnionRuleConfig[]
   unionViolations    UnionComplianceViolation[]
+  kitchenFulfillmentTickets KitchenFulfillmentTicket[]
+  kitchenFulfillmentHistories KitchenFulfillmentStatusHistory[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -2917,4 +2921,85 @@ model UnionComplianceViolation {
 
   @@index([organizationId, facilityId, workerId])
   @@index([violationType, resolved])
+}
+
+enum KitchenTicketStatus {
+  waiting
+  firing
+  ready
+  overdue_pickup
+  picked_up
+  cancelled
+}
+
+enum KitchenTicketPriority {
+  normal
+  high
+  urgent
+}
+
+model KitchenFulfillmentTicket {
+  id                 String                           @id @default(cuid())
+  organizationId     String
+  facilityId         String
+  eventId            String?
+  beoId              String?
+  zoneId             String?
+  serviceAreaId      String?
+  serviceAreaName    String
+  kitchenId          String
+  kitchenName        String
+  distroLocationId   String?
+  distroLocationName String?
+  requestedByUserId  String?
+  assignedToUserId   String?
+  status             KitchenTicketStatus              @default(waiting)
+  priority           KitchenTicketPriority            @default(normal)
+  itemName           String
+  itemDescription    String?
+  quantity           Int                              @default(1)
+  unitOfMeasure      String?
+  notes              String?
+  requestedAt        DateTime                         @default(now())
+  firedAt            DateTime?
+  readyAt            DateTime?
+  pickedUpAt         DateTime?
+  cancelledAt        DateTime?
+  pickedUpByUserId   String?
+  pickedUpByName     String?
+  overdueAt          DateTime?
+  wasOverdue         Boolean                          @default(false)
+  cancelReason       String?
+  createdAt          DateTime                         @default(now())
+  updatedAt          DateTime                         @updatedAt
+  organization       Organization                     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility           Facility                         @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  history            KitchenFulfillmentStatusHistory[]
+
+  @@index([organizationId, facilityId, status])
+  @@index([facilityId, kitchenId, status])
+  @@index([facilityId, serviceAreaId, status])
+  @@index([facilityId, readyAt])
+  @@index([beoId])
+}
+
+model KitchenFulfillmentStatusHistory {
+  id             String                   @id @default(cuid())
+  organizationId String
+  facilityId     String
+  ticketId       String
+  fromStatus     KitchenTicketStatus?
+  toStatus       KitchenTicketStatus
+  actorId        String?
+  actorName      String?
+  reason         String?
+  notes          String?
+  metadata       Json?
+  timestamp      DateTime                 @default(now())
+  organization   Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility       Facility                 @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  ticket         KitchenFulfillmentTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, timestamp])
+  @@index([organizationId, facilityId])
 }

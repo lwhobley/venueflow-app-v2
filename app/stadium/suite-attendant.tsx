@@ -5,6 +5,7 @@ import { apiRequest, useApiQuery } from '../../lib/api-client';
 import { useStadiumLiveStream } from '../../lib/stadium-live-stream';
 import { asArray } from '../../lib/format';
 import { OpsQueryState, OpsStaleNotice } from '../../components/stadium/OpsQueryState';
+import { DistroPickupNotificationBanner } from '../../components/stadium/DistroPickupNotificationBanner';
 import { opsConsole } from '../../lib/theme';
 
 export interface BEOItem {
@@ -125,6 +126,8 @@ export default function SuiteAttendantRunnerScreen() {
           </TouchableOpacity>
         ))}
       </View>
+
+      <DistroPickupNotificationBanner />
 
       {beos.length > 0 ? <OpsStaleNotice error={query.error} onRetry={fetchRunnerOrders} /> : null}
 
