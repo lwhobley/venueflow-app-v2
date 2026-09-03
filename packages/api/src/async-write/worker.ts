@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { AppModule } from '../app.module';
 import { PrismaService } from '../prisma/prisma.service';
-import { enterTenant } from '../prisma/tenant-context';
+import { runWithTenant } from '../prisma/tenant-context';
 import { applyTenantSessionSettings } from '../prisma/tenant-transaction';
 import { AsyncWriteMessage, AsyncWriteService } from './async-write.service';
 import { assertQueueTopology, HIGH_VOLUME_WRITE_QUEUE } from './queue-topology';
@@ -23,73 +23,74 @@ function messageVenueId(message: AsyncWriteMessage) {
 async function apply(prisma: PrismaService, message: AsyncWriteMessage): Promise<Record<string, unknown>> {
   const venueId = messageVenueId(message);
   const hash = payloadHash(message.payload);
-  return enterTenant({ venueId }, async () => {
+  
+  return runWithTenant(venueId, async () => {
     return prisma.$transaction(async (tx) => {
       await applyTenantSessionSettings(tx, { venueId });
       // Upsert plus an explicit row lock means two broker deliveries with the
       // same idempotency key cannot both mutate domain state.
-    const claimed = await tx.asyncWriteReceipt.upsert({
-      where: { venueId_kind_idempotencyKey: { venueId, kind: message.kind, idempotencyKey: message.idempotencyKey } },
-      create: { venueId, kind: message.kind, idempotencyKey: message.idempotencyKey, payloadHash: hash },
-      update: {},
-      select: { id: true },
-    });
-    await tx.$queryRaw`SELECT "id" FROM "AsyncWriteReceipt" WHERE "id" = ${claimed.id} FOR UPDATE`;
-    const receipt = await tx.asyncWriteReceipt.findUniqueOrThrow({ where: { id: claimed.id } });
-    if (receipt.payloadHash !== hash) throw new Error('Idempotency-Key was reused with a different payload.');
-    if (receipt.status === 'completed') return (receipt.result ?? { accepted: true, status: 'completed' }) as Record<string, unknown>;
-    if (receipt.status === 'failed_permanent') throw new Error('Queued write was previously rejected as permanent.');
-
-    const payload = message.payload as Record<string, any>;
-    let result: Record<string, unknown>;
-    if (message.kind === 'clock_in') {
-      const timeEntry = await tx.timeEntry.create({
-        data: {
-          profileId: payload.profileId,
-          venueId,
-          clockInAt: new Date(payload.clockInAt),
-          clockInLat: payload.lat,
-          clockInLng: payload.lng,
-          clockInAccuracyM: payload.accuracy,
-          clockInMocked: payload.mocked,
-          isOpen: true,
-        },
-        select: { id: true, clockInAt: true },
-      });
-      result = { accepted: true, status: 'completed', timeEntryId: timeEntry.id, clockInAt: timeEntry.clockInAt.toISOString() };
-    } else {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`bar-inventory-${payload.itemId}`}))`;
-      const item = await tx.barInventoryItem.findFirstOrThrow({ where: { id: payload.itemId, venueId } });
-      const requestedQuantity = Number(payload.quantity);
-      if (!Number.isFinite(requestedQuantity) || requestedQuantity >= 0) throw new Error('Queued inventory decrement must be negative.');
-      const nextOnHand = Math.max(0, item.onHand + requestedQuantity);
-      const appliedQuantity = nextOnHand - item.onHand;
-      await tx.barInventoryItem.update({ where: { id: item.id }, data: { onHand: nextOnHand } });
-      const movement = await tx.barInventoryMovement.create({
-        data: {
-          venueId,
-          itemId: item.id,
-          movementType: payload.movementType,
-          // The ledger quantity must reflect what actually changed stock.
-          quantity: appliedQuantity,
-          requestedQuantity,
-          appliedQuantity,
-          previousOnHand: item.onHand,
-          nextOnHand,
-          notes: payload.notes ?? null,
-          createdBy: payload.createdBy,
-        },
+      const claimed = await tx.asyncWriteReceipt.upsert({
+        where: { venueId_kind_idempotencyKey: { venueId, kind: message.kind, idempotencyKey: message.idempotencyKey } },
+        create: { venueId, kind: message.kind, idempotencyKey: message.idempotencyKey, payloadHash: hash },
+        update: {},
         select: { id: true },
       });
-      result = { accepted: true, status: 'completed', movementId: movement.id, requestedQuantity, appliedQuantity, nextOnHand };
-    }
+      await tx.$queryRaw`SELECT "id" FROM "AsyncWriteReceipt" WHERE "id" = ${claimed.id} FOR UPDATE`;
+      const receipt = await tx.asyncWriteReceipt.findUniqueOrThrow({ where: { id: claimed.id } });
+      if (receipt.payloadHash !== hash) throw new Error('Idempotency-Key was reused with a different payload.');
+      if (receipt.status === 'completed') return (receipt.result ?? { accepted: true, status: 'completed' }) as Record<string, unknown>;
+      if (receipt.status === 'failed_permanent') throw new Error('Queued write was previously rejected as permanent.');
 
-    await tx.asyncWriteReceipt.update({
-      where: { id: receipt.id },
-      data: { status: 'completed', result: result as Prisma.InputJsonValue, completedAt: new Date() },
-    });
-    return result;
-  }, { isolationLevel: 'Serializable' });
+      const payload = message.payload as Record<string, any>;
+      let result: Record<string, unknown>;
+      if (message.kind === 'clock_in') {
+        const timeEntry = await tx.timeEntry.create({
+          data: {
+            profileId: payload.profileId,
+            venueId,
+            clockInAt: new Date(payload.clockInAt),
+            clockInLat: payload.lat,
+            clockInLng: payload.lng,
+            clockInAccuracyM: payload.accuracy,
+            clockInMocked: payload.mocked,
+            isOpen: true,
+          },
+          select: { id: true, clockInAt: true },
+        });
+        result = { accepted: true, status: 'completed', timeEntryId: timeEntry.id, clockInAt: timeEntry.clockInAt.toISOString() };
+      } else {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`bar-inventory-${payload.itemId}`}))`;
+        const item = await tx.barInventoryItem.findFirstOrThrow({ where: { id: payload.itemId, venueId } });
+        const requestedQuantity = Number(payload.quantity);
+        if (!Number.isFinite(requestedQuantity) || requestedQuantity >= 0) throw new Error('Queued inventory decrement must be negative.');
+        const nextOnHand = Math.max(0, item.onHand + requestedQuantity);
+        const appliedQuantity = nextOnHand - item.onHand;
+        await tx.barInventoryItem.update({ where: { id: item.id }, data: { onHand: nextOnHand } });
+        const movement = await tx.barInventoryMovement.create({
+          data: {
+            venueId,
+            itemId: item.id,
+            movementType: payload.movementType,
+            // The ledger quantity must reflect what actually changed stock.
+            quantity: appliedQuantity,
+            requestedQuantity,
+            appliedQuantity,
+            previousOnHand: item.onHand,
+            nextOnHand,
+            notes: payload.notes ?? null,
+            createdBy: payload.createdBy,
+          },
+          select: { id: true },
+        });
+        result = { accepted: true, status: 'completed', movementId: movement.id, requestedQuantity, appliedQuantity, nextOnHand };
+      }
+
+      await tx.asyncWriteReceipt.update({
+        where: { id: receipt.id },
+        data: { status: 'completed', result: result as Prisma.InputJsonValue, completedAt: new Date() },
+      });
+      return result;
+    }, { isolationLevel: 'Serializable' });
   });
 }
 
