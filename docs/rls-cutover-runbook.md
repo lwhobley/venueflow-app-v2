@@ -66,7 +66,21 @@ Seeded two isolated tenants (venue A / venue B, distinct users + profiles) and r
 This proves the policy mechanism; it is **not** a substitute for the prod role switch,
 universal GUC binding, or a load/queue/realtime runtime proof.
 
+## Executable helpers
+
+The steps below are scripted in `scripts/rls-cutover/` (see its README for the
+ordered procedure):
+
+- `scripts/rls-cutover/phase0-roles.sql` — Phase 0 role provisioning (idempotent).
+- `scripts/rls-cutover/verify-tenant-isolation.sh` — the Phase 4 gate as an
+  executable; seeds two tenants, asserts isolation as `stadium_api`, exits
+  non-zero on any failure. Proven to PASS on a NOBYPASSRLS role and FAIL on a
+  bypass role.
+
 ## Phase 0 — principals (one-time, as superuser)
+
+Run `scripts/rls-cutover/phase0-roles.sql` (preferred — idempotent + posture
+check), or equivalently:
 
 ```sql
 -- Migrator: schema owner, used only by release jobs
