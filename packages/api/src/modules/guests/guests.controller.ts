@@ -12,6 +12,7 @@ import {
   Query,
   Req,
   UnauthorizedException,
+  UseInterceptors,
 } from '@nestjs/common';
 import type { ReservationStatus } from '@prisma/client';
 import { IsArray, IsBoolean, IsOptional, IsString, ValidateNested } from 'class-validator';
@@ -24,6 +25,7 @@ import { getClientIp } from '../../common/http';
 import { assertWithinSharedRateLimit } from '../../common/rate-limit';
 import { generateWebhookSecret, secretsMatch } from '../../common/webhook-auth';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 
@@ -167,6 +169,12 @@ const EMPTY_GUEST_STATS: GuestStats = {
 // upcoming/cancelled/no-show reservations aren't "visits" yet.
 const VISITED_STATUSES: ReservationStatus[] = ['checked_in', 'seated', 'completed'];
 
+// First real-controller slice of the RLS cutover's universal GUC binding (see
+// docs/rls-cutover-runbook.md and prisma/tenant-request-transaction.interceptor.ts).
+// Chosen for this first slice because it makes no external calls mid-handler
+// (no AI/S3/Stripe) — the leads webhook route is @Public(), so it never has a
+// tenant context bound and the interceptor is a no-op there.
+@UseInterceptors(TenantRequestTransactionInterceptor)
 @Controller('v1/guests')
 export class GuestsController {
   constructor(private readonly prisma: PrismaService) {}

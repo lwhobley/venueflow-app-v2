@@ -188,3 +188,33 @@ newly-covered table (`AuditLog`). See `docs/rls-cutover-runbook.md` → *Local r
 `GRANT`s, switching prod `DATABASE_URL` to `stadium_api`, and confirming prod
 migration parity (`prisma migrate status` against the prod direct URL). These need
 production credentials and are out of scope for a static/local session.
+
+## 11. Addendum 2 — universal GUC binding + a severe auth bootstrap finding (2026-09-03, same day)
+
+This pass installed `node_modules` and ran the **real NestJS app** — full unit
+suite (910 tests) and full integration suite (24 tests, real HTTP through real
+`AuthGuard`/interceptors/controllers) against a local PostgreSQL 18 instance,
+not just raw SQL. That surfaced a materially more severe finding than VW-021's
+narrow framing suggested.
+
+| ID | Severity | Finding | Status |
+|---|---|---|---|
+| VW-SWEEP-023 | **Critical** | `AuthGuard`'s first two queries (`Session` lookup, then the `Profile` lookup that DISCOVERS venueId) run before any tenant context exists. `Session`/`User` carry RLS with **zero** stadium_api policies (global, not tenant-owned); `Profile`'s own policy needs `app.venue_id` already bound. Verified directly: `stadium_api` with no GUCs reading a real `Session` row returned 0 rows. **Every authenticated request would 401 under the cutover role** — not a narrow onboarding-flow gap, all traffic. | **Fixed** — migration `20260903140000_auth_bootstrap_security_definer` adds two narrow, parameterized `SECURITY DEFINER` functions; `auth.guard.ts` now calls them unconditionally (one code path). Verified end-to-end on a fresh cluster: bootstrap RPCs return correct data with zero GUCs while direct table reads on the same tables stay fail-closed, and post-bootstrap policy isolation is unaffected. |
+| VW-SWEEP-024 | High | `phase0-roles.sql` never reassigned existing table/function ownership to `stadium_migrator`, and never granted it `USAGE` on `app_private` (locked to `PUBLIC` before that role existed). Without both, VW-023's fix 403s with `permission denied for table X` / `permission denied for schema app_private` on any real (non-superuser-owned) database — invisible on a hand-patched test DB, only surfaced by rebuilding from scratch. | **Fixed** — script now reassigns all table/sequence/`app_private`-function ownership and grants schema `USAGE`; re-verified end-to-end on three successive from-scratch rebuilds. |
+| VW-SWEEP-025 | Medium | `setupTestDb()` (used by every `*.integration.spec.ts`) runs `prisma db push` only — never the raw migration SQL — so once `AuthGuard` depended on the new RPCs unconditionally, every db-push test database 500'd on its first authenticated request (`app.e2e.integration.spec.ts` went 3/3 red). | **Fixed** — `setupTestDb()` now also creates the two bootstrap functions after `db push`; confirmed the same suite back to green. |
+| VW-SWEEP-026 | Low | `phase0-roles.sql`'s original `CREATE ROLE … PASSWORD :'var'` inside a `DO $$ … $$` block never worked — psql does not substitute `:'var'` inside a dollar-quoted body. | **Fixed** — rewritten with the standard `\gexec` idiom; confirmed working on three from-scratch reruns. |
+| VW-SWEEP-027 | Medium | Universal GUC binding (VW-022) needed an actual mechanism, not just a plan. | **Mechanism delivered**: `TenantRequestTransactionInterceptor` opens one GUC-bound transaction per request; the tenant-isolation Prisma extension redirects every model call anywhere downstream onto it — zero call-site changes. Deliberately not global (pool-exhaustion risk for routes with slow external calls mid-handler — AI/S3/Stripe against a pool of 3); applied to `GuestsController` as the first real-controller slice, proven via a new cross-tenant HTTP integration test. Rollout to the rest of `VENUE_SCOPED_MODELS` is tracked in `scripts/rls-cutover/README.md`, still open. |
+| VW-SWEEP-028 | Low | `npm run lint -w @venue-wrangler/api` (the exact CI Typecheck step) was broken on `main` at the start of this session: `async-write/worker.ts` called `enterTenant` (void, single-arg) where `runWithTenant` (runs `fn`, returns its result) was needed, and `union-compliance.service.ts` referenced Prisma models (`concourseOutlet`/`zone`) renamed to `outlet`/`facilityZone` before the file was written. | **Fixed independently** by another session mid-work (commits `8787b3a`/`c94cf64`/`fca2a05`/`6f3d5c6`); confirmed `npm run lint` exits 0 on the merged result. |
+
+**Regression gate for this addendum:** `npm run lint -w @venue-wrangler/api` (0
+errors), `npx vitest run` (910 passed, 2 skipped), `npx vitest run --config
+vitest.integration.config.ts` (24 passed) — all against a local PostgreSQL 18
+instance, re-run after every change in this pass.
+
+**Updated release-risk picture:** VW-023 alone would have made the RLS cutover
+an outage, not a security hardening step — it is now fixed and independently
+verified, and the runbook's Phase-0 script is fixed alongside it (VW-024). The
+remaining pre-cutover gate is narrower than before: finish the
+`TenantRequestTransactionInterceptor` rollout across the rest of the app
+(VW-027) and the non-auth bootstrap carve-outs (VW-021: Invite,
+WorkplaceJoinRequest, Subscription, PushToken).

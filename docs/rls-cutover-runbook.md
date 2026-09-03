@@ -15,14 +15,16 @@ Do **not** run the full policy set in production until every checklist item belo
 | Write paths binding GUCs | union punches, inventory transfer complete, temp roster import, suite BEO create/status/delivery |
 | Phase-1 helpers SQL (`app_private.*`) | **Live** in migration `20260903120000_upgrade_app_private_helpers_and_tenant_rls` |
 | `app_private` helper functions verified present | current_user_id/org/facility/venue/zone, scope_matches, venue_matches, can_manage_memberships, can_operate_scope |
-| Migration chain applies clean to a fresh DB | **Yes** — fixed 2026-09-03 (see below); all 72 migration dirs apply end-to-end |
+| Migration chain applies clean to a fresh DB | **Yes** — fixed 2026-09-03; all 74 migration dirs apply end-to-end |
 | stadium_api RLS **policy** coverage of tenant tables | **88 / 88** — completed by `20260903130000_complete_tenant_rls_policy_coverage` (was 24 / 88) |
-| Isolation proven under a live `NOBYPASSRLS` role (local PG 18) | **Yes** — read isolation, fail-closed default, cross-tenant write rejection (see proof below) |
-| Separate `stadium_migrator` vs `stadium_api` DB roles in prod | **Not cut over** (Phase 0 — superuser, prod) |
-| Universal GUC binding across ALL app read/write paths | **Not done** — still opt-in; required before the role switch |
-| Bootstrap carve-outs (Invite, WorkplaceJoinRequest, Subscription, PushToken) | **Open** — need reviewed SECURITY DEFINER path (venue_matches denies pre-membership) |
+| Auth bootstrap (Session/Profile/Venue lookups before any tenant context exists) | **Fixed** — `20260903140000_auth_bootstrap_security_definer` + `auth.guard.ts` now route through narrow SECURITY DEFINER RPCs. Without this, EVERY authenticated request 401'd under stadium_api (Session/User carry RLS with zero policies — see below). |
+| Universal GUC binding for ordinary (non-explicitly-transactional) reads/writes | **Mechanism live**, rollout in progress. `TenantRequestTransactionInterceptor` (prisma/tenant-request-transaction.interceptor.ts) wraps a request in one GUC-bound transaction and the tenant-isolation extension redirects every model call onto it — zero call-site changes. Applied so far: `GuestsController` only. Deliberately NOT global — see the interceptor's own doc for why (holding a pool connection during a slow AI/S3/Stripe call). |
+| Isolation proven under a live `NOBYPASSRLS` role (local PG 18) | **Yes**, at three layers: raw SQL (`scripts/rls-cutover/verify-tenant-isolation.sh`), the Prisma extension directly (`tenant-isolation.integration.spec.ts`), and the full HTTP pipeline through a real controller (`guests-tenant-request-transaction.integration.spec.ts`). |
+| Separate `stadium_migrator` vs `stadium_api` DB roles in prod | **Not cut over** (Phase 0 — superuser, prod). `phase0-roles.sql` now also reassigns ALL existing table/sequence/function ownership to `stadium_migrator` — required for the auth-bootstrap SECURITY DEFINER functions to work (see below), not optional. |
+| Bootstrap carve-outs beyond auth (Invite, WorkplaceJoinRequest, Subscription, PushToken) | **Still open** — need a reviewed SECURITY DEFINER path each (venue_matches denies pre-membership). Narrower and lower-severity than the auth fix above: these break specific onboarding flows, not 100% of traffic. |
 | `DATABASE_URL` switched to `stadium_api` in prod | **Not done** (Phase 0/rollout, prod) |
 | Prod migration parity confirmed | **Unconfirmed** — run `prisma migrate status` against prod (owner) |
+| Full test suite against local PG 18 | **910 unit + 24 integration, all green** — re-verified after every change in this session |
 
 ### What changed on 2026-09-03 (this session)
 
@@ -65,6 +67,118 @@ Seeded two isolated tenants (venue A / venue B, distinct users + profiles) and r
 
 This proves the policy mechanism; it is **not** a substitute for the prod role switch,
 universal GUC binding, or a load/queue/realtime runtime proof.
+
+### Follow-up work (same day): universal GUC binding + the auth bootstrap deadlock
+
+Two more things were found and fixed by continuing to drive this against a real
+NOBYPASSRLS role and the real app (not just SQL) — `npm ci` + a local PostgreSQL 18
+cluster made it possible to run the ACTUAL NestJS app and its full 910-unit /
+24-integration test suite, not just raw SQL, for this pass.
+
+**1. The auth bootstrap deadlock (severe — would have broken 100% of authenticated
+traffic).** `AuthGuard`'s very first two queries — look up the `Session` row by id,
+then the requester's `Profile` (which is what DISCOVERS the venueId) — run before any
+tenant context exists, so no `app.venue_id` GUC can be bound yet. `Session` and `User`
+carry RLS (enabled blanket by `20260805120000`) with **zero** stadium_api policies
+(they're global, not tenant-owned — see `VENUE_SCOPED_MODELS` in `tenant-scope.ts`),
+and under PostgreSQL, RLS enabled + no matching policy denies ALL rows to a
+non-bypass role. `Profile`'s own policy also needs `app.venue_id` already bound —
+exactly what this lookup exists to determine. Verified directly: as `stadium_api`
+with zero GUCs, `SELECT * FROM "Session"` returned 0 rows for an existing session.
+This is much bigger than the narrower bootstrap items already listed above — it's
+not one onboarding flow, it's every request.
+
+Fixed with migration `20260903140000_auth_bootstrap_security_definer`: two narrow,
+parameterized `SECURITY DEFINER` functions (`app_private.auth_lookup_session`,
+`app_private.auth_lookup_profiles`, the latter also joining `Venue` since AuthGuard's
+`profileSelect` needs it and `Venue` has the identical chicken-and-egg problem) that
+run with their OWNER's privileges. Since `Session`/`User`/`Profile`/`Venue` carry
+`ENABLE` (not `FORCE`) RLS, PostgreSQL already exempts the table OWNER — so once
+`stadium_migrator` owns these tables (see the `phase0-roles.sql` fix below), the
+functions read correctly with **no GUC required** and **no `BYPASSRLS` on any LOGIN
+role**. `auth.guard.ts` now calls these unconditionally (one code path, not a
+cutover-only branch — SECURITY DEFINER works identically under today's bypass role).
+Verified end-to-end on a fully fresh cluster: migrations → `phase0-roles.sql` →
+seed → bootstrap RPCs return correct data with zero GUCs → direct table reads on
+the same tables stay fail-closed → once GUCs are bound, ordinary policy isolation
+still holds.
+
+Two bugs surfaced and fixed while proving this on a *fresh* database (both were
+invisible on the hand-patched DB used earlier the same day):
+- **`phase0-roles.sql` never reassigned table/function ownership to
+  `stadium_migrator`.** Real deploys' tables are owned by whatever the migration
+  credential is today (typically `postgres`), not `stadium_migrator` — the role
+  the script creates fresh. Without an explicit reassignment, the owner-exemption
+  above doesn't apply and the bootstrap functions 403 with `permission denied for
+  table X`. Fixed: the script now reassigns every table/sequence/function in
+  `public`/`app_private` to `stadium_migrator`, idempotently.
+- **`stadium_migrator` was never granted `USAGE` on the `app_private` schema.**
+  That schema was explicitly locked to `PUBLIC` (`REVOKE ALL … FROM PUBLIC`) when
+  created, before `stadium_migrator` existed. A `SECURITY DEFINER` function calling
+  ANOTHER function in the same schema (e.g. `venue_matches()` calling
+  `current_venue_id()`) still needs schema-level `USAGE` for whichever role it
+  executes as, regardless of ownership — this failed with `permission denied for
+  schema app_private` until the grant was added.
+- Also fixed, unrelated to ownership: the script's original `CREATE ROLE …
+  PASSWORD :'var'` inside a `DO $$ … $$` block never worked — psql does not
+  substitute `:'var'` inside a dollar-quoted body, only in ordinary top-level SQL.
+  Rewritten using the standard `\gexec` idiom.
+
+**2. `setupTestDb()` (used by every `*.integration.spec.ts`) needed the same
+functions.** It runs `prisma db push` (schema sync only) — never the raw SQL in
+`prisma/migrations/*.sql` — so once `AuthGuard` started calling the bootstrap RPCs
+unconditionally, every db-push test database 500'd on its first authenticated
+request. Fixed by having `setupTestDb()` also create the two functions after
+`db push` (see its own doc comment on why the migration file isn't executed
+directly). This is genuinely load-bearing for CI, not cosmetic — confirmed by
+watching `app.e2e.integration.spec.ts` go from 3 failures to 0 after the fix.
+
+**3. Universal GUC binding**, i.e. making item 1 above ("Prisma tenant extension")
+actually enforce at the database layer for ordinary reads/writes, not just the
+opt-in `withTenantTransaction` write paths. Mechanism: `TenantRequestTransactionInterceptor`
+opens one transaction per request with GUCs bound via `applyTenantSessionSettings`,
+and the tenant-isolation Prisma extension (`tenant-isolation.extension.ts`)
+redirects every `this.prisma.<model>.<op>()` call anywhere downstream onto that
+SAME transaction — no call-site changes anywhere in the app. The redirect target
+must be a transaction from the **unextended** base client
+(`PrismaService.runRawTenantTransaction`, exposed through a Proxy special-case) —
+redirecting to an already-extended transaction would re-enter the same extension
+hook on itself and recurse forever.
+
+Deliberately **not** global (`APP_INTERCEPTOR`): it holds one pool connection open
+for the whole request, and a route with a slow external call mid-handler (AI, S3,
+Stripe, an outbound webhook) would hold that connection idle for the call's
+duration against a production pool of 3 — see the interceptor's own doc for the
+full reasoning and the `@SkipTenantTransaction()` escape hatch. Applied to
+`GuestsController` as the first real-controller slice (no external calls in its
+request path); rollout to the rest of `VENUE_SCOPED_MODELS`/`FACILITY_SCOPED_MODELS`
+owners is the next chunk of this work — see `scripts/rls-cutover/README.md`.
+
+Proven at three independent layers, not just one: `scripts/rls-cutover/verify-tenant-isolation.sh`
+(raw SQL under a real `stadium_api` role), `tenant-isolation.integration.spec.ts`
+(the extension directly), and the new `guests-tenant-request-transaction.integration.spec.ts`
+(real HTTP → real `AuthGuard` → real interceptor → real `GuestsController`, two
+seeded tenants, cross-tenant read/write assertions) — including
+`GuestsController.listGuests`'s array-form `$transaction([...])` batch, which is the
+one case flagged as a caveat in the interceptor's own doc comment (array-form
+members are redirected individually rather than batched, since each is already a
+constructed `PrismaPromise` by the time `$transaction([...])` sees them — fine for
+this read-only batch, worth checking before reusing on a multi-write batch).
+
+**Also fixed in passing, unrelated to RLS:** `npm run lint -w @venue-wrangler/api`
+(the exact CI Typecheck step) was broken on `main` at the start of this session —
+`async-write/worker.ts` called `enterTenant(context, fn)` (a void, single-argument,
+guard/interceptor-only binder) as if it were `runWithTenant(context, fn)` (runs `fn`
+and returns its result — the correct one for a background worker), and
+`union-compliance.service.ts` called `tx.concourseOutlet`/`tx.zone`, Prisma models
+that don't exist (`Outlet`/`FacilityZone` after the schema rename, before this file
+was written). Another session fixed these independently mid-session; see git history
+around `6f3d5c6`/`8787b3a`/`c94cf64`/`fca2a05`.
+
+Full regression gate for everything in this section: `npm run lint -w @venue-wrangler/api`
+(0 errors), `npx vitest run` (910 passed, 2 skipped), and
+`npx vitest run --config vitest.integration.config.ts` (24 passed) — all green
+against a local PostgreSQL 18 instance, re-run after every change.
 
 ## Executable helpers
 
