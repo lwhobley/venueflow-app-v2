@@ -107,6 +107,7 @@ describe('TenantRequestTransactionInterceptor via GuestsController (integration)
     const resA = await request(app.getHttpServer())
       .get('/api/v1/guests')
       .set('Authorization', `Bearer ${tenantA.token}`)
+      .set('x-venue-id', tenantA.venueId)
       .expect(200);
     const namesA = resA.body.guests.map((g: any) => g.fullName);
     expect(namesA).toContain(tenantA.guestName);
@@ -116,6 +117,7 @@ describe('TenantRequestTransactionInterceptor via GuestsController (integration)
     const resB = await request(app.getHttpServer())
       .get('/api/v1/guests')
       .set('Authorization', `Bearer ${tenantB.token}`)
+      .set('x-venue-id', tenantB.venueId)
       .expect(200);
     const namesB = resB.body.guests.map((g: any) => g.fullName);
     expect(namesB).toContain(tenantB.guestName);
@@ -127,6 +129,7 @@ describe('TenantRequestTransactionInterceptor via GuestsController (integration)
     const res = await request(app.getHttpServer())
       .get(`/api/v1/guests/${tenantA.guestId}`)
       .set('Authorization', `Bearer ${tenantA.token}`)
+      .set('x-venue-id', tenantA.venueId)
       .expect(200);
     expect(res.body.guest.id).toBe(tenantA.guestId);
   });
@@ -135,6 +138,7 @@ describe('TenantRequestTransactionInterceptor via GuestsController (integration)
     await request(app.getHttpServer())
       .get(`/api/v1/guests/${tenantB.guestId}`)
       .set('Authorization', `Bearer ${tenantA.token}`)
+      .set('x-venue-id', tenantA.venueId)
       .expect(404);
   });
 });
