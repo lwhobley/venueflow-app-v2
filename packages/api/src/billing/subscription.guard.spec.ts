@@ -38,4 +38,14 @@ describe('SubscriptionGuard', () => {
     await guard.canActivate(context);
     expect(request.venueScope).toBeUndefined();
   });
+
+  it('allows unauthenticated requests when the handler is marked @Public()', async () => {
+    const reflector = {
+      getAllAndOverride: vi.fn().mockReturnValue(true),
+    } as any;
+    const guard = new SubscriptionGuard(reflector);
+    const context = makeContext(undefined);
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    expect(reflector.getAllAndOverride).toHaveBeenCalled();
+  });
 });

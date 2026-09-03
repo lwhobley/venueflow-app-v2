@@ -34,9 +34,9 @@ export class WranglerController {
   async getAiUsage(@VenueScope() scope: Scope) {
     if (!scope) return null;
     if (!isAdminRole(scope.role)) throw new ForbiddenException('Manager access required to view AI usage');
-    const rows = await this.prisma.$queryRawUnsafe<Array<{ feature: string; model: string; requests: bigint; promptTokens: bigint; completionTokens: bigint; cachedTokens: bigint; totalTokens: bigint; estimatedCostMicros: bigint }>>(
-      `SELECT "feature", "model", COUNT(*)::bigint AS requests, COALESCE(SUM("promptTokens"),0)::bigint AS "promptTokens", COALESCE(SUM("completionTokens"),0)::bigint AS "completionTokens", COALESCE(SUM("cachedTokens"),0)::bigint AS "cachedTokens", COALESCE(SUM("totalTokens"),0)::bigint AS "totalTokens", COALESCE(SUM("estimatedCostMicros"),0)::bigint AS "estimatedCostMicros" FROM "AiUsageEvent" WHERE "venueId" = $1 AND "createdAt" >= date_trunc('month', NOW()) GROUP BY "feature", "model" ORDER BY "estimatedCostMicros" DESC`, scope.venueId,
-    );
+    const rows = await this.prisma.$queryRaw<Array<{ feature: string; model: string; requests: bigint; promptTokens: bigint; completionTokens: bigint; cachedTokens: bigint; totalTokens: bigint; estimatedCostMicros: bigint }>>`
+      SELECT "feature", "model", COUNT(*)::bigint AS requests, COALESCE(SUM("promptTokens"),0)::bigint AS "promptTokens", COALESCE(SUM("completionTokens"),0)::bigint AS "completionTokens", COALESCE(SUM("cachedTokens"),0)::bigint AS "cachedTokens", COALESCE(SUM("totalTokens"),0)::bigint AS "totalTokens", COALESCE(SUM("estimatedCostMicros"),0)::bigint AS "estimatedCostMicros" FROM "AiUsageEvent" WHERE "venueId" = ${scope.venueId} AND "createdAt" >= date_trunc('month', NOW()) GROUP BY "feature", "model" ORDER BY "estimatedCostMicros" DESC
+    `;
     const breakdown = rows.map((row) => ({ feature: row.feature, model: row.model, requests: Number(row.requests), promptTokens: Number(row.promptTokens), completionTokens: Number(row.completionTokens), totalTokens: Number(row.totalTokens), estimatedCostUsd: Number(row.estimatedCostMicros) / 1_000_000 }));
     const requests = breakdown.reduce((sum, row) => sum + row.requests, 0);
     const promptTokens = rows.reduce((sum, row) => sum + Number(row.promptTokens), 0);

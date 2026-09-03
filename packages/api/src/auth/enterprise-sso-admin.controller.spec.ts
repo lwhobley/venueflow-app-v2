@@ -68,4 +68,48 @@ describe('EnterpriseSsoAdminController.updateGroupRoleMapping', () => {
     ).rejects.toThrow('This administrator may not map an enterprise group to that role.');
     expect(prisma.enterpriseSsoGroupRoleMapping.update).not.toHaveBeenCalled();
   });
+
+  it('rejects postLoginRedirectUri targeting an untrusted external domain', async () => {
+    const { controller, prisma } = makeController();
+    prisma.enterpriseSsoProvider = { create: vi.fn() };
+    await expect(
+      controller.createProvider(user, {
+        organizationId: 'org-1',
+        slug: 'okta-test',
+        displayName: 'Okta',
+        protocol: 'oidc' as any,
+        allowedEmailDomains: ['example.com'],
+        postLoginRedirectUri: 'https://attacker.com/steal-token',
+      } as any),
+    ).rejects.toThrow('SSO post-login redirect origin must match an approved application domain or a registered organization email domain.');
+    expect(prisma.enterpriseSsoProvider.create).not.toHaveBeenCalled();
+  });
+
+  it('allows postLoginRedirectUri targeting an approved app origin', async () => {
+    const { controller, prisma } = makeController();
+    prisma.enterpriseSsoProvider = { create: vi.fn().mockResolvedValue({ id: 'p-1' }) };
+    await controller.createProvider(user, {
+      organizationId: 'org-1',
+      slug: 'okta-test',
+      displayName: 'Okta',
+      protocol: 'oidc' as any,
+      allowedEmailDomains: ['example.com'],
+      postLoginRedirectUri: 'https://stadiumwrangler.com/auth/callback',
+    } as any);
+    expect(prisma.enterpriseSsoProvider.create).toHaveBeenCalled();
+  });
+
+  it('allows postLoginRedirectUri targeting the organization allowed domain', async () => {
+    const { controller, prisma } = makeController();
+    prisma.enterpriseSsoProvider = { create: vi.fn().mockResolvedValue({ id: 'p-2' }) };
+    await controller.createProvider(user, {
+      organizationId: 'org-1',
+      slug: 'saml-test',
+      displayName: 'SAML',
+      protocol: 'saml' as any,
+      allowedEmailDomains: ['acmestadium.org'],
+      postLoginRedirectUri: 'https://portal.acmestadium.org/sso/callback',
+    } as any);
+    expect(prisma.enterpriseSsoProvider.create).toHaveBeenCalled();
+  });
 });

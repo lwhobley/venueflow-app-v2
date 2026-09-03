@@ -29,6 +29,12 @@ describe('Mass Temp Staffing & Union Compliance Services', () => {
         findFirst: vi.fn(),
         create: vi.fn(),
       },
+      concourseOutlet: {
+        findFirst: vi.fn().mockResolvedValue({ id: 'STAND-104', zoneId: 'zone-1' }),
+      },
+      zone: {
+        findFirst: vi.fn().mockResolvedValue({ id: 'zone-1' }),
+      },
       tempAgency: {
         findUnique: vi.fn(),
         create: vi.fn(),
@@ -151,5 +157,25 @@ describe('Mass Temp Staffing & Union Compliance Services', () => {
     const redResult = await staffingService.kioskCheckIn('facility-1', '100013');
     expect(redResult.status).toBe('RED');
     expect(redResult.message).toContain('CHECK-IN BLOCKED');
+  });
+
+  it('rejects a punch when outletId does not exist in the facility', async () => {
+    prisma.workerProfile.findFirst.mockResolvedValue({ id: 'w_1', organizationId: 'org-1', facilityId: 'facility-1', active: true });
+    prisma.shiftPunch.findFirst.mockResolvedValue(null);
+    prisma.concourseOutlet.findFirst.mockResolvedValue(null); // Outlet not found in facility
+
+    await expect(
+      unionService.recordPunch('org-1', 'facility-1', 'w_1', 'IN', 'pin_entry', undefined, 'OUTLET-FOREIGN'),
+    ).rejects.toThrow('Specified outlet does not belong to this facility.');
+  });
+
+  it('rejects a punch when outlet zone and specified zone conflict', async () => {
+    prisma.workerProfile.findFirst.mockResolvedValue({ id: 'w_1', organizationId: 'org-1', facilityId: 'facility-1', active: true });
+    prisma.shiftPunch.findFirst.mockResolvedValue(null);
+    prisma.concourseOutlet.findFirst.mockResolvedValue({ id: 'OUTLET-1', zoneId: 'zone-A' });
+
+    await expect(
+      unionService.recordPunch('org-1', 'facility-1', 'w_1', 'IN', 'pin_entry', 'zone-B', 'OUTLET-1'),
+    ).rejects.toThrow('Specified outlet does not match the provided zone.');
   });
 });

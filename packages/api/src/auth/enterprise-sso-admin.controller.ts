@@ -8,6 +8,7 @@ import type { AuthUser } from './auth.guard';
 import { EnterpriseSsoService } from './enterprise-sso.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { canAssignEnterpriseRole } from './roles';
+import { isAllowedOrigin } from '../common/cors-origin';
 
 const PROVIDER_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const SECRET_ENV_KEY = /^SSO_[A-Z0-9_]+$/;
@@ -133,14 +134,15 @@ export class EnterpriseSsoAdminController {
   @Post('providers')
   async createProvider(@CurrentUser() user: AuthUser, @Body() body: ProviderDto) {
     await this.sso.assertOrganizationAdministrator(user.sub, body.organizationId);
-    this.assertSafeRedirect(body.postLoginRedirectUri);
+    const normalizedDomains = this.normalizeDomains(body.allowedEmailDomains);
+    this.assertSafeRedirect(body.postLoginRedirectUri, normalizedDomains);
     this.assertHttpsUrl(body.oidcIssuer, 'OIDC issuer');
     this.assertHttpsUrl(body.samlEntryPoint, 'SAML entry point');
     return this.prisma.enterpriseSsoProvider.create({
       data: {
         ...body,
         slug: body.slug.trim().toLowerCase(),
-        allowedEmailDomains: this.normalizeDomains(body.allowedEmailDomains),
+        allowedEmailDomains: normalizedDomains,
         groupClaim: body.groupClaim?.trim() || 'groups',
         status: body.status ?? EnterpriseSsoProviderStatus.draft,
       },
@@ -152,7 +154,8 @@ export class EnterpriseSsoAdminController {
     const existing = await this.prisma.enterpriseSsoProvider.findUniqueOrThrow({ where: { id: providerId } });
     await this.sso.assertOrganizationAdministrator(user.sub, existing.organizationId);
     if (body.organizationId && body.organizationId !== existing.organizationId) throw new BadRequestException('An SSO provider cannot be moved between organizations.');
-    this.assertSafeRedirect(body.postLoginRedirectUri);
+    const effectiveDomains = body.allowedEmailDomains ? this.normalizeDomains(body.allowedEmailDomains) : existing.allowedEmailDomains;
+    this.assertSafeRedirect(body.postLoginRedirectUri, effectiveDomains);
     this.assertHttpsUrl(body.oidcIssuer, 'OIDC issuer');
     this.assertHttpsUrl(body.samlEntryPoint, 'SAML entry point');
     return this.prisma.enterpriseSsoProvider.update({
@@ -161,7 +164,7 @@ export class EnterpriseSsoAdminController {
         ...body,
         organizationId: undefined,
         ...(body.slug ? { slug: body.slug.trim().toLowerCase() } : {}),
-        ...(body.allowedEmailDomains ? { allowedEmailDomains: this.normalizeDomains(body.allowedEmailDomains) } : {}),
+        ...(body.allowedEmailDomains ? { allowedEmailDomains: effectiveDomains } : {}),
         ...(body.groupClaim ? { groupClaim: body.groupClaim.trim() } : {}),
       },
     });
@@ -226,11 +229,25 @@ export class EnterpriseSsoAdminController {
     return Array.from(new Set(normalized));
   }
 
-  private assertSafeRedirect(value?: string) {
+  private assertSafeRedirect(value?: string, allowedDomains: string[] = []) {
     if (!value) return;
-    const url = new URL(value);
+    let url: URL;
+    try {
+      url = new URL(value);
+    } catch {
+      throw new BadRequestException('SSO post-login redirect must be a valid HTTPS URL.');
+    }
     if (url.protocol !== 'https:' || url.username || url.password || url.port || /(^|\.)(localhost|local|internal)$/i.test(url.hostname)) {
       throw new BadRequestException('SSO post-login redirects must use an approved public HTTPS origin.');
+    }
+    const host = url.hostname.toLowerCase();
+    const isApprovedAppOrigin = isAllowedOrigin(url.origin, true);
+    const matchesOrgDomain = allowedDomains.some((domain) => {
+      const clean = domain.trim().toLowerCase().replace(/^@/, '');
+      return host === clean || host.endsWith(`.${clean}`);
+    });
+    if (!isApprovedAppOrigin && !matchesOrgDomain) {
+      throw new BadRequestException('SSO post-login redirect origin must match an approved application domain or a registered organization email domain.');
     }
   }
 

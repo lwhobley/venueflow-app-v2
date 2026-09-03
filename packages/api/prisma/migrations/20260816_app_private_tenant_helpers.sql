@@ -83,25 +83,65 @@ AS $$
     );
 $$;
 
--- Placeholder capability checks; refine after membership tables are live under RLS.
+-- Verified check: actor is an active organization administrator, platform admin, or owner.
 CREATE OR REPLACE FUNCTION app_private.can_manage_memberships()
 RETURNS boolean
 LANGUAGE sql
 STABLE
-SECURITY INVOKER
+SECURITY DEFINER
 SET search_path = ''
 AS $$
-  SELECT app_private.current_user_id() IS NOT NULL
+  SELECT EXISTS (
+    SELECT 1
+    FROM public."OrganizationMembership" membership
+    WHERE membership."organizationId" = app_private.current_organization_id()
+      AND membership."userId" = app_private.current_user_id()
+      AND membership."status" = 'active'
+      AND membership."role" IN ('platform_admin', 'organization_admin', 'owner', 'admin')
+  );
 $$;
 
+-- Verified check: actor holds an active operational management role.
 CREATE OR REPLACE FUNCTION app_private.can_operate_scope()
 RETURNS boolean
 LANGUAGE sql
 STABLE
-SECURITY INVOKER
+SECURITY DEFINER
 SET search_path = ''
 AS $$
-  SELECT app_private.current_user_id() IS NOT NULL
+  SELECT EXISTS (
+    SELECT 1
+    FROM public."OrganizationMembership" membership
+    WHERE membership."organizationId" = app_private.current_organization_id()
+      AND membership."userId" = app_private.current_user_id()
+      AND membership."status" = 'active'
+      AND membership."role" IN (
+        'platform_admin', 'organization_admin', 'owner', 'admin', 'fnb_director',
+        'event_manager', 'outlet_manager', 'executive_chef', 'warehouse_manager',
+        'premium_manager', 'manager'
+      )
+  );
 $$;
+
+-- Verified check: legacy venue scope matches via active Profile.
+CREATE OR REPLACE FUNCTION app_private.venue_matches(row_venue_id text)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  SELECT
+    row_venue_id = app_private.current_venue_id()
+    AND EXISTS (
+      SELECT 1
+      FROM public."Profile" profile
+      WHERE profile."venueId" = row_venue_id
+        AND profile."userId" = app_private.current_user_id()
+        AND (profile."membershipStatus" IS NULL OR profile."membershipStatus" = 'active')
+    );
+$$;
+
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA app_private FROM PUBLIC, anon, authenticated;
 
 COMMENT ON SCHEMA app_private IS 'Request-scoped helpers for RLS policies. Values come from SET LOCAL app.* inside withTenantTransaction.';

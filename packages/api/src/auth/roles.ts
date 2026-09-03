@@ -108,5 +108,5 @@ export function canManageRole(actorRole: string | null | undefined, targetRole: 
 }
 
 export function isOwnerOrAdminRole(role?: string | null): boolean {
-  return role === 'admin' || role === 'owner';
+  return role === 'admin' || role === 'owner' || role === 'platform_admin' || role === 'organization_admin';
 }

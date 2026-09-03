@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { canManageAssignedScope, canManageRole, canManageVenue, ROLE_RANK } from './roles';
+import { canManageAssignedScope, canManageRole, canManageVenue, isOwnerOrAdminRole, ROLE_RANK } from './roles';
 
 describe('stadium role authorization', () => {
   it.each(['platform_admin', 'organization_admin', 'fnb_director', 'event_manager', 'outlet_manager', 'executive_chef', 'warehouse_manager', 'premium_manager'])('%s can perform venue operations', (role) => {
@@ -66,5 +66,15 @@ describe('canManageRole', () => {
 
   it('allAccess overrides rank entirely', () => {
     expect(canManageRole('staff', 'admin', true)).toBe(true);
+  });
+});
+
+describe('isOwnerOrAdminRole', () => {
+  it.each(['owner', 'admin', 'platform_admin', 'organization_admin'])('%s is recognized as owner or admin', (role) => {
+    expect(isOwnerOrAdminRole(role)).toBe(true);
+  });
+
+  it.each(['manager', 'server', 'staff', 'fnb_director', 'concourse_supervisor'])('%s is not recognized as owner or admin', (role) => {
+    expect(isOwnerOrAdminRole(role)).toBe(false);
   });
 });

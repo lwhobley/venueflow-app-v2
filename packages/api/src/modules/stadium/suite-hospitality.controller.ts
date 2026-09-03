@@ -71,6 +71,9 @@ export class SuiteHospitalityController {
 
   @Post('seed')
   async seed10VipSuites(@VenueScope() scope: Scope, @Body() body: SeedSuitesDto) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new ForbiddenException('Seeding suite orders is disabled in production.');
+    }
     await this.assertOperator(scope, body.zoneId);
     return this.service.seed10VipSuites(
       scope.venueId,

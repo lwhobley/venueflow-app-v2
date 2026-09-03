@@ -109,6 +109,9 @@ export class ConcourseInventoryController {
 
   @Post('seed-outlets')
   async seedOutlets(@VenueScope() scope: Scope, @Body() body: SeedOutletsDto) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new ForbiddenException('Seeding concourse outlets is disabled in production.');
+    }
     await this.assertOperator(scope, body.zoneId);
     return this.service.seedConcourseOutletsAndWarehouse(
       scope.venueId,

@@ -5,6 +5,8 @@ import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { AppModule } from '../app.module';
 import { PrismaService } from '../prisma/prisma.service';
+import { enterTenant } from '../prisma/tenant-context';
+import { applyTenantSessionSettings } from '../prisma/tenant-transaction';
 import { AsyncWriteMessage, AsyncWriteService } from './async-write.service';
 import { assertQueueTopology, HIGH_VOLUME_WRITE_QUEUE } from './queue-topology';
 
@@ -21,9 +23,11 @@ function messageVenueId(message: AsyncWriteMessage) {
 async function apply(prisma: PrismaService, message: AsyncWriteMessage): Promise<Record<string, unknown>> {
   const venueId = messageVenueId(message);
   const hash = payloadHash(message.payload);
-  return prisma.$transaction(async (tx) => {
-    // Upsert plus an explicit row lock means two broker deliveries with the
-    // same idempotency key cannot both mutate domain state.
+  return enterTenant({ venueId }, async () => {
+    return prisma.$transaction(async (tx) => {
+      await applyTenantSessionSettings(tx, { venueId });
+      // Upsert plus an explicit row lock means two broker deliveries with the
+      // same idempotency key cannot both mutate domain state.
     const claimed = await tx.asyncWriteReceipt.upsert({
       where: { venueId_kind_idempotencyKey: { venueId, kind: message.kind, idempotencyKey: message.idempotencyKey } },
       create: { venueId, kind: message.kind, idempotencyKey: message.idempotencyKey, payloadHash: hash },
@@ -86,6 +90,7 @@ async function apply(prisma: PrismaService, message: AsyncWriteMessage): Promise
     });
     return result;
   }, { isolationLevel: 'Serializable' });
+  });
 }
 
 function isPermanent(error: unknown) {
