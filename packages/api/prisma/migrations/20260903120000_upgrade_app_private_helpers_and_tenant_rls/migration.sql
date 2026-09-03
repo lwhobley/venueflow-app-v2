@@ -1,6 +1,17 @@
 -- Upgrade app_private tenant helper functions and apply hierarchical RLS policies.
 -- Safe to apply with current database roles; prepares for NOBYPASSRLS stadium_api cutover.
 
+-- Ensure required roles exist before attempting to use them
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    CREATE ROLE anon;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    CREATE ROLE authenticated;
+  END IF;
+END $$;
+
 CREATE SCHEMA IF NOT EXISTS app_private;
 REVOKE ALL ON SCHEMA app_private FROM PUBLIC;
 
