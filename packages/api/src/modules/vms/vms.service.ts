@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -28,9 +29,65 @@ import {
 import { VmsAiService } from './vms-ai.service';
 import { VmsIntegrationsService } from './vms-integrations.service';
 
+/**
+ * Scrypt-based Key Derivation for Worker PINs (N3)
+ */
+export function hashPin(pin: string, salt: string): string {
+  return crypto.scryptSync(pin, salt, 64).toString('hex');
+}
+
+export function verifyPin(pin: string, salt: string, expectedHash: string): boolean {
+  try {
+    const derived = crypto.scryptSync(pin, salt, 64);
+    const expected = Buffer.from(expectedHash, 'hex');
+    if (derived.length !== expected.length) return false;
+    return crypto.timingSafeEqual(derived, expected);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Omit credential materials from API responses (N2)
+ */
+export function sanitizeStaffMember<T extends Record<string, any>>(staff: T): Omit<T, 'pinHash' | 'pinSalt'> {
+  if (!staff) return staff;
+  const { pinHash, pinSalt, ...safe } = staff;
+  return safe as any;
+}
+
 @Injectable()
 export class VmsService {
   private readonly logger = new Logger(VmsService.name);
+  private failedPunchAttempts = new Map<string, { count: number; lockedUntil: number }>();
+
+  private checkPunchLockout(staffId: string) {
+    const record = this.failedPunchAttempts.get(staffId);
+    if (record && record.lockedUntil > Date.now()) {
+      const minutesRemaining = Math.ceil((record.lockedUntil - Date.now()) / 60000);
+      throw new ForbiddenException(`Too many failed punch attempts. Worker locked out for ${minutesRemaining} more minute(s).`);
+    }
+  }
+
+  private recordFailedPunchAttempt(staffId: string) {
+    const record = this.failedPunchAttempts.get(staffId) || { count: 0, lockedUntil: 0 };
+    record.count += 1;
+    if (record.count >= 5) {
+      record.lockedUntil = Date.now() + 15 * 60 * 1000; // 15 min lockout
+    }
+    this.failedPunchAttempts.set(staffId, record);
+  }
+
+  private resetFailedPunchAttempts(staffId: string) {
+    this.failedPunchAttempts.delete(staffId);
+  }
+
+  private timingSafeCompare(a: string, b: string): boolean {
+    const bufA = Buffer.from(a);
+    const bufB = Buffer.from(b);
+    if (bufA.length !== bufB.length) return false;
+    return crypto.timingSafeEqual(bufA, bufB);
+  }
 
   constructor(
     private readonly prisma: PrismaService,
@@ -300,7 +357,7 @@ export class VmsService {
     const limit = Math.min(100, Math.max(1, params.limit ?? 50));
     const skip = (page - 1) * limit;
 
-    return this.prisma.vmsStaffMember.findMany({
+    const records = await this.prisma.vmsStaffMember.findMany({
       where,
       skip,
       take: limit,
@@ -309,6 +366,7 @@ export class VmsService {
       },
       orderBy: { lastName: 'asc' },
     });
+    return records.map(sanitizeStaffMember);
   }
 
   async createStaffMember(
@@ -326,7 +384,7 @@ export class VmsService {
     let pinSalt: string | undefined;
     if (dto.pin) {
       pinSalt = crypto.randomBytes(16).toString('hex');
-      pinHash = crypto.createHash('sha256').update(dto.pin + pinSalt).digest('hex');
+      pinHash = hashPin(dto.pin, pinSalt);
     }
 
     const staff = await this.prisma.vmsStaffMember.create({
@@ -361,7 +419,7 @@ export class VmsService {
       changes: { firstName: staff.firstName, lastName: staff.lastName, vendorId: staff.vendorId },
     });
 
-    return staff;
+    return sanitizeStaffMember(staff);
   }
 
   // ---------------------------------------------------------------------------
@@ -419,6 +477,12 @@ export class VmsService {
       },
     });
     if (!order) throw new NotFoundException('Staffing order not found');
+    if (order.attendances) {
+      order.attendances = order.attendances.map((a) => ({
+        ...a,
+        staffMember: a.staffMember ? sanitizeStaffMember(a.staffMember) : a.staffMember,
+      })) as any;
+    }
     return order;
   }
 
@@ -518,6 +582,7 @@ export class VmsService {
 
   async getUnfilledOrdersNeedingEscalation(organizationId: string, facilityId: string) {
     const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
     const in48Hours = new Date(now.getTime() + 48 * 3600 * 1000);
     const shiftDateCutoff = in48Hours.toISOString().split('T')[0];
 
@@ -533,7 +598,7 @@ export class VmsService {
             VmsOrderStatus.booked,
           ],
         },
-        shiftDate: { lte: shiftDateCutoff },
+        shiftDate: { gte: todayStr, lte: shiftDateCutoff },
       },
       include: {
         fulfillments: { include: { vendor: true } },
@@ -736,35 +801,52 @@ export class VmsService {
     });
     if (!staff) throw new NotFoundException('Staff member not found');
 
-    // Worker credential check (B4):
+    // Check lockout
+    this.checkPunchLockout(staff.id);
+
+    // Worker credential check (B4, N3, N5):
     if (!options?.isManager) {
+      if (!staff.pinHash && !staff.badgeNumber) {
+        throw new ForbiddenException(
+          'Staff member has no PIN or badge credential configured on file. A manager must record this punch.',
+        );
+      }
       if (staff.pinHash && staff.pinSalt) {
         if (!dto.pin) {
           throw new BadRequestException('Worker PIN required for clock-in.');
         }
-        const hash = crypto.createHash('sha256').update(dto.pin + staff.pinSalt).digest('hex');
-        if (hash !== staff.pinHash) {
+        if (!verifyPin(dto.pin, staff.pinSalt, staff.pinHash)) {
+          this.recordFailedPunchAttempt(staff.id);
           throw new BadRequestException('Invalid worker PIN.');
         }
       } else if (staff.badgeNumber) {
-        if (!dto.badgeCode || dto.badgeCode.trim().toLowerCase() !== staff.badgeNumber.trim().toLowerCase()) {
+        if (
+          !dto.badgeCode ||
+          !this.timingSafeCompare(
+            dto.badgeCode.trim().toLowerCase(),
+            staff.badgeNumber.trim().toLowerCase(),
+          )
+        ) {
+          this.recordFailedPunchAttempt(staff.id);
           throw new BadRequestException('Invalid worker badge code.');
         }
       }
+      this.resetFailedPunchAttempts(staff.id);
     }
 
+    // Active punch check: Key on clockOut: null to prevent open punch accumulation (N4)
     const activePunch = await this.prisma.vmsTimeAttendance.findFirst({
       where: {
         staffMemberId: dto.staffMemberId,
         facilityId,
-        status: VmsAttendanceStatus.clocked_in,
+        clockOut: null,
       },
     });
     if (activePunch) {
-      throw new BadRequestException('Staff member already clocked in.');
+      throw new BadRequestException('Staff member already has an active clock-in without clock-out.');
     }
 
-    // Geofencing verification (F1):
+    // Geofencing verification (F1, N9):
     let isWithinGeofence = true;
     const deviationFlags: string[] = [];
 
@@ -785,6 +867,9 @@ export class VmsService {
           isWithinGeofence = false;
           deviationFlags.push('off_site_punch');
         }
+      } else {
+        this.logger.warn(`Facility ${facilityId} coordinates are not configured; geofence check could not be verified.`);
+        deviationFlags.push('geofence_unconfigured');
       }
     }
 
@@ -823,6 +908,10 @@ export class VmsService {
       changes: { staffMemberId: staff.id, isWithinGeofence, deviationFlags },
     });
 
+    if (attendance.staffMember) {
+      attendance.staffMember = sanitizeStaffMember(attendance.staffMember) as any;
+    }
+
     return attendance;
   }
 
@@ -841,18 +930,38 @@ export class VmsService {
       throw new BadRequestException('Record is not in active clocked-in status');
     }
 
-    // Worker credential check on self clock-out (B4):
+    // Check lockout
+    if (attendance.staffMemberId) {
+      this.checkPunchLockout(attendance.staffMemberId);
+    }
+
+    // Worker credential check on self clock-out (B4, N3, N5):
     if (!options?.isManager) {
       const staff = attendance.staffMember;
+      if (!staff?.pinHash && !staff?.badgeNumber) {
+        throw new ForbiddenException(
+          'Staff member has no PIN or badge credential configured on file. A manager must record this punch.',
+        );
+      }
       if (staff?.pinHash && staff?.pinSalt) {
         if (!dto.pin) throw new BadRequestException('Worker PIN required for clock-out.');
-        const hash = crypto.createHash('sha256').update(dto.pin + staff.pinSalt).digest('hex');
-        if (hash !== staff.pinHash) throw new BadRequestException('Invalid worker PIN.');
+        if (!verifyPin(dto.pin, staff.pinSalt, staff.pinHash)) {
+          if (staff.id) this.recordFailedPunchAttempt(staff.id);
+          throw new BadRequestException('Invalid worker PIN.');
+        }
       } else if (staff?.badgeNumber) {
-        if (!dto.badgeCode || dto.badgeCode.trim().toLowerCase() !== staff.badgeNumber.trim().toLowerCase()) {
+        if (
+          !dto.badgeCode ||
+          !this.timingSafeCompare(
+            dto.badgeCode.trim().toLowerCase(),
+            staff.badgeNumber.trim().toLowerCase(),
+          )
+        ) {
+          if (staff.id) this.recordFailedPunchAttempt(staff.id);
           throw new BadRequestException('Invalid worker badge code.');
         }
       }
+      if (staff?.id) this.resetFailedPunchAttempts(staff.id);
     }
 
     const clockOutTime = new Date();
@@ -908,6 +1017,10 @@ export class VmsService {
       before: { clockIn: attendance.clockIn, status: attendance.status },
       changes: { hoursWorked: rawHours, billableHours, deviationFlags, totalBilledCents },
     });
+
+    if (updated.staffMember) {
+      updated.staffMember = sanitizeStaffMember(updated.staffMember) as any;
+    }
 
     return updated;
   }
@@ -965,7 +1078,7 @@ export class VmsService {
       if (params.endDate) where.clockIn.lte = new Date(params.endDate);
     }
 
-    return this.prisma.vmsTimeAttendance.findMany({
+    const reports = await this.prisma.vmsTimeAttendance.findMany({
       where,
       include: {
         staffMember: {
@@ -975,6 +1088,99 @@ export class VmsService {
       },
       orderBy: { clockIn: 'desc' },
     });
+    return reports.map((r) => ({
+      ...r,
+      staffMember: r.staffMember ? sanitizeStaffMember(r.staffMember) : r.staffMember,
+    }));
+  }
+
+  /**
+   * No-Show Detection (F1b):
+   * Identifies confirmed orders whose scheduled start time (+ grace period) has passed
+   * without a clock-in from assigned staff members, and flags deviation with 'no_show'.
+   */
+  async detectNoShows(organizationId: string, facilityId: string, gracePeriodMinutes = 30) {
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+
+    const orders = await this.prisma.vmsStaffingOrder.findMany({
+      where: {
+        organizationId,
+        facilityId,
+        status: { in: [VmsOrderStatus.confirmed, VmsOrderStatus.booked] },
+        shiftDate: { lte: todayStr },
+      },
+      include: {
+        fulfillments: {
+          where: { status: { in: [VmsFulfillmentStatus.confirmed, VmsFulfillmentStatus.completed] } },
+          include: { vendor: true },
+        },
+        attendances: true,
+      },
+    });
+
+    const flaggedNoShows: Array<{ orderId: string; vendorId: string; role: string; reason: string }> = [];
+
+    for (const order of orders) {
+      const [startH, startM] = (order.startTime || '09:00').split(':').map(Number);
+      const scheduledStart = new Date(`${order.shiftDate}T00:00:00Z`);
+      scheduledStart.setUTCHours(startH || 9, startM || 0, 0, 0);
+
+      const threshold = new Date(scheduledStart.getTime() + gracePeriodMinutes * 60 * 1000);
+      if (now > threshold) {
+        const actualClockIns = order.attendances.filter(
+          (a) => !a.deviationFlags.includes('no_show'),
+        ).length;
+        const missingCount = Math.max(0, order.quantityFulfilled - actualClockIns);
+
+        if (missingCount > 0) {
+          for (let i = 0; i < missingCount; i++) {
+            const fulfillment = order.fulfillments[i % (order.fulfillments.length || 1)];
+            const vendorId = fulfillment?.vendorId;
+
+            const noShowRecord = await this.prisma.vmsTimeAttendance.create({
+              data: {
+                organizationId,
+                facilityId,
+                orderId: order.id,
+                clockIn: scheduledStart,
+                clockOut: scheduledStart,
+                billableHours: 0,
+                billedRateCents: 0,
+                totalBilledCents: 0,
+                status: VmsAttendanceStatus.flagged_exception,
+                isWithinGeofence: false,
+                deviationFlags: ['no_show', 'unfilled_shift'],
+              },
+            });
+
+            await this.logAudit({
+              organizationId,
+              facilityId,
+              entityType: 'VmsTimeAttendance',
+              entityId: noShowRecord.id,
+              action: 'EXCEPTION_FLAGGED',
+              userId: 'system_scheduler',
+              changes: { orderId: order.id, vendorId, reason: 'Staff member failed to report to scheduled shift on time' },
+            });
+
+            this.logger.warn(`No-show detected for order ${order.orderNumber} (role: ${order.roleRequired})`);
+            flaggedNoShows.push({
+              orderId: order.id,
+              vendorId: vendorId || 'unknown',
+              role: order.roleRequired,
+              reason: 'Shift start + 30m grace period elapsed without clock-in',
+            });
+          }
+        }
+      }
+    }
+
+    return {
+      scannedOrdersCount: orders.length,
+      flaggedNoShowsCount: flaggedNoShows.length,
+      flaggedNoShows,
+    };
   }
 
   async exportPayrollAdp(organizationId: string, facilityId: string) {
@@ -1059,10 +1265,29 @@ export class VmsService {
   async getVendorScorecard(organizationId: string, facilityId: string) {
     const vendors = await this.prisma.vmsVendor.findMany({
       where: { organizationId, facilityId },
-      include: {
-        orderFulfillments: true,
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        rating: true,
+        orderFulfillments: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
         staffMembers: {
-          include: { attendances: true },
+          select: {
+            id: true,
+            attendances: {
+              select: {
+                id: true,
+                status: true,
+                deviationFlags: true,
+                totalBilledCents: true,
+              },
+            },
+          },
         },
       },
     });
@@ -1242,5 +1467,41 @@ export class VmsService {
       take: limit,
       orderBy: { timestamp: 'desc' },
     });
+  }
+
+  async exportAuditLogs(
+    organizationId: string,
+    facilityId: string,
+    filters?: { entityType?: string; startDate?: string; endDate?: string; format?: 'csv' | 'json' },
+  ) {
+    const where: any = { organizationId, facilityId };
+    if (filters?.entityType) where.entityType = filters.entityType;
+    if (filters?.startDate || filters?.endDate) {
+      where.timestamp = {};
+      if (filters.startDate) where.timestamp.gte = new Date(filters.startDate);
+      if (filters.endDate) where.timestamp.lte = new Date(filters.endDate);
+    }
+
+    const logs = await this.prisma.vmsAuditLog.findMany({
+      where,
+      orderBy: { timestamp: 'desc' },
+      take: 5000,
+    });
+
+    if (filters?.format === 'json') {
+      return logs;
+    }
+
+    const headers = ['Timestamp', 'Entity Type', 'Entity ID', 'Action', 'Performed By', 'Changes'];
+    const rows = logs.map((l) => [
+      l.timestamp.toISOString(),
+      l.entityType,
+      l.entityId,
+      l.action,
+      l.performedByUserId,
+      `"${JSON.stringify(l.changes).replace(/"/g, '""')}"`,
+    ]);
+
+    return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
   }
 }

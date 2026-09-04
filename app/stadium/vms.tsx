@@ -1109,7 +1109,14 @@ export default function VendorManagementSystemScreen() {
             <View style={styles.modalBtnRow}>
               <Pressable
                 style={[styles.submitBtn, { backgroundColor: palette.primary, flex: 1, marginTop: 12 }]}
-                onPress={() => {
+                onPress={async () => {
+                  try {
+                    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+                      await navigator.clipboard.writeText(payrollExportContent);
+                    }
+                  } catch {
+                    // Clipboard access might be blocked in certain browser permission settings
+                  }
                   Alert.alert('Export Ready', 'Payroll payload copied to clipboard.');
                   setShowPayrollExportModal(false);
                 }}

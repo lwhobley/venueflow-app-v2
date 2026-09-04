@@ -315,3 +315,9 @@ REVOKE ALL ON "VmsOrderFulfillment" FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON "VmsTimeAttendance" FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON "VmsInventorySyncLog" FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON "VmsAuditLog" FROM PUBLIC, anon, authenticated;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON
+  "VmsVendor", "VmsVendorService", "VmsStaffMember", "VmsStaffingOrder",
+  "VmsOrderFulfillment", "VmsTimeAttendance", "VmsInventorySyncLog", "VmsAuditLog"
+TO stadium_api;
+

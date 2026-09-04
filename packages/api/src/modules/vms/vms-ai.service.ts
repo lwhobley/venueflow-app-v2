@@ -322,50 +322,103 @@ Return strictly formatted JSON:
       }
     }
 
-    // Heuristic venue ratio modeling (e.g. 1 concessions staff per 150 fans, 1 security per 250 fans)
-    const concessionsCount = Math.max(8, Math.round(attendance / 180));
-    const bartendersCount = Math.max(4, Math.round(attendance / 400));
-    const suiteAttendants = Math.max(6, Math.round(attendance / 600));
-    const securityCount = Math.max(10, Math.round(attendance / 250));
-    const culinaryPrep = Math.max(4, Math.round(attendance / 750));
+    // Deterministic modeling: Incorporate historical venue orders if available (F2)
+    const history = event.historicalOrders || [];
+    const historicalRolesMap = new Map<string, { totalQty: number; count: number; totalDuration: number }>();
 
-    const roles = [
-      {
-        role: 'Concessions Cashier & Runner',
-        headcount: concessionsCount,
-        recommendedDurationHours: duration + 1,
-        estimatedCostCents: concessionsCount * (duration + 1) * 2200,
-        notes: 'Covers main concourse and upper bowl express stands.',
-      },
-      {
-        role: 'Bartender',
-        headcount: bartendersCount,
-        recommendedDurationHours: duration + 1.5,
-        estimatedCostCents: bartendersCount * (duration + 1.5) * 2800,
-        notes: 'Club level and concourse craft cocktail bars.',
-      },
-      {
-        role: 'Suite Attendant',
-        headcount: suiteAttendants,
-        recommendedDurationHours: duration + 2,
-        estimatedCostCents: suiteAttendants * (duration + 2) * 3000,
-        notes: 'Dedicated luxury suite catering and replenishment.',
-      },
-      {
-        role: 'Event Security & Access Control',
-        headcount: securityCount,
-        recommendedDurationHours: duration + 2,
-        estimatedCostCents: securityCount * (duration + 2) * 2600,
-        notes: 'Gates, metal detectors, and backstage egress.',
-      },
-      {
-        role: 'Culinary Prep & Kitchen Distro',
-        headcount: culinaryPrep,
-        recommendedDurationHours: duration + 3,
-        estimatedCostCents: culinaryPrep * (duration + 3) * 2500,
-        notes: 'Commissary kitchen prep and satellite galley distribution.',
-      },
-    ];
+    for (const h of history) {
+      const normalizedRole = h.roleRequired.trim();
+      const existing = historicalRolesMap.get(normalizedRole) || { totalQty: 0, count: 0, totalDuration: 0 };
+      existing.totalQty += h.quantityRequested;
+      existing.totalDuration += h.durationHours || duration;
+      existing.count += 1;
+      historicalRolesMap.set(normalizedRole, existing);
+    }
+
+    let roles: Array<{
+      role: string;
+      headcount: number;
+      recommendedDurationHours: number;
+      estimatedCostCents: number;
+      notes: string;
+    }> = [];
+
+    if (historicalRolesMap.size > 0) {
+      // Scale historical averages by attendance relative to standard 15k attendance
+      const attendanceScale = Math.max(0.5, attendance / 15000);
+      roles = Array.from(historicalRolesMap.entries()).map(([roleName, stats]) => {
+        const avgQty = Math.max(2, Math.round((stats.totalQty / stats.count) * attendanceScale));
+        const avgDuration = Number((stats.totalDuration / stats.count).toFixed(1));
+        const rateCents = roleName.toLowerCase().includes('security')
+          ? 2600
+          : roleName.toLowerCase().includes('bartender')
+          ? 2800
+          : roleName.toLowerCase().includes('suite')
+          ? 3000
+          : 2400;
+
+        return {
+          role: roleName,
+          headcount: avgQty,
+          recommendedDurationHours: avgDuration,
+          estimatedCostCents: avgQty * Math.round(avgDuration) * rateCents,
+          notes: `Historical order model: averaged from ${stats.count} prior ${roleName} requisitions.`,
+        };
+      });
+    }
+
+    // Blend with standard venue ratios if historical profile is sparse (< 3 roles)
+    if (roles.length < 3) {
+      const concessionsCount = Math.max(8, Math.round(attendance / 180));
+      const bartendersCount = Math.max(4, Math.round(attendance / 400));
+      const suiteAttendants = Math.max(6, Math.round(attendance / 600));
+      const securityCount = Math.max(10, Math.round(attendance / 250));
+      const culinaryPrep = Math.max(4, Math.round(attendance / 750));
+
+      const baselineRoles = [
+        {
+          role: 'Concessions Cashier & Runner',
+          headcount: concessionsCount,
+          recommendedDurationHours: duration + 1,
+          estimatedCostCents: concessionsCount * (duration + 1) * 2200,
+          notes: 'Covers main concourse and upper bowl express stands.',
+        },
+        {
+          role: 'Bartender',
+          headcount: bartendersCount,
+          recommendedDurationHours: duration + 1.5,
+          estimatedCostCents: bartendersCount * (duration + 1.5) * 2800,
+          notes: 'Club level and concourse craft cocktail bars.',
+        },
+        {
+          role: 'Suite Attendant',
+          headcount: suiteAttendants,
+          recommendedDurationHours: duration + 2,
+          estimatedCostCents: suiteAttendants * (duration + 2) * 3000,
+          notes: 'Dedicated luxury suite catering and replenishment.',
+        },
+        {
+          role: 'Event Security & Access Control',
+          headcount: securityCount,
+          recommendedDurationHours: duration + 2,
+          estimatedCostCents: securityCount * (duration + 2) * 2600,
+          notes: 'Gates, metal detectors, and backstage egress.',
+        },
+        {
+          role: 'Culinary Prep & Kitchen Distro',
+          headcount: culinaryPrep,
+          recommendedDurationHours: duration + 3,
+          estimatedCostCents: culinaryPrep * (duration + 3) * 2500,
+          notes: 'Commissary kitchen prep and satellite galley distribution.',
+        },
+      ];
+
+      for (const base of baselineRoles) {
+        if (!roles.some((r) => r.role.toLowerCase() === base.role.toLowerCase())) {
+          roles.push(base);
+        }
+      }
+    }
 
     const totalHeadcount = roles.reduce((sum, r) => sum + r.headcount, 0);
     const totalCost = roles.reduce((sum, r) => sum + r.estimatedCostCents, 0);

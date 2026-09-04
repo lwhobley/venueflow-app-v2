@@ -34,6 +34,8 @@ describe('VmsController', () => {
       clockOut: vi.fn().mockResolvedValue({ id: 'att-1', status: 'clocked_out' }),
       syncInventory: vi.fn().mockResolvedValue({ status: 'success', itemsSynced: 5 }),
       exportPayrollAdp: vi.fn().mockResolvedValue({ csvContent: 'Co Code,Hours\nVNW,8.0', rowCount: 1 }),
+      detectNoShows: vi.fn().mockResolvedValue({ scannedOrdersCount: 1, flaggedNoShowsCount: 0, flaggedNoShows: [] }),
+      exportAuditLogs: vi.fn().mockResolvedValue('Timestamp,Entity Type\n2026-09-04,VmsVendor'),
     };
 
     prisma = {
@@ -108,5 +110,17 @@ describe('VmsController', () => {
     const csv = await controller.exportPayrollAdp(managerScope);
     expect(csv).toContain('Co Code');
     expect(service.exportPayrollAdp).toHaveBeenCalledWith('org-1', 'fac-1');
+  });
+
+  it('triggers no-show detection for manager', async () => {
+    const res = await controller.detectNoShows(managerScope, '30');
+    expect(res.scannedOrdersCount).toBe(1);
+    expect(service.detectNoShows).toHaveBeenCalledWith('org-1', 'fac-1', 30);
+  });
+
+  it('exports audit logs for manager', async () => {
+    const csv = await controller.exportAuditLogs(managerScope, undefined, undefined, undefined, 'csv');
+    expect(csv).toContain('Timestamp,Entity Type');
+    expect(service.exportAuditLogs).toHaveBeenCalledWith('org-1', 'fac-1', expect.objectContaining({ format: 'csv' }));
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
-import { VmsService } from './vms.service';
+import { VmsService, hashPin } from './vms.service';
 import { VmsAiService } from './vms-ai.service';
 import { VmsIntegrationsService } from './vms-integrations.service';
 import {
@@ -280,9 +280,12 @@ describe('VmsService', () => {
         billedRateCents: 2800,
       });
 
-      const res = await service.clockIn(mockOrgId, mockFacilityId, {
-        staffMemberId: 'staff-1',
-      });
+      const res = await service.clockIn(
+        mockOrgId,
+        mockFacilityId,
+        { staffMemberId: 'staff-1' },
+        { isManager: true },
+      );
 
       expect(res.id).toBe('att-1');
       expect(res.status).toBe(VmsAttendanceStatus.clocked_in);
@@ -300,10 +303,15 @@ describe('VmsService', () => {
       });
       prisma.vmsTimeAttendance.update.mockImplementation((args: any) => Promise.resolve(args.data));
 
-      const res = await service.clockOut(mockOrgId, mockFacilityId, {
-        attendanceId: 'att-1',
-        breakMinutes: 10, // < 30m after 6h
-      });
+      const res = await service.clockOut(
+        mockOrgId,
+        mockFacilityId,
+        {
+          attendanceId: 'att-1',
+          breakMinutes: 10, // < 30m after 6h
+        },
+        { isManager: true },
+      );
 
       expect(res.deviationFlags).toContain('meal_break_penalty');
       expect(res.status).toBe(VmsAttendanceStatus.flagged_exception);
@@ -508,6 +516,164 @@ describe('VmsService', () => {
       expect(scorecard[0].onTimeRatePercent).toBeNull();
       expect(scorecard[0].fulfillmentRatePercent).toBeNull();
       expect(scorecard[0].hasData).toBe(false);
+    });
+
+    it('rejects non-manager clock-in when worker has no credential on file (N5)', async () => {
+      prisma.vmsStaffMember.findFirst.mockResolvedValue({
+        id: 'staff-no-cred',
+        pinHash: null,
+        pinSalt: null,
+        badgeNumber: null,
+      });
+
+      await expect(
+        service.clockIn(mockOrgId, mockFacilityId, { staffMemberId: 'staff-no-cred' }),
+      ).rejects.toThrow('Staff member has no PIN or badge credential configured on file');
+    });
+
+    it('verifies worker PIN using scrypt and rejects invalid PIN (N3)', async () => {
+      const salt = 'aabbccdd11223344';
+      const correctHash = hashPin('4321', salt);
+
+      prisma.vmsStaffMember.findFirst.mockResolvedValue({
+        id: 'staff-pin',
+        pinHash: correctHash,
+        pinSalt: salt,
+        hourlyRateCents: 2500,
+      });
+
+      // Wrong PIN
+      await expect(
+        service.clockIn(mockOrgId, mockFacilityId, { staffMemberId: 'staff-pin', pin: '9999' }),
+      ).rejects.toThrow('Invalid worker PIN');
+
+      // Correct PIN
+      prisma.vmsTimeAttendance.findFirst.mockResolvedValue(null);
+      prisma.vmsTimeAttendance.create.mockResolvedValue({
+        id: 'att-valid',
+        status: VmsAttendanceStatus.clocked_in,
+        staffMember: { id: 'staff-pin', pinHash: correctHash, pinSalt: salt },
+      });
+
+      const res = await service.clockIn(
+        mockOrgId,
+        mockFacilityId,
+        { staffMemberId: 'staff-pin', pin: '4321' },
+      );
+      expect(res.id).toBe('att-valid');
+      // Credential omission (N2)
+      expect((res.staffMember as any)?.pinHash).toBeUndefined();
+      expect((res.staffMember as any)?.pinSalt).toBeUndefined();
+    });
+
+    it('rejects clock-in when worker has an open punch with clockOut: null (N4)', async () => {
+      prisma.vmsStaffMember.findFirst.mockResolvedValue({
+        id: 'staff-open',
+        badgeNumber: 'BADGE-1',
+        hourlyRateCents: 2500,
+      });
+
+      // Previous punch had status flagged_exception, but clockOut was null!
+      prisma.vmsTimeAttendance.findFirst.mockResolvedValue({
+        id: 'att-open-1',
+        status: VmsAttendanceStatus.flagged_exception,
+        clockOut: null,
+      });
+
+      await expect(
+        service.clockIn(
+          mockOrgId,
+          mockFacilityId,
+          { staffMemberId: 'staff-open', badgeCode: 'BADGE-1' },
+        ),
+      ).rejects.toThrow('Staff member already has an active clock-in without clock-out');
+    });
+
+    it('flags geofence_unconfigured when facility coordinates are null (N9)', async () => {
+      prisma.vmsStaffMember.findFirst.mockResolvedValue({
+        id: 'staff-1',
+        badgeNumber: 'B-1',
+        hourlyRateCents: 2500,
+      });
+      prisma.vmsTimeAttendance.findFirst.mockResolvedValue(null);
+      prisma.facility.findUnique.mockResolvedValue({ latitude: null, longitude: null });
+      prisma.vmsTimeAttendance.create.mockImplementation((args: any) => Promise.resolve(args.data));
+
+      const punch = await service.clockIn(
+        mockOrgId,
+        mockFacilityId,
+        { staffMemberId: 'staff-1', badgeCode: 'B-1', gpsLatitude: 37.77, gpsLongitude: -122.41 },
+      );
+
+      expect(punch.deviationFlags).toContain('geofence_unconfigured');
+    });
+
+    it('bounds unfilled escalation query by shiftDate lower bound (N8)', async () => {
+      prisma.vmsStaffingOrder.findMany.mockResolvedValue([]);
+
+      await service.getUnfilledOrdersNeedingEscalation(mockOrgId, mockFacilityId);
+
+      expect(prisma.vmsStaffingOrder.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            shiftDate: expect.objectContaining({
+              gte: expect.any(String),
+              lte: expect.any(String),
+            }),
+          }),
+        }),
+      );
+    });
+
+    it('detects no-shows and records flagged exceptions with no_show flag (F1b)', async () => {
+      const pastShiftDate = new Date(Date.now() - 2 * 3600 * 1000).toISOString().split('T')[0];
+      prisma.vmsStaffingOrder.findMany.mockResolvedValue([
+        {
+          id: 'order-noshow-1',
+          orderNumber: 'ORD-NS-01',
+          roleRequired: 'Bartender',
+          shiftDate: pastShiftDate,
+          startTime: '06:00',
+          quantityFulfilled: 2,
+          fulfillments: [{ vendorId: 'v-1' }],
+          attendances: [], // 0 clocked in
+        },
+      ]);
+      prisma.vmsTimeAttendance.create.mockResolvedValue({ id: 'att-ns-1' });
+
+      const res = await service.detectNoShows(mockOrgId, mockFacilityId, 30);
+
+      expect(res.flaggedNoShowsCount).toBe(2);
+      expect(prisma.vmsTimeAttendance.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: VmsAttendanceStatus.flagged_exception,
+            deviationFlags: expect.arrayContaining(['no_show']),
+          }),
+        }),
+      );
+    });
+
+    it('exports audit logs in CSV and JSON formats (F6)', async () => {
+      prisma.vmsAuditLog.findMany.mockResolvedValue([
+        {
+          id: 'log-1',
+          timestamp: new Date('2026-09-04T12:00:00Z'),
+          entityType: 'VmsVendor',
+          entityId: 'v-1',
+          action: 'CREATE',
+          performedByUserId: 'user-1',
+          changes: { name: 'Acme Staffing' },
+        },
+      ]);
+
+      const jsonLogs = await service.exportAuditLogs(mockOrgId, mockFacilityId, { format: 'json' });
+      expect(Array.isArray(jsonLogs)).toBe(true);
+
+      const csvLogs = await service.exportAuditLogs(mockOrgId, mockFacilityId, { format: 'csv' });
+      expect(typeof csvLogs).toBe('string');
+      expect(csvLogs).toContain('Timestamp,Entity Type,Entity ID,Action,Performed By,Changes');
+      expect(csvLogs).toContain('VmsVendor,v-1,CREATE,user-1');
     });
   });
 });

@@ -346,6 +346,20 @@ export class VmsController {
     });
   }
 
+  @Post('attendance/detect-no-shows')
+  async detectNoShows(
+    @VenueScope() scope: Scope,
+    @Query('gracePeriodMinutes') gracePeriodMinutes?: string,
+  ) {
+    this.assertManager(scope);
+    const orgId = await this.organizationIdFor(scope.venueId);
+    return this.service.detectNoShows(
+      orgId,
+      scope.venueId,
+      gracePeriodMinutes ? parseInt(gracePeriodMinutes, 10) : 30,
+    );
+  }
+
   @Get('attendance/payroll/adp')
   @Header('Content-Type', 'text/csv')
   @Header('Content-Disposition', 'attachment; filename="adp-payroll-export.csv"')
@@ -440,6 +454,24 @@ export class VmsController {
       entityType,
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
+    });
+  }
+
+  @Get('audit-logs/export')
+  async exportAuditLogs(
+    @VenueScope() scope: Scope,
+    @Query('entityType') entityType?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('format') format?: 'csv' | 'json',
+  ) {
+    this.assertManager(scope);
+    const orgId = await this.organizationIdFor(scope.venueId);
+    return this.service.exportAuditLogs(orgId, scope.venueId, {
+      entityType,
+      startDate,
+      endDate,
+      format,
     });
   }
 }

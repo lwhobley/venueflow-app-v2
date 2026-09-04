@@ -123,8 +123,38 @@ export class VmsIntegrationsService {
       },
     ];
 
-    const isConfigured = Boolean(process.env.YELLOW_DOG_API_KEY || process.env.YELLOW_DOG_API_URL);
-    const syncStatus = isConfigured ? 'success' : 'demo_mode';
+    let syncStatus = 'demo_mode';
+    let syncMessage = `Demonstration sync completed for ${defaultCatalog.length} items (using baseline inventory catalog). Configure live integration endpoint for direct cloud push.`;
+
+    const remoteUrl = process.env.YELLOW_DOG_API_URL;
+    const remoteKey = process.env.YELLOW_DOG_API_KEY;
+
+    if (remoteUrl && remoteKey) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3000);
+        const res = await fetch(`${remoteUrl}/v1/inventory/sync`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${remoteKey}`,
+          },
+          body: JSON.stringify({ facilityId: params.facilityId, items: params.customItems || defaultCatalog }),
+          signal: controller.signal,
+        }).finally(() => clearTimeout(timeout));
+
+        if (res.ok) {
+          syncStatus = 'success';
+          syncMessage = `Live sync with ${system.toUpperCase()} API completed successfully (${res.status}).`;
+        } else {
+          syncStatus = 'failed';
+          syncMessage = `${system.toUpperCase()} API returned error status ${res.status}: ${res.statusText}`;
+        }
+      } catch (err: any) {
+        syncStatus = 'failed';
+        syncMessage = `${system.toUpperCase()} integration connection failed: ${err.message || String(err)}`;
+      }
+    }
 
     const supplies = params.customItems
       ? params.customItems.map((item, idx) => ({
@@ -147,9 +177,11 @@ export class VmsIntegrationsService {
         syncType,
         status: syncStatus,
         itemsSyncedCount: supplies.length,
-        details: isConfigured
+        details: syncStatus === 'success'
           ? `Successfully synchronized ${supplies.length} stock line items with ${system}.`
-          : `Demonstration sync performed for ${supplies.length} stock line items (${system} API key not configured).`,
+          : syncStatus === 'failed'
+          ? `Failed live synchronization with ${system}: ${syncMessage}`
+          : `Demonstration sync performed for ${supplies.length} stock line items (${system} live URL/API key not configured).`,
         metadata: {
           timestamp: new Date().toISOString(),
           catalogSnapshot: supplies,
@@ -164,9 +196,7 @@ export class VmsIntegrationsService {
       syncType,
       itemsSynced: supplies.length,
       status: syncStatus,
-      message: isConfigured
-        ? `Sync with ${system.toUpperCase()} completed. Equipment allocation and consumption logged.`
-        : `Demonstration sync completed for ${supplies.length} items. Configure YELLOW_DOG_API_KEY for live push.`,
+      message: syncMessage,
       supplies,
     };
   }
