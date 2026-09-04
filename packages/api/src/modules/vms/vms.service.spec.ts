@@ -2,6 +2,8 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { VmsService, hashPin } from './vms.service';
 import { VmsAiService } from './vms-ai.service';
 import { VmsIntegrationsService } from './vms-integrations.service';
+import { VmsWorkforceService } from './vms-workforce.service';
+import { VmsNotificationsService } from './vms-notifications.service';
 import {
   VmsAttendanceStatus,
   VmsFulfillmentStatus,
@@ -14,6 +16,8 @@ describe('VmsService', () => {
   let service: VmsService;
   let aiService: VmsAiService;
   let integrationsService: VmsIntegrationsService;
+  let workforceService: VmsWorkforceService;
+  let notificationsService: VmsNotificationsService;
   let prisma: any;
 
   const mockOrgId = 'org-1';
@@ -45,6 +49,7 @@ describe('VmsService', () => {
         update: vi.fn(),
       },
       vmsOrderFulfillment: {
+        groupBy: vi.fn().mockResolvedValue([]),
         findUnique: vi.fn(),
         findMany: vi.fn(),
         create: vi.fn(),
@@ -69,12 +74,63 @@ describe('VmsService', () => {
         create: vi.fn(),
         findMany: vi.fn(),
       },
+      vmsStaffAssignment: {
+        findMany: vi.fn().mockResolvedValue([]),
+        findFirst: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+        upsert: vi.fn(),
+      },
+      vmsStaffAvailability: {
+        findMany: vi.fn().mockResolvedValue([]),
+        create: vi.fn(),
+      },
+      vmsOrderTemplate: {
+        findMany: vi.fn().mockResolvedValue([]),
+        findFirst: vi.fn(),
+        findUnique: vi.fn(),
+        create: vi.fn(),
+        delete: vi.fn(),
+      },
+      vmsNotificationPreference: {
+        findMany: vi.fn().mockResolvedValue([]),
+        upsert: vi.fn(),
+      },
+      vmsNotificationLog: {
+        create: vi.fn(),
+        findMany: vi.fn().mockResolvedValue([]),
+        count: vi.fn().mockResolvedValue(0),
+      },
+      vmsPunchLockout: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        upsert: vi.fn(),
+        deleteMany: vi.fn(),
+      },
+      venue: {
+        findUnique: vi.fn().mockResolvedValue({ name: 'Test Stadium' }),
+      },
+      profile: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(async (cb) => cb(prisma)),
     };
 
     aiService = new VmsAiService();
     integrationsService = new VmsIntegrationsService(prisma);
-    service = new VmsService(prisma, aiService, integrationsService);
+    workforceService = new VmsWorkforceService(prisma);
+    notificationsService = new VmsNotificationsService(
+      prisma,
+      { send: vi.fn(), sendOrThrow: vi.fn() } as any,
+      { get: vi.fn().mockReturnValue(undefined) } as any,
+    );
+    service = new VmsService(
+      prisma,
+      aiService,
+      integrationsService,
+      workforceService,
+      notificationsService,
+    );
   });
 
   describe('Vendor Directory', () => {
@@ -379,25 +435,19 @@ describe('VmsService', () => {
       expect(res.records[0].grossPay).toBe(200.0);
     });
 
-    it('calculates vendor scorecard metrics', async () => {
+    it('calculates vendor scorecard metrics from database aggregates (F9)', async () => {
       prisma.vmsVendor.findMany.mockResolvedValue([
+        { id: 'v-1', name: 'Apex Staffing', code: 'APEX', rating: 4.8 },
+      ]);
+      prisma.vmsOrderFulfillment.groupBy.mockResolvedValue([
+        { vendorId: 'v-1', status: VmsFulfillmentStatus.confirmed, _count: { _all: 2 } },
+      ]);
+      prisma.$queryRaw.mockResolvedValue([
         {
-          id: 'v-1',
-          name: 'Apex Staffing',
-          code: 'APEX',
-          rating: 4.8,
-          orderFulfillments: [
-            { status: VmsFulfillmentStatus.confirmed },
-            { status: VmsFulfillmentStatus.confirmed },
-          ],
-          staffMembers: [
-            {
-              attendances: [
-                { totalBilledCents: 25000, deviationFlags: [] },
-                { totalBilledCents: 25000, deviationFlags: [] },
-              ],
-            },
-          ],
+          vendorId: 'v-1',
+          totalPunches: BigInt(2),
+          offTargetPunches: BigInt(0),
+          totalBilledCents: BigInt(50000),
         },
       ]);
 
@@ -407,7 +457,40 @@ describe('VmsService', () => {
       expect(scorecard[0].vendorName).toBe('Apex Staffing');
       expect(scorecard[0].fulfillmentRatePercent).toBe(100);
       expect(scorecard[0].onTimeRatePercent).toBe(100);
+      expect(scorecard[0].totalBilledCents).toBe(50000);
       expect(scorecard[0].tierStatus).toBe('Tier 1 Preferred');
+
+      // The aggregate must be computed in the database, not by loading every
+      // staff member and attendance row into memory.
+      expect(prisma.vmsOrderFulfillment.groupBy).toHaveBeenCalled();
+      expect(prisma.$queryRaw).toHaveBeenCalled();
+      const vendorQuery = prisma.vmsVendor.findMany.mock.calls[0][0];
+      expect(vendorQuery.include).toBeUndefined();
+    });
+
+    it('counts unattributed no-shows against the fulfilling vendor (Q2)', async () => {
+      prisma.vmsVendor.findMany.mockResolvedValue([
+        { id: 'v-empty', name: 'No-Show Staffing', code: 'NOSHOW', rating: 3.0 },
+      ]);
+      prisma.vmsOrderFulfillment.groupBy.mockResolvedValue([
+        { vendorId: 'v-empty', status: VmsFulfillmentStatus.confirmed, _count: { _all: 1 } },
+      ]);
+      // Two slots the vendor confirmed and never staffed: no staff member, so
+      // attribution comes through the order's fulfillment instead.
+      prisma.$queryRaw.mockResolvedValue([
+        {
+          vendorId: 'v-empty',
+          totalPunches: BigInt(2),
+          offTargetPunches: BigInt(2),
+          totalBilledCents: BigInt(0),
+        },
+      ]);
+
+      const scorecard = await service.getVendorScorecard(mockOrgId, mockFacilityId);
+
+      expect(scorecard[0].onTimeRatePercent).toBe(0);
+      expect(scorecard[0].noShowCount).toBe(2);
+      expect(scorecard[0].hasData).toBe(true);
     });
 
     it('triggers Yellow Dog inventory sync', async () => {
@@ -500,15 +583,10 @@ describe('VmsService', () => {
 
     it('returns explicit null without fabricated fallback when vendor has 0 punches', async () => {
       prisma.vmsVendor.findMany.mockResolvedValue([
-        {
-          id: 'v-new',
-          name: 'Brand New Vendor',
-          code: 'NEW',
-          rating: 5.0,
-          orderFulfillments: [],
-          staffMembers: [],
-        },
+        { id: 'v-new', name: 'Brand New Vendor', code: 'NEW', rating: 5.0 },
       ]);
+      prisma.vmsOrderFulfillment.groupBy.mockResolvedValue([]);
+      prisma.$queryRaw.mockResolvedValue([]);
 
       const scorecard = await service.getVendorScorecard(mockOrgId, mockFacilityId);
 
@@ -625,7 +703,7 @@ describe('VmsService', () => {
       );
     });
 
-    it('detects no-shows and records flagged exceptions with no_show flag (F1b)', async () => {
+    it('attributes no-shows to the assigned worker, not an arbitrary one (Q1)', async () => {
       const pastShiftDate = new Date(Date.now() - 2 * 3600 * 1000).toISOString().split('T')[0];
       prisma.vmsStaffingOrder.findMany.mockResolvedValue([
         {
@@ -634,52 +712,107 @@ describe('VmsService', () => {
           roleRequired: 'Bartender',
           shiftDate: pastShiftDate,
           startTime: '06:00',
-          quantityFulfilled: 2,
-          fulfillments: [
+          quantityFulfilled: 1,
+          fulfillments: [{ id: 'f-1', vendorId: 'v-1' }],
+          assignments: [
             {
-              vendor: {
-                id: 'v-1',
-                staffMembers: [{ id: 'staff-candidate-1' }],
+              id: 'assign-1',
+              staffMemberId: 'staff-rostered',
+              staffMember: {
+                id: 'staff-rostered',
+                firstName: 'Rosa',
+                lastName: 'Klein',
+                vendorId: 'v-1',
               },
             },
           ],
-          attendances: [], // 0 clocked in
+          attendances: [],
         },
       ]);
       prisma.vmsTimeAttendance.create.mockResolvedValue({ id: 'att-ns-1' });
 
       const res = await service.detectNoShows(mockOrgId, mockFacilityId, 30);
 
-      expect(res.flaggedNoShowsCount).toBe(2);
-      // First slot assigned to candidate staff member
+      expect(res.flaggedNoShowsCount).toBe(1);
+      expect(res.flaggedNoShows[0].staffMemberId).toBe('staff-rostered');
+      expect(res.flaggedNoShows[0].staffName).toBe('Rosa Klein');
       expect(prisma.vmsTimeAttendance.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            staffMemberId: 'staff-candidate-1',
+            staffMemberId: 'staff-rostered',
             status: VmsAttendanceStatus.flagged_exception,
             deviationFlags: expect.arrayContaining(['no_show']),
           }),
         }),
       );
+      // The assignment itself is marked so the roster reflects the absence.
+      expect(prisma.vmsStaffAssignment.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'assign-1' } }),
+      );
+    });
 
-      // Idempotency check: run again with existing no-shows recorded (P3)
+    it('records an unstaffed confirmed slot against the vendor with no worker (Q1)', async () => {
+      const pastShiftDate = new Date(Date.now() - 2 * 3600 * 1000).toISOString().split('T')[0];
       prisma.vmsStaffingOrder.findMany.mockResolvedValue([
         {
-          id: 'order-noshow-1',
-          orderNumber: 'ORD-NS-01',
+          id: 'order-noshow-2',
+          orderNumber: 'ORD-NS-02',
           roleRequired: 'Bartender',
           shiftDate: pastShiftDate,
           startTime: '06:00',
           quantityFulfilled: 2,
-          fulfillments: [{ vendor: { id: 'v-1', staffMembers: [{ id: 'staff-candidate-1' }] } }],
+          fulfillments: [{ id: 'f-1', vendorId: 'v-1' }],
+          assignments: [], // vendor confirmed 2 but named nobody
+          attendances: [],
+        },
+      ]);
+      prisma.vmsTimeAttendance.create.mockResolvedValue({ id: 'att-ns-2' });
+
+      const res = await service.detectNoShows(mockOrgId, mockFacilityId, 30);
+
+      expect(res.flaggedNoShowsCount).toBe(2);
+      expect(res.flaggedNoShows.every((n: any) => n.staffMemberId === null)).toBe(true);
+      expect(res.flaggedNoShows.every((n: any) => n.vendorId === 'v-1')).toBe(true);
+      expect(prisma.vmsTimeAttendance.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            staffMemberId: null,
+            deviationFlags: expect.arrayContaining(['no_show', 'unfilled_shift']),
+          }),
+        }),
+      );
+    });
+
+    it('is idempotent across repeated no-show sweeps (P3)', async () => {
+      const pastShiftDate = new Date(Date.now() - 2 * 3600 * 1000).toISOString().split('T')[0];
+      prisma.vmsStaffingOrder.findMany.mockResolvedValue([
+        {
+          id: 'order-noshow-3',
+          orderNumber: 'ORD-NS-03',
+          roleRequired: 'Bartender',
+          shiftDate: pastShiftDate,
+          startTime: '06:00',
+          quantityFulfilled: 2,
+          fulfillments: [{ id: 'f-1', vendorId: 'v-1' }],
+          assignments: [
+            {
+              id: 'assign-1',
+              staffMemberId: 'staff-a',
+              staffMember: { id: 'staff-a', firstName: 'A', lastName: 'One', vendorId: 'v-1' },
+            },
+          ],
+          // One absentee already flagged, one unfilled slot already recorded.
           attendances: [
-            { id: 'att-1', deviationFlags: ['no_show'] },
-            { id: 'att-2', deviationFlags: ['no_show'] },
+            { id: 'att-1', staffMemberId: 'staff-a', deviationFlags: ['no_show'] },
+            { id: 'att-2', staffMemberId: null, deviationFlags: ['no_show', 'unfilled_shift'] },
           ],
         },
       ]);
-      const res2 = await service.detectNoShows(mockOrgId, mockFacilityId, 30);
-      expect(res2.flaggedNoShowsCount).toBe(0); // Idempotent: 0 newly flagged
+
+      const res = await service.detectNoShows(mockOrgId, mockFacilityId, 30);
+
+      expect(res.flaggedNoShowsCount).toBe(0);
+      expect(prisma.vmsTimeAttendance.create).not.toHaveBeenCalled();
     });
 
     it('sanitizes pinHash and pinSalt from getVendor staffMembers (P4)', async () => {

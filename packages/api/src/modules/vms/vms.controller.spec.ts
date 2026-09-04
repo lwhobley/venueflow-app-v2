@@ -1,3 +1,5 @@
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { VmsController } from './vms.controller';
 import { ForbiddenException } from '@nestjs/common';
@@ -7,6 +9,9 @@ describe('VmsController', () => {
   let controller: VmsController;
   let service: any;
   let prisma: any;
+  let workforce: any;
+  let notifications: any;
+  let scheduler: any;
 
   const managerScope: any = {
     venueId: 'fac-1',
@@ -34,6 +39,9 @@ describe('VmsController', () => {
       clockOut: vi.fn().mockResolvedValue({ id: 'att-1', status: 'clocked_out' }),
       syncInventory: vi.fn().mockResolvedValue({ status: 'success', itemsSynced: 5 }),
       exportPayrollAdp: vi.fn().mockResolvedValue({ csvContent: 'Co Code,Hours\nVNW,8.0', rowCount: 1 }),
+      logAudit: vi.fn().mockResolvedValue(undefined),
+      listExpiringCertifications: vi.fn().mockResolvedValue([]),
+      getOrder: vi.fn().mockResolvedValue({ id: 'order-1', title: 'T', roleRequired: 'Bartender', quantityRequested: 2, shiftDate: '2026-09-10', startTime: '16:00', endTime: '22:00', durationHours: 6, budgetCents: 1000, specialRequirements: null, templateName: null }),
       detectNoShows: vi.fn().mockResolvedValue({ scannedOrdersCount: 1, flaggedNoShowsCount: 0, flaggedNoShows: [] }),
       exportAuditLogs: vi.fn().mockResolvedValue('Timestamp,Entity Type\n2026-09-04,VmsVendor'),
     };
@@ -44,7 +52,36 @@ describe('VmsController', () => {
       },
     };
 
-    controller = new VmsController(service, prisma);
+    workforce = {
+      listAssignments: vi.fn().mockResolvedValue([]),
+      assignStaffToOrder: vi.fn().mockResolvedValue({ id: 'assign-1' }),
+      releaseAssignment: vi.fn().mockResolvedValue({ id: 'assign-1', orderId: 'o-1', staffMemberId: 's-1' }),
+      listAvailability: vi.fn().mockResolvedValue([]),
+      setAvailability: vi.fn().mockResolvedValue({ id: 'avail-1' }),
+      getAvailabilityCalendar: vi.fn().mockResolvedValue({ assignments: [], unavailableBlocks: [], conflicts: [] }),
+      listTemplates: vi.fn().mockResolvedValue([]),
+      createTemplate: vi.fn().mockResolvedValue({ id: 'tpl-1' }),
+      deleteTemplate: vi.fn().mockResolvedValue({ success: true }),
+      getTemplate: vi.fn().mockResolvedValue({ id: 'tpl-1', name: 'Game Day', roleRequired: 'Bartender', quantityRequested: 4, startTime: '16:00', endTime: '22:00', durationHours: 6, budgetCents: 0, specialRequirements: null }),
+      importVendorsCsv: vi.fn().mockResolvedValue({ parsed: 1, imported: 1, skipped: 0, errors: [] }),
+      importStaffCsv: vi.fn().mockResolvedValue({ parsed: 1, imported: 1, skipped: 0, errors: [] }),
+      exportVendorsCsv: vi.fn().mockResolvedValue('Name,Code'),
+      exportStaffCsv: vi.fn().mockResolvedValue('First Name,Last Name'),
+    };
+
+    notifications = {
+      listDeliveryLog: vi.fn().mockResolvedValue({ rows: [], total: 0, page: 1, limit: 50 }),
+      listPreferences: vi.fn().mockResolvedValue([]),
+      setPreference: vi.fn().mockResolvedValue({ id: 'pref-1' }),
+    };
+
+    scheduler = {
+      runNoShowSweep: vi.fn().mockResolvedValue({ facilities: 1, flagged: 0 }),
+      runFulfillmentEscalation: vi.fn().mockResolvedValue({ facilities: 1, escalated: 0 }),
+      runCertificationExpiryCheck: vi.fn().mockResolvedValue({ facilities: 1, expiring: 0 }),
+    };
+
+    controller = new VmsController(service, prisma, workforce, notifications, scheduler);
   });
 
   it('allows manager to list vendors', async () => {
@@ -122,5 +159,52 @@ describe('VmsController', () => {
     const csv = await controller.exportAuditLogs(managerScope, undefined, undefined, undefined, 'csv');
     expect(csv).toContain('Timestamp,Entity Type');
     expect(service.exportAuditLogs).toHaveBeenCalledWith('org-1', 'fac-1', expect.objectContaining({ format: 'csv' }));
+  });
+});
+
+/**
+ * Nest resolves routes in declaration order, so a literal segment declared
+ * after a parameterised one at the same depth is unreachable — `vendors/export`
+ * sitting below `vendors/:id` was silently answered by the vendor lookup with
+ * id="export". This guard is static so it fails at test time rather than in a
+ * browser.
+ */
+describe('VmsController route declaration order', () => {
+  const source = readFileSync(join(__dirname, 'vms.controller.ts'), 'utf-8');
+
+  const routes = Array.from(
+    source.matchAll(/@(Get|Post|Put|Patch|Delete)\('([^']*)'\)/g),
+  ).map((match) => ({ method: match[1], path: match[2] }));
+
+  it('parses the controller route table', () => {
+    expect(routes.length).toBeGreaterThan(40);
+  });
+
+  it('never declares a literal segment behind a parameterised one', () => {
+    const shadowed: string[] = [];
+
+    routes.forEach((route, index) => {
+      const segments = route.path.split('/');
+      if (segments.some((s) => s.startsWith(':'))) return;
+
+      for (let earlier = 0; earlier < index; earlier++) {
+        const candidate = routes[earlier];
+        if (candidate.method !== route.method) continue;
+
+        const candidateSegments = candidate.path.split('/');
+        if (candidateSegments.length !== segments.length) continue;
+
+        const shadows = candidateSegments.every(
+          (segment, i) => segment.startsWith(':') || segment === segments[i],
+        );
+        const hasParam = candidateSegments.some((segment) => segment.startsWith(':'));
+
+        if (shadows && hasParam) {
+          shadowed.push(`${route.method} ${route.path} is shadowed by ${candidate.path}`);
+        }
+      }
+    });
+
+    expect(shadowed).toEqual([]);
   });
 });

@@ -42,6 +42,8 @@ export const FACILITY_SCOPED_MODELS: ReadonlySet<string> = new Set([
   'DailyTemporaryRoster', 'DailyTemporaryRosterWorker', 'DailyTemporaryRosterHistory',
   'VmsVendor', 'VmsStaffMember', 'VmsStaffingOrder',
   'VmsTimeAttendance', 'VmsInventorySyncLog', 'VmsAuditLog',
+  'VmsStaffAssignment', 'VmsStaffAvailability', 'VmsOrderTemplate',
+  'VmsNotificationPreference', 'VmsNotificationLog', 'VmsPunchLockout',
 ]);
 
 /**

@@ -581,6 +581,16 @@ export default function VendorManagementSystemScreen() {
 
               <View style={styles.payrollBtnGroup}>
                 <Pressable
+                  style={[styles.exportBtn, { borderColor: palette.charcoal, borderWidth: 1 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open the worker clock-in kiosk"
+                  onPress={() => router.push('/stadium/vms-kiosk')}
+                >
+                  <MaterialCommunityIcons name="tablet-dashboard" size={16} color={palette.charcoal} />
+                  <Text style={[styles.exportText, { color: palette.charcoal }]}>OPEN KIOSK</Text>
+                </Pressable>
+
+                <Pressable
                   style={[styles.exportBtn, { borderColor: palette.primary, borderWidth: 1 }]}
                   disabled={isExportingPayroll}
                   onPress={async () => {

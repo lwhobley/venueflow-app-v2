@@ -188,12 +188,17 @@ const mutationRoutes: Record<string, Route> = {
     path: '/v1/vms/attendance/clock-in',
     method: 'POST',
     body: (args) => args,
+    // Kiosks run on venue wifi that drops. A punch that cannot reach the API is
+    // queued locally against its idempotency key and replayed on reconnect, so
+    // a worker is never told to "try again" for a shift they already started.
+    offline: true,
     invalidate: [['vms.listAttendance']],
   },
   'vms.clockOut': {
     path: '/v1/vms/attendance/clock-out',
     method: 'POST',
     body: (args) => args,
+    offline: true,
     invalidate: [['vms.listAttendance'], ['vms.getScorecard']],
   },
   'vms.approveAttendance': {

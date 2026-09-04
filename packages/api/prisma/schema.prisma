@@ -493,6 +493,12 @@ model Organization {
   vmsTimeAttendances         VmsTimeAttendance[]
   vmsInventorySyncLogs       VmsInventorySyncLog[]
   vmsAuditLogs               VmsAuditLog[]
+  vmsStaffAssignments        VmsStaffAssignment[]
+  vmsStaffAvailabilities     VmsStaffAvailability[]
+  vmsOrderTemplates          VmsOrderTemplate[]
+  vmsNotificationPreferences VmsNotificationPreference[]
+  vmsNotificationLogs        VmsNotificationLog[]
+  vmsPunchLockouts           VmsPunchLockout[]
 }
 
 model Facility {
@@ -541,6 +547,12 @@ model Facility {
   vmsTimeAttendances         VmsTimeAttendance[]
   vmsInventorySyncLogs       VmsInventorySyncLog[]
   vmsAuditLogs               VmsAuditLog[]
+  vmsStaffAssignments        VmsStaffAssignment[]
+  vmsStaffAvailabilities     VmsStaffAvailability[]
+  vmsOrderTemplates          VmsOrderTemplate[]
+  vmsNotificationPreferences VmsNotificationPreference[]
+  vmsNotificationLogs        VmsNotificationLog[]
+  vmsPunchLockouts           VmsPunchLockout[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -3415,6 +3427,8 @@ model VmsStaffMember {
   facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
   vendor                VmsVendor?            @relation(fields: [vendorId], references: [id], onDelete: SetNull)
   attendances           VmsTimeAttendance[]
+  assignments           VmsStaffAssignment[]
+  availabilities        VmsStaffAvailability[]
 
   @@index([organizationId, facilityId, status])
   @@index([vendorId])
@@ -3448,6 +3462,7 @@ model VmsStaffingOrder {
   facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
   fulfillments          VmsOrderFulfillment[]
   attendances           VmsTimeAttendance[]
+  assignments           VmsStaffAssignment[]
 
   @@unique([organizationId, facilityId, orderNumber])
   @@index([facilityId, shiftDate, status])
@@ -3469,6 +3484,7 @@ model VmsOrderFulfillment {
 
   order                 VmsStaffingOrder      @relation(fields: [orderId], references: [id], onDelete: Cascade)
   vendor                VmsVendor             @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  assignments           VmsStaffAssignment[]
 
   @@index([orderId, vendorId])
 }
@@ -3539,4 +3555,169 @@ model VmsAuditLog {
   facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
 
   @@index([facilityId, entityType, timestamp])
+}
+
+enum VmsAssignmentStatus {
+  assigned
+  confirmed
+  released
+  no_show
+  completed
+}
+
+enum VmsNotificationEvent {
+  order_submitted
+  bid_received
+  order_confirmed
+  shift_reminder
+  time_deviation
+  no_show_alert
+  fulfillment_failure
+  certification_expiring
+}
+
+enum VmsNotificationChannel {
+  email
+  sms
+  push
+}
+
+enum VmsNotificationStatus {
+  sent
+  failed
+  suppressed
+}
+
+/// Links a specific staff member to a specific staffing order. Without this the
+/// system cannot say who was expected on a shift, which is what forced no-show
+/// detection to guess an attributed worker (review finding Q1).
+model VmsStaffAssignment {
+  id                    String                @id @default(cuid())
+  organizationId        String
+  facilityId            String
+  orderId               String
+  staffMemberId         String
+  fulfillmentId         String?
+  status                VmsAssignmentStatus   @default(assigned)
+  assignedAt            DateTime              @default(now())
+  releasedAt            DateTime?
+  notes                 String?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  order                 VmsStaffingOrder      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  staffMember           VmsStaffMember        @relation(fields: [staffMemberId], references: [id], onDelete: Cascade)
+  fulfillment           VmsOrderFulfillment?  @relation(fields: [fulfillmentId], references: [id], onDelete: SetNull)
+
+  @@unique([orderId, staffMemberId])
+  @@index([organizationId, facilityId, status])
+  @@index([staffMemberId, status])
+}
+
+/// Date-range availability windows for a staff member. `available: false` marks
+/// an unavailable block (PTO, other booking); the absence of any row means
+/// "no declared constraint" rather than "unavailable".
+model VmsStaffAvailability {
+  id                    String                @id @default(cuid())
+  organizationId        String
+  facilityId            String
+  staffMemberId         String
+  startDate             DateTime
+  endDate               DateTime
+  available             Boolean               @default(true)
+  reason                String?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  staffMember           VmsStaffMember        @relation(fields: [staffMemberId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, facilityId, startDate, endDate])
+  @@index([staffMemberId, startDate])
+}
+
+/// Reusable requisition template (game day, private event, seasonal).
+model VmsOrderTemplate {
+  id                    String                @id @default(cuid())
+  organizationId        String
+  facilityId            String
+  name                  String
+  roleRequired          String
+  quantityRequested     Int                   @default(1)
+  startTime             String                @default("16:00")
+  endTime               String                @default("22:00")
+  durationHours         Float                 @default(4.0)
+  budgetCents           Int                   @default(0)
+  specialRequirements   String?
+  createdById           String
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, facilityId, name])
+  @@index([organizationId, facilityId])
+}
+
+/// Per-user opt-out for a given VMS notification event.
+model VmsNotificationPreference {
+  id                    String                @id @default(cuid())
+  organizationId        String
+  facilityId            String
+  userId                String
+  eventType             VmsNotificationEvent
+  emailEnabled          Boolean               @default(true)
+  smsEnabled            Boolean               @default(false)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([facilityId, userId, eventType])
+  @@index([organizationId, facilityId])
+}
+
+/// Delivery tracking for every VMS notification attempt.
+model VmsNotificationLog {
+  id                    String                @id @default(cuid())
+  organizationId        String
+  facilityId            String
+  eventType             VmsNotificationEvent
+  channel               VmsNotificationChannel @default(email)
+  recipient             String
+  subject               String?
+  status                VmsNotificationStatus  @default(sent)
+  errorMessage          String?
+  entityType            String?
+  entityId              String?
+  createdAt             DateTime              @default(now())
+
+  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+
+  @@index([facilityId, eventType, createdAt])
+  @@index([facilityId, status, createdAt])
+}
+
+/// Durable, cross-replica failed-punch counter. Replaces the in-process Map that
+/// reset on deploy and gave an attacker N attempts per instance (finding P5).
+model VmsPunchLockout {
+  id                    String                @id @default(cuid())
+  organizationId        String
+  facilityId            String
+  staffMemberId         String                @unique
+  failedCount           Int                   @default(0)
+  lockedUntil           DateTime?
+  lastAttemptAt         DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+
+  @@index([facilityId, lockedUntil])
 }
