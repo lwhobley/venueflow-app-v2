@@ -86,6 +86,7 @@ describe('KitchenDistroFulfillmentService', () => {
         kitchenName: 'Main Galley',
         itemName: 'Braised Short Ribs',
         quantity: 4,
+        operationalAreaType: 'suite',
       },
       { userId: 'user-1', userName: 'Chef Mario' },
     );

@@ -63,6 +63,23 @@ export interface DistroTicket {
 
 const DISTRO_TICKETS_KEY = ['stadium', 'distro-tickets'];
 
+/**
+ * Operational areas a ticket can be raised against. Must stay a subset of the
+ * server's OperationalAreaType enum; the API rejects anything the caller's
+ * department does not cover, so this list is a convenience, not a permission.
+ */
+const OPERATIONAL_AREA_OPTIONS = [
+  { value: 'suite', label: 'Suite' },
+  { value: 'club', label: 'Club' },
+  { value: 'catering', label: 'Catering' },
+  { value: 'concession', label: 'Concession' },
+  { value: 'culinary', label: 'Culinary' },
+  { value: 'kitchen', label: 'Kitchen' },
+  { value: 'distro', label: 'Distro' },
+] as const;
+
+type OperationalAreaTypeOption = (typeof OPERATIONAL_AREA_OPTIONS)[number]['value'];
+
 export default function DistroPickupConsoleScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -82,6 +99,10 @@ export default function DistroPickupConsoleScreen() {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [newTicketData, setNewTicketData] = useState({
     serviceAreaName: '',
+    // Routes the ticket to the owning department. The server treats this as a
+    // declaration to validate, never as a grant — you can only pick an area
+    // your department already covers.
+    operationalAreaType: '' as OperationalAreaTypeOption | '',
     kitchenName: 'Main Commissary Kitchen',
     kitchenId: 'kitchen-main',
     distroLocationName: 'Distro Bay North',
@@ -194,11 +215,16 @@ export default function DistroPickupConsoleScreen() {
       Alert.alert('Required Fields', 'Please specify Service Area and Item Name.');
       return;
     }
+    if (!newTicketData.operationalAreaType) {
+      Alert.alert('Operational Area Required', 'Select the operational area this ticket belongs to.');
+      return;
+    }
     try {
       await apiRequest('/v1/stadium/distro-tickets', {
         method: 'POST',
         body: {
           serviceAreaName: newTicketData.serviceAreaName.trim(),
+          operationalAreaType: newTicketData.operationalAreaType,
           kitchenName: newTicketData.kitchenName.trim(),
           kitchenId: newTicketData.kitchenId.trim(),
           distroLocationName: newTicketData.distroLocationName.trim(),
@@ -210,6 +236,7 @@ export default function DistroPickupConsoleScreen() {
       setCreateModalVisible(false);
       setNewTicketData({
         serviceAreaName: '',
+        operationalAreaType: '',
         kitchenName: 'Main Commissary Kitchen',
         kitchenId: 'kitchen-main',
         distroLocationName: 'Distro Bay North',
@@ -727,6 +754,26 @@ export default function DistroPickupConsoleScreen() {
               value={newTicketData.serviceAreaName}
               onChangeText={(t) => setNewTicketData({ ...newTicketData, serviceAreaName: t })}
             />
+            <Text style={styles.fieldLabel}>Operational Area</Text>
+            <View style={styles.areaChipRow}>
+              {OPERATIONAL_AREA_OPTIONS.map((opt) => {
+                const selected = newTicketData.operationalAreaType === opt.value;
+                return (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[styles.areaChip, selected && styles.areaChipSelected]}
+                    onPress={() => setNewTicketData({ ...newTicketData, operationalAreaType: opt.value })}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    accessibilityLabel={`Operational area ${opt.label}`}
+                  >
+                    <Text style={[styles.areaChipText, selected && styles.areaChipTextSelected]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
             <Text style={styles.fieldLabel}>Item Name</Text>
             <TextInput
               style={styles.modalInput}
@@ -1152,6 +1199,31 @@ const styles = StyleSheet.create({
     color: '#F8FAFC',
     padding: 10,
     fontSize: 13,
+  },
+  areaChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  areaChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#0F172A',
+  },
+  areaChipSelected: {
+    borderColor: '#0EA5E9',
+    backgroundColor: '#0C4A6E',
+  },
+  areaChipText: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  areaChipTextSelected: {
+    color: '#E0F2FE',
   },
   modalButtons: {
     flexDirection: 'row',

@@ -8,11 +8,12 @@ import {
   Query,
   UseInterceptors,
 } from '@nestjs/common';
-import { KitchenTicketPriority, KitchenTicketStatus } from '@prisma/client';
+import { KitchenTicketPriority, KitchenTicketStatus, OperationalAreaType } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsEnum,
   IsIn,
   IsInt,
   IsOptional,
@@ -27,10 +28,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
-import {
-  deriveTicketOperationalArea,
-  KitchenDistroFulfillmentService,
-} from './kitchen-distro-fulfillment.service';
+import { KitchenDistroFulfillmentService } from './kitchen-distro-fulfillment.service';
 
 type Scope = NonNullable<VenueScopedRequest['venueScope']>;
 
@@ -39,6 +37,13 @@ export class CreateTicketDto {
   @IsOptional() @IsString() beoId?: string;
   @IsOptional() @IsString() zoneId?: string;
   @IsOptional() @IsString() serviceAreaId?: string;
+  /**
+   * R2-01: explicit, enum-validated operational area. Required unless
+   * `serviceAreaId` resolves to a service area with an unambiguous department.
+   * Validated against the caller's own department entitlements, so it cannot
+   * be used to reach an area the caller does not already hold.
+   */
+  @IsOptional() @IsEnum(OperationalAreaType) operationalAreaType?: OperationalAreaType;
   @IsString() @MaxLength(120) serviceAreaName!: string;
   @IsString() @MaxLength(100) kitchenId!: string;
   @IsString() @MaxLength(120) kitchenName!: string;
@@ -55,6 +60,8 @@ export class CreateTicketDto {
 export class GenerateFromBeoDto {
   @IsString() @MaxLength(100) kitchenId!: string;
   @IsString() @MaxLength(120) kitchenName!: string;
+  /** Defaults to `suite`; BEO orders are raised against a suite sub-venue. */
+  @IsOptional() @IsEnum(OperationalAreaType) operationalAreaType?: OperationalAreaType;
   @IsOptional() @IsString() @MaxLength(100) distroLocationId?: string;
   @IsOptional() @IsString() @MaxLength(120) distroLocationName?: string;
   @IsOptional() @IsArray() @ArrayMaxSize(100) @IsString({ each: true }) lineItemCodes?: string[];
@@ -130,18 +137,18 @@ export class KitchenDistroFulfillmentController {
     scope: Scope,
     action: ResourceAction,
     ticketOrArea: {
-      serviceAreaName?: string | null;
-      notes?: string | null;
-      beoId?: string | null;
+      operationalAreaType: OperationalAreaType;
       zoneId?: string | null;
-    } | string,
+    } | OperationalAreaType,
   ) {
     const zoneId = typeof ticketOrArea === 'object' ? ticketOrArea.zoneId ?? undefined : undefined;
     await this.assertOperator(scope, zoneId);
 
+    // R2-01: authorize against the ticket's PERSISTED, server-resolved area.
+    // Never re-derive it from client-controlled text at decision time.
     const operationalAreaType = typeof ticketOrArea === 'string'
       ? ticketOrArea
-      : deriveTicketOperationalArea(ticketOrArea);
+      : ticketOrArea.operationalAreaType;
 
     const venue = await this.prisma.venue.findUniqueOrThrow({
       where: { id: scope.venueId },
@@ -193,7 +200,8 @@ export class KitchenDistroFulfillmentController {
     const visibleTickets: typeof tickets = [];
 
     for (const ticket of tickets) {
-      const area = deriveTicketOperationalArea(ticket);
+      // R2-01: filter on the persisted area, not re-derived text.
+      const area = ticket.operationalAreaType;
       let allowed = areaDecisions.get(area);
       if (allowed === undefined) {
         const decision = await canAccessResource({
@@ -232,11 +240,31 @@ export class KitchenDistroFulfillmentController {
     @VenueScope() scope: Scope,
     @Body() dto: CreateTicketDto,
   ) {
-    await this.assertTicketAccess(scope, 'create', dto);
+    // R2-01: resolve the authoritative area FIRST (deny-by-default, anchored
+    // to server-owned records), then authorize the caller against that
+    // resolved value, then persist it. A caller can only ever create a ticket
+    // in an area they are already entitled to.
+    const venue = await this.prisma.venue.findUniqueOrThrow({
+      where: { id: scope.venueId },
+      select: { organizationId: true },
+    });
+    const operationalAreaType = await this.service.resolveOperationalArea({
+      organizationId: venue.organizationId,
+      facilityId: scope.venueId,
+      serviceAreaId: dto.serviceAreaId,
+      declaredArea: dto.operationalAreaType,
+    });
+
+    await this.assertTicketAccess(scope, 'create', {
+      operationalAreaType,
+      zoneId: dto.zoneId,
+    });
+
     return this.service.createTicket(
       scope.venueId,
       dto,
       { userId: scope.userId, userName: scope.role, role: scope.role },
+      operationalAreaType,
     );
   }
 
@@ -246,7 +274,10 @@ export class KitchenDistroFulfillmentController {
     @Param('beoId') beoId: string,
     @Body() dto: GenerateFromBeoDto,
   ) {
-    await this.assertTicketAccess(scope, 'create', 'catering');
+    // R2-01: BEO tickets are suite work by default (raised against a suite
+    // sub-venue), not catering. Authorize against the same area the service
+    // will persist.
+    await this.assertTicketAccess(scope, 'create', dto.operationalAreaType ?? 'suite');
     return this.service.createTicketsFromBeo(
       scope.venueId,
       beoId,

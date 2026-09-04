@@ -38,6 +38,7 @@ describe('KitchenDistroFulfillmentController (Unit & Security)', () => {
       getTicketById: vi.fn().mockResolvedValue({
         id: 'ticket-concession-1',
         serviceAreaName: 'Concession Stand 104',
+        operationalAreaType: 'concession',
         status: KitchenTicketStatus.waiting,
       }),
     } as any;
@@ -61,6 +62,7 @@ describe('KitchenDistroFulfillmentController (Unit & Security)', () => {
       getTicketById: vi.fn().mockResolvedValue({
         id: 'ticket-concession-1',
         serviceAreaName: 'Hawker Station 12',
+        operationalAreaType: 'concession',
         status: KitchenTicketStatus.waiting,
       }),
       fireTicket: vi.fn(),
@@ -85,6 +87,7 @@ describe('KitchenDistroFulfillmentController (Unit & Security)', () => {
     const concessionTicket = {
       id: 'ticket-concession-1',
       serviceAreaName: 'Stand 104',
+      operationalAreaType: 'concession',
       status: KitchenTicketStatus.waiting,
     };
     const service = {
@@ -108,9 +111,24 @@ describe('KitchenDistroFulfillmentController (Unit & Security)', () => {
   it('F-01: listTickets filters out Concessions tickets for Culinary-only staff', async () => {
     const prisma = buildPrismaMock(['culinary'], 'concourse_supervisor');
     const tickets = [
-      { id: 't-suite', serviceAreaName: 'Suite 101', status: KitchenTicketStatus.waiting },
-      { id: 't-concession', serviceAreaName: 'Concession Stand 104', status: KitchenTicketStatus.waiting },
-      { id: 't-kitchen', serviceAreaName: 'Main Galley', status: KitchenTicketStatus.waiting },
+      {
+        id: 't-suite',
+        serviceAreaName: 'Suite 101',
+        operationalAreaType: 'suite',
+        status: KitchenTicketStatus.waiting,
+      },
+      {
+        id: 't-concession',
+        serviceAreaName: 'Concession Stand 104',
+        operationalAreaType: 'concession',
+        status: KitchenTicketStatus.waiting,
+      },
+      {
+        id: 't-kitchen',
+        serviceAreaName: 'Main Galley',
+        operationalAreaType: 'kitchen',
+        status: KitchenTicketStatus.waiting,
+      },
     ];
     const service = {
       listTickets: vi.fn().mockResolvedValue(tickets),
@@ -137,6 +155,7 @@ describe('KitchenDistroFulfillmentController (Unit & Security)', () => {
     const ticket = {
       id: 'ticket-1',
       serviceAreaName: 'Suite 200',
+      operationalAreaType: 'suite',
       status: KitchenTicketStatus.waiting,
     };
     const service = {
@@ -172,6 +191,7 @@ describe('KitchenDistroFulfillmentController (Unit & Security)', () => {
     const ticket = {
       id: 'ticket-1',
       serviceAreaName: 'Suite 200',
+      operationalAreaType: 'suite',
       status: KitchenTicketStatus.waiting,
     };
     const service = {
@@ -193,5 +213,123 @@ describe('KitchenDistroFulfillmentController (Unit & Security)', () => {
 
     const reopened = await controller.reopenTicket(scope, 'ticket-1', { reason: 'Restored order' });
     expect(reopened.status).toBe(KitchenTicketStatus.waiting);
+  });
+
+  /**
+   * R2-01 regression suite.
+   *
+   * Authorization used to be derived at read time from free-text fields
+   * (serviceAreaName / notes) via deriveTicketOperationalArea(). That is a
+   * client-influenced trust boundary: a ticket whose name contains no keyword
+   * fell through to a permissive default, and text an operator typed into
+   * `notes` could change who was allowed to see the ticket.
+   *
+   * Authorization now reads the persisted, server-resolved
+   * `operationalAreaType` column. These cases all fail under name derivation
+   * and pass under column-based authorization.
+   */
+  describe('R2-01: authorization uses the persisted area, not free text', () => {
+    it('hides a neutrally-named concession ticket from Culinary-only staff', async () => {
+      const prisma = buildPrismaMock(['culinary'], 'concourse_supervisor');
+      const service = {
+        // No keyword anywhere in the name — name derivation would have
+        // defaulted this to a permissive area and leaked it.
+        listTickets: vi.fn().mockResolvedValue([
+          {
+            id: 't-neutral',
+            serviceAreaName: 'Section 112',
+            operationalAreaType: 'concession',
+            status: KitchenTicketStatus.waiting,
+          },
+        ]),
+      } as any;
+
+      const controller = new KitchenDistroFulfillmentController(service, prisma);
+      const scope = {
+        venueId,
+        userId: 'u-culinary',
+        role: 'concourse_supervisor',
+        allAccess: false,
+      } as any;
+
+      const visible = await controller.listTickets(scope);
+      expect(visible.map((t: any) => t.id)).not.toContain('t-neutral');
+    });
+
+    it('shows a BEO-created suite ticket to Suites staff despite a catering-sounding name', async () => {
+      const prisma = buildPrismaMock(['suites'], 'concourse_supervisor');
+      const service = {
+        listTickets: vi.fn().mockResolvedValue([
+          {
+            id: 't-beo',
+            serviceAreaName: 'Catering Order 4471',
+            operationalAreaType: 'suite',
+            status: KitchenTicketStatus.waiting,
+          },
+        ]),
+      } as any;
+
+      const controller = new KitchenDistroFulfillmentController(service, prisma);
+      const scope = {
+        venueId,
+        userId: 'u-suites',
+        role: 'concourse_supervisor',
+        allAccess: false,
+      } as any;
+
+      const visible = await controller.listTickets(scope);
+      expect(visible.map((t: any) => t.id)).toContain('t-beo');
+    });
+
+    it('does not let operator-supplied notes change who can see a ticket', async () => {
+      const prisma = buildPrismaMock(['culinary'], 'concourse_supervisor');
+      const service = {
+        listTickets: vi.fn().mockResolvedValue([
+          {
+            id: 't-notes',
+            serviceAreaName: 'Stand 104',
+            // Free text naming another area must be inert for authorization.
+            notes: 'Deliver to suite level — culinary kitchen prep',
+            operationalAreaType: 'concession',
+            status: KitchenTicketStatus.waiting,
+          },
+        ]),
+      } as any;
+
+      const controller = new KitchenDistroFulfillmentController(service, prisma);
+      const scope = {
+        venueId,
+        userId: 'u-culinary',
+        role: 'concourse_supervisor',
+        allAccess: false,
+      } as any;
+
+      const visible = await controller.listTickets(scope);
+      expect(visible.map((t: any) => t.id)).not.toContain('t-notes');
+    });
+
+    it('forbids mutating a neutrally-named ticket outside the actor department', async () => {
+      const prisma = buildPrismaMock(['culinary'], 'concourse_supervisor');
+      const service = {
+        getTicketById: vi.fn().mockResolvedValue({
+          id: 't-neutral',
+          serviceAreaName: 'Section 112',
+          operationalAreaType: 'concession',
+          status: KitchenTicketStatus.waiting,
+        }),
+        fireTicket: vi.fn(),
+      } as any;
+
+      const controller = new KitchenDistroFulfillmentController(service, prisma);
+      const scope = {
+        venueId,
+        userId: 'u-culinary',
+        role: 'concourse_supervisor',
+        allAccess: false,
+      } as any;
+
+      await expect(controller.fireTicket(scope, 't-neutral')).rejects.toThrow(ForbiddenException);
+      expect(service.fireTicket).not.toHaveBeenCalled();
+    });
   });
 });

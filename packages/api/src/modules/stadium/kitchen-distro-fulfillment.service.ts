@@ -16,7 +16,41 @@ export interface DistroActor {
 }
 
 /**
- * Derives operational area type from ticket service area name, notes, and BEO association.
+ * Server-owned constraint: which operational areas a ticket may legitimately
+ * claim, given the F&B department of the outlet / operation unit it is
+ * attached to. Derived from data the client cannot set (Outlet.department,
+ * FnbOperationUnit.department), so it cannot be spoofed by request text.
+ *
+ * Sets with more than one member are genuinely ambiguous at the data layer
+ * (an outlet classed `premium_hospitality` may serve either suites or clubs);
+ * the caller must disambiguate explicitly, and may only pick from this set.
+ */
+const FNB_DEPARTMENT_AREA_CONSTRAINTS: Record<string, ReadonlyArray<OperationalAreaType>> = {
+  concessions: ['concession'],
+  retail_fnb: ['concession'],
+  culinary_production: ['culinary', 'kitchen'],
+  premium_hospitality: ['suite', 'club'],
+  catering_banquets: ['catering'],
+  beverage_operations: ['concession', 'club', 'suite', 'catering'],
+  vendor_partners: ['concession', 'other'],
+};
+
+/**
+ * LEGACY — backfill only. Do NOT use for authorization.
+ *
+ * Infers an operational area by substring-matching free text that the client
+ * controls (`serviceAreaName`, `notes`). It is retained solely so migration
+ * 20260903190000 can classify rows created before
+ * `KitchenFulfillmentTicket.operationalAreaType` existed. Using it as a live
+ * authorization input is unsafe in both directions and was the subject of
+ * review finding R2-01: an unlabelled ticket fell through to `distro` (which
+ * Culinary is entitled to, leaking Concessions work), `'Standard Prep Line'`
+ * matched `stand` -> `concession`, and any BEO-linked suite ticket was forced
+ * to `catering`, locking Suites out of its own tickets.
+ *
+ * Live classification goes through
+ * KitchenDistroFulfillmentService.resolveOperationalArea(), which is
+ * deny-by-default and anchored to server-owned records.
  */
 export function deriveTicketOperationalArea(ticket: {
   serviceAreaName?: string | null;
@@ -55,6 +89,13 @@ export interface CreateKitchenTicketDto {
   beoId?: string;
   zoneId?: string;
   serviceAreaId?: string;
+  /**
+   * Explicit, enum-validated operational area. Required unless `serviceAreaId`
+   * resolves to a service area whose department maps to exactly one area.
+   * The caller is authorized against the resolved value, so declaring an area
+   * cannot grant access to one they do not already hold.
+   */
+  operationalAreaType?: OperationalAreaType;
   serviceAreaName: string;
   kitchenId: string;
   kitchenName: string;
@@ -71,6 +112,8 @@ export interface CreateKitchenTicketDto {
 export interface CreateTicketsFromBeoDto {
   kitchenId: string;
   kitchenName: string;
+  /** Defaults to `suite` (BEO orders are raised against a suite sub-venue). */
+  operationalAreaType?: OperationalAreaType;
   distroLocationId?: string;
   distroLocationName?: string;
   lineItemCodes?: string[];
@@ -128,6 +171,87 @@ export class KitchenDistroFulfillmentService {
       select: { organizationId: true },
     });
     return venue.organizationId;
+  }
+
+  /**
+   * Resolves the authoritative operational area for a new ticket (R2-01).
+   *
+   * Deny-by-default. The returned area is what every later authorization
+   * decision is made against, so it must never be inferred from text the
+   * client controls:
+   *
+   *   - `serviceAreaId`, when supplied, must resolve to a real Outlet or
+   *     FnbOperationUnit inside this org/facility. Its server-owned
+   *     `department` yields the set of areas the ticket may legitimately
+   *     claim. An id that resolves to nothing is rejected rather than
+   *     ignored, so a bogus id cannot be used to reach the looser path below.
+   *   - `declaredArea` (an enum, never free text) picks within that set, and
+   *     is rejected if it falls outside it — a concessions outlet cannot be
+   *     labelled `suite`.
+   *   - With no resolvable service area, `declaredArea` stands alone. That is
+   *     safe because the caller is separately checked against it by
+   *     canAccessResource, so they can only ever declare an area they already
+   *     hold — declaring one is not a way to gain access.
+   *   - With neither, we reject. There is deliberately no fallback area:
+   *     the previous `distro` default is exactly what leaked Concessions work
+   *     to Culinary.
+   */
+  async resolveOperationalArea(params: {
+    organizationId: string;
+    facilityId: string;
+    serviceAreaId?: string | null;
+    declaredArea?: OperationalAreaType | null;
+  }): Promise<OperationalAreaType> {
+    const { organizationId, facilityId, serviceAreaId, declaredArea } = params;
+
+    if (serviceAreaId) {
+      const outlet = await this.prisma.outlet.findFirst({
+        where: { id: serviceAreaId, organizationId, facilityId },
+        select: { department: true },
+      });
+      const unit = outlet
+        ? null
+        : await this.prisma.fnbOperationUnit.findFirst({
+            where: { id: serviceAreaId, venueId: facilityId },
+            select: { department: true },
+          });
+
+      if (!outlet && !unit) {
+        throw new BadRequestException(
+          'serviceAreaId does not resolve to a service area in this facility.',
+        );
+      }
+
+      const fnbDepartment = (outlet?.department ?? unit!.department) as string;
+      const permitted = FNB_DEPARTMENT_AREA_CONSTRAINTS[fnbDepartment];
+
+      if (!permitted || permitted.length === 0) {
+        throw new BadRequestException(
+          `Service area is classified '${fnbDepartment}', which has no operational-area mapping. Assign a supported department before raising tickets against it.`,
+        );
+      }
+
+      if (declaredArea) {
+        if (!permitted.includes(declaredArea)) {
+          throw new BadRequestException(
+            `Operational area '${declaredArea}' is not valid for this service area (permitted: ${permitted.join(', ')}).`,
+          );
+        }
+        return declaredArea;
+      }
+
+      if (permitted.length === 1) return permitted[0];
+
+      throw new BadRequestException(
+        `This service area serves multiple operational areas (${permitted.join(', ')}); specify operationalAreaType explicitly.`,
+      );
+    }
+
+    if (declaredArea) return declaredArea;
+
+    throw new BadRequestException(
+      'operationalAreaType is required when no serviceAreaId is supplied, so the ticket can be routed to the correct department.',
+    );
   }
 
   /**
@@ -341,9 +465,27 @@ export class KitchenDistroFulfillmentService {
   /**
    * Create a single fulfillment ticket.
    */
-  async createTicket(facilityId: string, dto: CreateKitchenTicketDto, actor: DistroActor = {}) {
+  async createTicket(
+    facilityId: string,
+    dto: CreateKitchenTicketDto,
+    actor: DistroActor = {},
+    resolvedArea?: OperationalAreaType,
+  ) {
     // F-16: Always derive organizationId securely from venue scope, never from caller-supplied DTO
     const organizationId = await this.organizationIdFor(facilityId);
+
+    // R2-01: the persisted area is authoritative for every later authorization
+    // decision. The controller resolves it before authorizing the caller, and
+    // passes it through; resolving again here would be wasted work but must
+    // still happen if some other entry point calls the service directly.
+    const operationalAreaType =
+      resolvedArea ??
+      (await this.resolveOperationalArea({
+        organizationId,
+        facilityId,
+        serviceAreaId: dto.serviceAreaId,
+        declaredArea: dto.operationalAreaType,
+      }));
 
     const ticket = await this.prisma.$transaction(async (tx) => {
       await applyTenantSessionSettings(tx, { organizationId, facilityId, venueId: facilityId });
@@ -352,6 +494,7 @@ export class KitchenDistroFulfillmentService {
         data: {
           organizationId,
           facilityId,
+          operationalAreaType,
           eventId: dto.eventId ?? null,
           beoId: dto.beoId ?? null,
           zoneId: dto.zoneId ?? null,
@@ -429,6 +572,14 @@ export class KitchenDistroFulfillmentService {
       throw new BadRequestException('No eligible catering line items found to create tickets.');
     }
 
+    // R2-01: these tickets originate from a SuiteBeoOrder against a specific
+    // sub-venue (the suite), so the area is `suite` — NOT `catering`. The old
+    // text-derivation forced every BEO-linked ticket to `catering`, which both
+    // leaked suite work to Catering and locked the owning Suites department
+    // out of its own tickets. An explicit override is still honoured for
+    // genuinely non-suite BEO flows.
+    const operationalAreaType: OperationalAreaType = dto.operationalAreaType ?? 'suite';
+
     const createdTickets = await this.prisma.$transaction(async (tx) => {
       await applyTenantSessionSettings(tx, { organizationId, facilityId, venueId: facilityId });
 
@@ -438,6 +589,7 @@ export class KitchenDistroFulfillmentService {
           data: {
             organizationId,
             facilityId,
+            operationalAreaType,
             eventId: beo.eventId,
             beoId: beo.id,
             zoneId: beo.zoneId,

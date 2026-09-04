@@ -57,8 +57,21 @@ export interface AccessDecision {
   activeDepartmentCodes: string[];
 }
 
-/** Normalized operational areas permitted by department code without overrides */
-const BASELINE_DEPARTMENT_AREAS: Record<string, Set<string>> = {
+/**
+ * Normalized operational areas permitted by department code without overrides.
+ *
+ * SINGLE SOURCE OF TRUTH for department -> area authorization. This drives all
+ * three layers, so they cannot drift apart:
+ *   1. Application layer  — evaluateAccessRules() below.
+ *   2. Database layer     — materialized into DepartmentAreaRule rows by
+ *                           DepartmentsService.ensureDefaultDepartments(), which
+ *                           the RLS helper app_private.department_area_allows()
+ *                           reads (migration 20260903190000).
+ *   3. Backfill           — the same mapping is embedded in that migration to
+ *                           seed rules for departments created before it ran.
+ * A drift guard (access-control.helper.spec.ts) asserts 1 and 2 agree.
+ */
+export const BASELINE_DEPARTMENT_AREAS: Record<string, Set<string>> = {
   suites: new Set(['suite', 'shared']),
   clubs: new Set(['club', 'shared']),
   catering: new Set(['catering', 'kitchen', 'distro', 'shared']),

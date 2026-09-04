@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { assertCanManageDepartment } from '../../auth/access-control.helper';
+import { assertCanManageDepartment, BASELINE_DEPARTMENT_AREAS } from '../../auth/access-control.helper';
+import type { OperationalAreaType } from '@prisma/client';
 import { canManageVenue, isAdminRole } from '../../auth/roles';
 import type { CreateUserAreaOverrideDto } from './departments.dto';
 
@@ -44,23 +45,91 @@ export class DepartmentsService {
     const existingCodes = new Set(existing.map((d) => d.code.toLowerCase()));
 
     const missing = STANDARD_VENUE_DEPARTMENTS.filter((d) => !existingCodes.has(d.code));
-    if (missing.length === 0) return;
+    if (missing.length > 0) {
+      await Promise.all(
+        missing.map((dept) =>
+          this.prisma.department.create({
+            data: {
+              organizationId,
+              facilityId,
+              code: dept.code,
+              name: dept.name,
+              defaultRoute: dept.defaultRoute,
+              visibilityScope: dept.visibilityScope,
+              active: true,
+            },
+          }),
+        ),
+      );
+    }
 
-    await Promise.all(
-      missing.map((dept) =>
-        this.prisma.department.create({
-          data: {
-            organizationId,
-            facilityId,
-            code: dept.code,
-            name: dept.name,
-            defaultRoute: dept.defaultRoute,
-            visibilityScope: dept.visibilityScope,
-            active: true,
-          },
-        }),
-      ),
-    );
+    await this.ensureDepartmentAreaRules(organizationId, facilityId);
+  }
+
+  /**
+   * Materializes BASELINE_DEPARTMENT_AREAS into DepartmentAreaRule rows.
+   *
+   * These rows are what the database-layer check reads:
+   * app_private.department_area_allows() (migration 20260903190000) joins
+   * DepartmentMembership -> DepartmentAreaRule to decide whether a user may
+   * see a kitchen ticket in a given operational area. Without them the RLS
+   * policy would deny every non-admin, so this runs on every workspace/list
+   * call rather than only at department-creation time — it is cheap
+   * (idempotent no-op once seeded) and self-heals a facility whose rules were
+   * never written.
+   *
+   * BASELINE_DEPARTMENT_AREAS is the single source of truth for both layers;
+   * access-control.helper.spec.ts guards against the two drifting apart.
+   */
+  private async ensureDepartmentAreaRules(organizationId: string, facilityId: string): Promise<void> {
+    const departments = await this.prisma.department.findMany({
+      where: { organizationId, facilityId },
+      select: { id: true, code: true },
+    });
+
+    const existingRules = await this.prisma.departmentAreaRule.findMany({
+      where: {
+        organizationId,
+        facilityId,
+        zoneId: null,
+        subVenueId: null,
+        outletId: null,
+      },
+      select: { departmentId: true, areaType: true },
+    });
+    const seen = new Set(existingRules.map((r) => `${r.departmentId}:${r.areaType}`));
+
+    const toCreate: Array<{
+      organizationId: string;
+      facilityId: string;
+      departmentId: string;
+      areaType: OperationalAreaType;
+      actionScope: string;
+    }> = [];
+
+    for (const dept of departments) {
+      const areas = BASELINE_DEPARTMENT_AREAS[dept.code.toLowerCase()];
+      if (!areas) continue;
+      for (const area of areas) {
+        if (seen.has(`${dept.id}:${area}`)) continue;
+        toCreate.push({
+          organizationId,
+          facilityId,
+          departmentId: dept.id,
+          areaType: area as OperationalAreaType,
+          actionScope: 'read_write',
+        });
+      }
+    }
+
+    if (toCreate.length === 0) return;
+
+    // A partial unique index backs the department-wide rule set, so a
+    // concurrent seeder racing us is absorbed rather than throwing.
+    await this.prisma.departmentAreaRule.createMany({
+      data: toCreate,
+      skipDuplicates: true,
+    });
   }
 
   /**

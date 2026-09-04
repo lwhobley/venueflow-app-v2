@@ -2968,6 +2968,14 @@ model KitchenFulfillmentTicket {
   beoId              String?
   zoneId             String?
   serviceAreaId      String?
+  /**
+   * Authoritative operational area, resolved server-side at creation from
+   * server-owned records (Outlet/FnbOperationUnit department) or an explicit,
+   * enum-validated declaration the creator is already entitled to. Every
+   * authorization decision — application and RLS — reads this column. Never
+   * infer it from serviceAreaName/notes at decision time (review R2-01).
+   */
+  operationalAreaType OperationalAreaType
   serviceAreaName    String
   kitchenId          String
   kitchenName        String
@@ -3001,6 +3009,7 @@ model KitchenFulfillmentTicket {
   @@index([organizationId, facilityId, status])
   @@index([facilityId, kitchenId, status])
   @@index([facilityId, serviceAreaId, status])
+  @@index([facilityId, operationalAreaType, status])
   @@index([facilityId, readyAt])
   @@index([beoId])
 }
