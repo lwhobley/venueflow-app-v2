@@ -635,7 +635,14 @@ describe('VmsService', () => {
           shiftDate: pastShiftDate,
           startTime: '06:00',
           quantityFulfilled: 2,
-          fulfillments: [{ vendorId: 'v-1' }],
+          fulfillments: [
+            {
+              vendor: {
+                id: 'v-1',
+                staffMembers: [{ id: 'staff-candidate-1' }],
+              },
+            },
+          ],
           attendances: [], // 0 clocked in
         },
       ]);
@@ -644,14 +651,56 @@ describe('VmsService', () => {
       const res = await service.detectNoShows(mockOrgId, mockFacilityId, 30);
 
       expect(res.flaggedNoShowsCount).toBe(2);
+      // First slot assigned to candidate staff member
       expect(prisma.vmsTimeAttendance.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
+            staffMemberId: 'staff-candidate-1',
             status: VmsAttendanceStatus.flagged_exception,
             deviationFlags: expect.arrayContaining(['no_show']),
           }),
         }),
       );
+
+      // Idempotency check: run again with existing no-shows recorded (P3)
+      prisma.vmsStaffingOrder.findMany.mockResolvedValue([
+        {
+          id: 'order-noshow-1',
+          orderNumber: 'ORD-NS-01',
+          roleRequired: 'Bartender',
+          shiftDate: pastShiftDate,
+          startTime: '06:00',
+          quantityFulfilled: 2,
+          fulfillments: [{ vendor: { id: 'v-1', staffMembers: [{ id: 'staff-candidate-1' }] } }],
+          attendances: [
+            { id: 'att-1', deviationFlags: ['no_show'] },
+            { id: 'att-2', deviationFlags: ['no_show'] },
+          ],
+        },
+      ]);
+      const res2 = await service.detectNoShows(mockOrgId, mockFacilityId, 30);
+      expect(res2.flaggedNoShowsCount).toBe(0); // Idempotent: 0 newly flagged
+    });
+
+    it('sanitizes pinHash and pinSalt from getVendor staffMembers (P4)', async () => {
+      prisma.vmsVendor.findFirst.mockResolvedValue({
+        id: 'v-1',
+        name: 'Apex Staffing',
+        staffMembers: [
+          {
+            id: 'staff-1',
+            firstName: 'Jane',
+            lastName: 'Doe',
+            pinHash: 'secret-hash-value',
+            pinSalt: 'secret-salt-value',
+          },
+        ],
+      });
+
+      const vendor = await service.getVendor('v-1', mockOrgId, mockFacilityId);
+      expect(vendor.id).toBe('v-1');
+      expect((vendor.staffMembers[0] as any).pinHash).toBeUndefined();
+      expect((vendor.staffMembers[0] as any).pinSalt).toBeUndefined();
     });
 
     it('exports audit logs in CSV and JSON formats (F6)', async () => {

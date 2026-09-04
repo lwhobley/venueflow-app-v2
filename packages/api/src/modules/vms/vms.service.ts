@@ -157,6 +157,9 @@ export class VmsService {
       },
     });
     if (!vendor) throw new NotFoundException('Vendor not found');
+    if (vendor.staffMembers) {
+      vendor.staffMembers = vendor.staffMembers.map(sanitizeStaffMember) as any;
+    }
     return vendor;
   }
 
@@ -1012,7 +1015,7 @@ export class VmsService {
       entityType: 'VmsTimeAttendance',
       entityId: dto.attendanceId,
       action: 'CLOCK_OUT',
-      userId: options?.callerUserId || attendance.staffMemberId,
+      userId: options?.callerUserId || attendance.staffMemberId || 'system',
       ipAddress: options?.ipAddress,
       before: { clockIn: attendance.clockIn, status: attendance.status },
       changes: { hoursWorked: rawHours, billableHours, deviationFlags, totalBilledCents },
@@ -1113,7 +1116,13 @@ export class VmsService {
       include: {
         fulfillments: {
           where: { status: { in: [VmsFulfillmentStatus.confirmed, VmsFulfillmentStatus.completed] } },
-          include: { vendor: true },
+          include: {
+            vendor: {
+              include: {
+                staffMembers: true,
+              },
+            },
+          },
         },
         attendances: true,
       },
@@ -1128,20 +1137,37 @@ export class VmsService {
 
       const threshold = new Date(scheduledStart.getTime() + gracePeriodMinutes * 60 * 1000);
       if (now > threshold) {
+        // Idempotency: count both actual punches and already recorded no-shows (P3)
         const actualClockIns = order.attendances.filter(
           (a) => !a.deviationFlags.includes('no_show'),
         ).length;
-        const missingCount = Math.max(0, order.quantityFulfilled - actualClockIns);
+        const existingNoShows = order.attendances.filter(
+          (a) => a.deviationFlags.includes('no_show'),
+        ).length;
+        const missingCount = Math.max(0, order.quantityFulfilled - actualClockIns - existingNoShows);
 
         if (missingCount > 0) {
+          const punchedStaffIds = new Set(
+            order.attendances.map((a) => a.staffMemberId).filter(Boolean),
+          );
+
           for (let i = 0; i < missingCount; i++) {
             const fulfillment = order.fulfillments[i % (order.fulfillments.length || 1)];
-            const vendorId = fulfillment?.vendorId;
+            const vendor = fulfillment?.vendor;
+            const vendorId = vendor?.id;
+
+            // Find an unpunched staff member from vendor roster if available (P1)
+            const candidateStaff = vendor?.staffMembers?.find((s) => !punchedStaffIds.has(s.id));
+            const staffMemberId = candidateStaff ? candidateStaff.id : null;
+            if (candidateStaff) {
+              punchedStaffIds.add(candidateStaff.id);
+            }
 
             const noShowRecord = await this.prisma.vmsTimeAttendance.create({
               data: {
                 organizationId,
                 facilityId,
+                staffMemberId,
                 orderId: order.id,
                 clockIn: scheduledStart,
                 clockOut: scheduledStart,
@@ -1161,7 +1187,7 @@ export class VmsService {
               entityId: noShowRecord.id,
               action: 'EXCEPTION_FLAGGED',
               userId: 'system_scheduler',
-              changes: { orderId: order.id, vendorId, reason: 'Staff member failed to report to scheduled shift on time' },
+              changes: { orderId: order.id, vendorId, staffMemberId, reason: 'Staff member failed to report to scheduled shift on time' },
             });
 
             this.logger.warn(`No-show detected for order ${order.orderNumber} (role: ${order.roleRequired})`);
@@ -1188,13 +1214,18 @@ export class VmsService {
       where: {
         organizationId,
         facilityId,
+        staffMemberId: { not: null },
         status: { in: [VmsAttendanceStatus.approved, VmsAttendanceStatus.clocked_out] },
       },
       include: { staffMember: true },
       orderBy: { clockIn: 'asc' },
     });
 
-    return this.integrationsService.generateAdpExportCsv(records);
+    const validRecords = records.filter(
+      (r): r is typeof r & { staffMember: NonNullable<typeof r.staffMember> } => r.staffMember !== null,
+    );
+
+    return this.integrationsService.generateAdpExportCsv(validRecords);
   }
 
   async exportPayrollGusto(organizationId: string, facilityId: string) {
@@ -1202,17 +1233,22 @@ export class VmsService {
       where: {
         organizationId,
         facilityId,
+        staffMemberId: { not: null },
         status: { in: [VmsAttendanceStatus.approved, VmsAttendanceStatus.clocked_out] },
       },
       include: { staffMember: true },
       orderBy: { clockIn: 'asc' },
     });
 
+    const validRecords = records.filter(
+      (r): r is typeof r & { staffMember: NonNullable<typeof r.staffMember> } => r.staffMember !== null,
+    );
+
     const now = new Date();
     const periodStart = new Date(now.getTime() - 14 * 86400 * 1000).toISOString().split('T')[0];
     const periodEnd = now.toISOString().split('T')[0];
 
-    return this.integrationsService.generateGustoExportJson(records, periodStart, periodEnd);
+    return this.integrationsService.generateGustoExportJson(validRecords, periodStart, periodEnd);
   }
 
   // ---------------------------------------------------------------------------
@@ -1399,7 +1435,7 @@ export class VmsService {
 
     const mapped = records.map((r) => ({
       id: r.id,
-      staffName: `${r.staffMember.firstName} ${r.staffMember.lastName}`,
+      staffName: r.staffMember ? `${r.staffMember.firstName} ${r.staffMember.lastName}` : 'Unassigned Slot',
       hoursWorked: r.hoursWorked,
       breakMinutes: r.breakMinutes,
       clockIn: r.clockIn,

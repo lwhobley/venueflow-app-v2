@@ -22,7 +22,7 @@
     "api:prisma:generate": "npm run prisma:generate -w @venue-wrangler/api",
     "api:migrate:dev": "npm run prisma:migrate:dev -w @venue-wrangler/api",
     "doctor": "expo-doctor",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && npm run typecheck -w @venue-wrangler/api",
     "test": "npm run api:prisma:generate && vitest run",
     "test:watch": "npm run api:prisma:generate && vitest"
   },

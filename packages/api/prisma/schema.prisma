@@ -3477,7 +3477,7 @@ model VmsTimeAttendance {
   id                    String                @id @default(cuid())
   organizationId        String
   facilityId            String
-  staffMemberId         String
+  staffMemberId         String?
   orderId               String?
   clockIn               DateTime              @default(now())
   clockOut              DateTime?
@@ -3499,7 +3499,7 @@ model VmsTimeAttendance {
 
   organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
-  staffMember           VmsStaffMember        @relation(fields: [staffMemberId], references: [id], onDelete: Cascade)
+  staffMember           VmsStaffMember?       @relation(fields: [staffMemberId], references: [id], onDelete: Cascade)
   order                 VmsStaffingOrder?     @relation(fields: [orderId], references: [id], onDelete: SetNull)
 
   @@index([facilityId, staffMemberId, status])

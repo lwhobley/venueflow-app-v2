@@ -16,7 +16,7 @@ export interface InventorySyncResult {
   system: VmsSyncSystem;
   syncType: string;
   itemsSynced: number;
-  status: 'success' | 'partial' | 'failed';
+  status: 'success' | 'partial' | 'failed' | 'demo_mode';
   message: string;
   supplies: ShiftSupplyItem[];
 }
@@ -123,7 +123,7 @@ export class VmsIntegrationsService {
       },
     ];
 
-    let syncStatus = 'demo_mode';
+    let syncStatus: 'success' | 'partial' | 'failed' | 'demo_mode' = 'demo_mode';
     let syncMessage = `Demonstration sync completed for ${defaultCatalog.length} items (using baseline inventory catalog). Configure live integration endpoint for direct cloud push.`;
 
     const remoteUrl = process.env.YELLOW_DOG_API_URL;
@@ -184,7 +184,7 @@ export class VmsIntegrationsService {
           : `Demonstration sync performed for ${supplies.length} stock line items (${system} live URL/API key not configured).`,
         metadata: {
           timestamp: new Date().toISOString(),
-          catalogSnapshot: supplies,
+          catalogSnapshot: supplies as any,
         },
       },
     });
