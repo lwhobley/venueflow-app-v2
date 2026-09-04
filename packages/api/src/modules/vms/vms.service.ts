@@ -1610,15 +1610,19 @@ export class VmsService {
         -- DISTINCT ON pins each attendance row to exactly one vendor: an order
         -- filled by two agencies has two confirmed fulfillments, and a plain
         -- join would charge the same missing slot to both of them.
-        SELECT DISTINCT ON (a."id")
-          f."vendorId", a."deviationFlags", a."totalBilledCents"
-        FROM "VmsTimeAttendance" a
-        JOIN "VmsOrderFulfillment" f ON f."orderId" = a."orderId"
-        WHERE a."organizationId" = ${organizationId}
-          AND a."facilityId" = ${facilityId}
-          AND a."staffMemberId" IS NULL
-          AND f."status" IN ('confirmed', 'completed')
-        ORDER BY a."id", f."createdAt" ASC, f."id" ASC
+        -- Wrapped: an ORDER BY written directly in a UNION arm binds to the
+        -- whole union, where "a" is out of scope (42P01).
+        SELECT "vendorId", "deviationFlags", "totalBilledCents" FROM (
+          SELECT DISTINCT ON (a."id")
+            f."vendorId", a."deviationFlags", a."totalBilledCents"
+          FROM "VmsTimeAttendance" a
+          JOIN "VmsOrderFulfillment" f ON f."orderId" = a."orderId"
+          WHERE a."organizationId" = ${organizationId}
+            AND a."facilityId" = ${facilityId}
+            AND a."staffMemberId" IS NULL
+            AND f."status" IN ('confirmed', 'completed')
+          ORDER BY a."id", f."createdAt" ASC, f."id" ASC
+        ) deduped
       ) v
       WHERE v."vendorId" IS NOT NULL
       GROUP BY v."vendorId"

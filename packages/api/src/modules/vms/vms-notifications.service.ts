@@ -8,6 +8,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmailService } from '../../email/email.service';
+import { runOutsideTenantTx } from '../../prisma/tenant-request-transaction';
 
 const MANAGER_ROLES: Role[] = ['admin', 'owner', 'manager'];
 const ACTIVE_MEMBERSHIP = [{ membershipStatus: null }, { membershipStatus: 'active' as const }];
@@ -280,12 +281,17 @@ export class VmsNotificationsService {
    */
   notifyAfterCommit(args: VmsNotifyArgs): void {
     setImmediate(() => {
-      this.notify(args).catch((err) => {
-        this.logger.error(
-          `Deferred VMS notification (${args.eventType}) failed: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
-        );
+      // AsyncLocalStorage follows the timer, so without stepping out of the
+      // store this would still resolve the request's now-committed transaction
+      // client and every query would fail with "Transaction already closed".
+      runOutsideTenantTx(() => {
+        this.notify(args).catch((err) => {
+          this.logger.error(
+            `Deferred VMS notification (${args.eventType}) failed: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        });
       });
     });
   }

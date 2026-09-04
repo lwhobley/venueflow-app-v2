@@ -21,6 +21,19 @@ export function runWithTenantTx<T>(tx: RawTenantTx, fn: () => T): T {
   return storage.run(tx, fn);
 }
 
+/**
+ * Run `fn` with no request transaction bound, even when called from inside one.
+ *
+ * AsyncLocalStorage propagates through timers and promise continuations, so
+ * work deferred with setImmediate from inside a request still resolves the
+ * request's transaction client — which by then has committed, and every query
+ * fails with "Transaction already closed". Post-commit work must explicitly
+ * step outside the store so it uses the pooled client instead.
+ */
+export function runOutsideTenantTx<T>(fn: () => T): T {
+  return storage.exit(fn);
+}
+
 /** The raw transaction bound for the current request, if any. */
 export function getBoundTenantTx(): RawTenantTx | undefined {
   return storage.getStore();
