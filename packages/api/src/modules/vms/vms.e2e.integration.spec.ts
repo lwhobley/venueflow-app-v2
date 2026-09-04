@@ -148,10 +148,14 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     outsider = await makeUser(otherVenueId, 'manager', 'Workforce Manager');
 
     // `prisma db push` syncs schema.prisma only and never runs the raw SQL in
-    // prisma/migrations, so the audit-log immutability trigger from
-    // 20260904170000 does not exist in a db-push test database. Recreate it
-    // here — the same approach setup-test-db.ts takes for the auth bootstrap
-    // functions. Keep in sync with that migration.
+    // prisma/migrations, so the audit-log immutability trigger does not exist
+    // in a db-push test database. Recreate it here — the same approach
+    // setup-test-db.ts takes for the auth bootstrap functions.
+    //
+    // UPDATE only, matching 20260904180000: guarding DELETE with a trigger made
+    // it impossible to cascade-delete a Facility that had produced audit rows.
+    // Deletion is blocked by privilege instead — stadium_api holds SELECT and
+    // INSERT only — which the owner connection used here deliberately bypasses.
     await prisma.$executeRawUnsafe('CREATE SCHEMA IF NOT EXISTS app_private');
     await prisma.$executeRawUnsafe(`
       CREATE OR REPLACE FUNCTION app_private.enforce_vms_audit_log_immutability()
@@ -166,7 +170,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     );
     await prisma.$executeRawUnsafe(`
       CREATE TRIGGER enforce_vms_audit_log_immutability
-        BEFORE UPDATE OR DELETE ON "VmsAuditLog"
+        BEFORE UPDATE ON "VmsAuditLog"
         FOR EACH ROW EXECUTE FUNCTION app_private.enforce_vms_audit_log_immutability();
     `);
   }, 60_000);
@@ -554,6 +558,17 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
   });
 
   describe('audit trail', () => {
+    it('completes the order through the audited status transition', async () => {
+      await request(app.getHttpServer())
+        .patch(`/api/v1/vms/orders/${orderId}/status`)
+        .set(auth(manager))
+        .send({ status: 'completed' })
+        .expect(200);
+
+      const order = await prisma.vmsStaffingOrder.findUniqueOrThrow({ where: { id: orderId } });
+      expect(order.status).toBe('completed');
+    });
+
     it('records the journey with actor and before/after values', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/vms/audit-logs?limit=100')
@@ -571,16 +586,36 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
       expect(statusChange.changes.before).toBeDefined();
     });
 
-    it('refuses to update or delete an audit entry', async () => {
+    it('refuses to amend an audit entry', async () => {
       const entry = await prisma.vmsAuditLog.findFirstOrThrow({ where: { facilityId: venueId } });
 
       await expect(
         prisma.vmsAuditLog.update({ where: { id: entry.id }, data: { action: 'TAMPERED' } }),
       ).rejects.toThrow(/immutable/i);
+    });
 
-      await expect(
-        prisma.vmsAuditLog.delete({ where: { id: entry.id } }),
-      ).rejects.toThrow(/immutable/i);
+    it('withholds UPDATE and DELETE on the audit log from the runtime role', async () => {
+      // Deletion is blocked by privilege rather than by a trigger, so that a
+      // legitimate Facility teardown can still cascade. Assert the grant state
+      // directly. The role only exists once migrations have run, so a db-push
+      // database (which is what this suite uses) simply has nothing to check.
+      const [role] = await prisma.$queryRawUnsafe<Array<{ present: boolean }>>(
+        `SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'stadium_api') AS present`,
+      );
+      if (!role?.present) return;
+
+      const [grants] = await prisma.$queryRawUnsafe<
+        Array<{ canUpdate: boolean; canDelete: boolean; canInsert: boolean }>
+      >(`
+        SELECT
+          has_table_privilege('stadium_api', '"VmsAuditLog"', 'UPDATE') AS "canUpdate",
+          has_table_privilege('stadium_api', '"VmsAuditLog"', 'DELETE') AS "canDelete",
+          has_table_privilege('stadium_api', '"VmsAuditLog"', 'INSERT') AS "canInsert"
+      `);
+
+      expect(grants.canUpdate).toBe(false);
+      expect(grants.canDelete).toBe(false);
+      expect(grants.canInsert).toBe(true);
     });
 
     it('exports the audit trail as CSV', async () => {
