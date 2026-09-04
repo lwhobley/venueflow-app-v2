@@ -183,6 +183,15 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
       await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
     }
     if (venueIds.length) {
+      // VmsOrderFulfillment.vendor is onDelete: Restrict, so cascading the
+      // Facility delete through VmsVendor is refused while any bid survives.
+      // Clear the fulfillments first and the rest of the VMS graph cascades
+      // cleanly from the Facility. Leaving them behind strands Facility rows,
+      // which then breaks the blanket organization.deleteMany() that the other
+      // integration specs use to tidy up.
+      await prisma.vmsOrderFulfillment.deleteMany({
+        where: { order: { facilityId: { in: venueIds } } },
+      });
       await prisma.facility.deleteMany({ where: { id: { in: venueIds } } });
       await prisma.venue.deleteMany({ where: { id: { in: venueIds } } });
       await prisma.organization.deleteMany();
