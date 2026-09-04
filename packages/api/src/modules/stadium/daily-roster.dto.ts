@@ -14,17 +14,17 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { DailyRosterType } from '@prisma/client';
+import { AttendanceStatus as PrismaAttendanceStatus, DailyRosterType } from '@prisma/client';
 
-export const VALID_ATTENDANCE_STATUSES = [
-  'scheduled',
-  'checked_in',
-  'checked_out',
-  'no_show',
-  'excused',
-] as const;
+/**
+ * F-14: derived from the Prisma enum rather than hand-listed, so the DTO guard
+ * and the database constraint (migration 20260903200000) cannot drift apart —
+ * adding a state to the schema automatically widens validation, and removing
+ * one automatically narrows it.
+ */
+export const VALID_ATTENDANCE_STATUSES = Object.values(PrismaAttendanceStatus);
 
-export type AttendanceStatus = typeof VALID_ATTENDANCE_STATUSES[number];
+export type AttendanceStatus = PrismaAttendanceStatus;
 
 export class CreateDailyRosterDto {
   @IsString()
@@ -92,7 +92,7 @@ export class AssignRosterWorkerDto {
 
   @IsOptional()
   @IsIn(VALID_ATTENDANCE_STATUSES)
-  attendanceStatus?: string;
+  attendanceStatus?: AttendanceStatus;
 
   @IsOptional()
   @IsString()
@@ -120,7 +120,7 @@ export class UpdateRosterWorkerDto {
 
   @IsOptional()
   @IsIn(VALID_ATTENDANCE_STATUSES)
-  attendanceStatus?: string;
+  attendanceStatus?: AttendanceStatus;
 
   @IsOptional()
   @IsString()
@@ -144,7 +144,7 @@ export class WorkerAdjustmentDto {
 
   @IsOptional()
   @IsIn(VALID_ATTENDANCE_STATUSES)
-  attendanceStatus?: string;
+  attendanceStatus?: AttendanceStatus;
 
   @IsOptional()
   @IsString()

@@ -166,3 +166,42 @@ Tests: **978 passed, 2 skipped, 89 files, 0 failures** (baseline 961/88). `tsc -
 Still open, unchanged by this pass: **R2-03** (roster TOCTOU, Low), **F-14 database half** (`attendanceStatus` enum/CHECK), and the realtime gateway broadcast audit.
 
 One item now warrants owner attention that did not exist before this round: because the RLS layer was previously deny-everything under `stadium_api`, **no environment has ever run a full workload against working policies.** The isolation gate must be re-run — and extended with positive-visibility assertions, not only cross-tenant-denial ones — before the cutover flips `DATABASE_URL` to `stadium_api`.
+
+---
+
+## 8. Round 4 — R2-03 and F-14 database half (2026-09-03)
+
+### 8.1 R2-03 — roster adjustment check-to-use window
+
+`adjustClosedRoster` verified worker ownership with a `findFirst` **outside** the transaction and then wrote **inside** it. Two changes close the window:
+
+1. The ownership pre-check moved inside the `$transaction` callback, ahead of the CAS version bump, so the relationship is read and used under one snapshot.
+2. The write changed from `update({ where: { id } })` to `updateMany({ where: { id, rosterId } })` with a `count === 0` guard. Ownership is now enforced by the write's own predicate rather than only by a preceding read — a worker on another roster matches nothing and is rejected.
+
+Regression test `R2-03: rejects the adjustment when the write predicate matches no worker on this roster` simulates the pre-check passing while the write matches zero rows, asserts `NotFoundException`, and asserts the `updateMany` predicate actually contains `rosterId`.
+
+### 8.2 F-14 — database half
+
+`attendanceStatus` was `TEXT NOT NULL DEFAULT 'scheduled'` with no enum and no CHECK. Migration `20260903200000` converts it to a Postgres `AttendanceStatus` enum (`scheduled`, `checked_in`, `checked_out`, `no_show`, `excused`), matching the `DailyRosterStatus` / `KitchenTicketStatus` pattern already used in this feature.
+
+The conversion **refuses to run** if unrecognized values exist, rather than coercing them to `'scheduled'`. These rows sit beside `hoursWorked` / `breakMinutes` / `hourlyRateCents`, so they are payroll-adjacent and silently rewriting a worker's attendance would destroy real information. The guard names the offending values so they can be reconciled deliberately.
+
+`VALID_ATTENDANCE_STATUSES` is now derived from the Prisma enum (`Object.values(PrismaAttendanceStatus)`) instead of being hand-listed, so the DTO guard and the database constraint cannot drift. Typing the DTO fields as `AttendanceStatus` also propagated the constraint into the compiler, which surfaced and fixed three service call sites that were passing bare `string`.
+
+### 8.3 Verification
+
+| Check | Result |
+|---|---|
+| Database rejects a typo (`'chekced_in'`) | `ERROR: invalid input value for enum "AttendanceStatus"` — this insert succeeded before |
+| Migration guard against unrecognized legacy values | Fires and names them: `unrecognized value(s) present: 'bogus', 'chekced_in'` |
+| Column type after migration | `AttendanceStatus`, default `'scheduled'::"AttendanceStatus"` |
+| All 79 migrations against an empty database | Applied clean |
+| Unit tests | **980 passed / 2 skipped / 89 files**, 0 failures |
+| Integration tests | **26 / 26** |
+| `tsc --noEmit` | exit 0 |
+
+### 8.4 Remaining
+
+Only the **realtime gateway broadcast audit** is still outstanding from this review series. It is an audit rather than a known defect — the question is whether any gateway broadcast reaches subscribers outside the tenant/department boundary the REST layer now enforces.
+
+The pre-cutover action from §7.4 also still stands: re-run the isolation gate with positive-visibility assertions before flipping `DATABASE_URL` to `stadium_api`.

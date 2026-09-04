@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DailyRosterService } from './daily-roster.service';
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { AttendanceStatus as PrismaAttendanceStatus } from '@prisma/client';
+import { VALID_ATTENDANCE_STATUSES } from './daily-roster.dto';
 
 describe('DailyRosterService (Unit)', () => {
   const facilityId = 'venue-stadium-1';
@@ -294,9 +296,17 @@ describe('DailyRosterService (Unit)', () => {
       departmentMembership: {
         findFirst: vi.fn().mockResolvedValue({ id: 'mem-1' }),
       },
-      dailyTemporaryRosterWorker: {
-        findFirst: vi.fn().mockResolvedValue(null), // worker not on this roster
-      },
+      // R2-03: the ownership check now runs inside the transaction.
+      $transaction: vi.fn().mockImplementation(async (callback) =>
+        callback({
+          dailyTemporaryRosterWorker: {
+            findFirst: vi.fn().mockResolvedValue(null), // worker not on this roster
+            updateMany: vi.fn(),
+          },
+          dailyTemporaryRosterHistory: { create: vi.fn() },
+          dailyTemporaryRoster: { updateMany: vi.fn(), findUniqueOrThrow: vi.fn() },
+        }),
+      ),
     } as any;
 
     const service = new DailyRosterService(prismaMock);
@@ -466,16 +476,14 @@ describe('DailyRosterService (Unit)', () => {
       dailyTemporaryRoster: {
         findFirst: vi.fn().mockResolvedValue(mockRoster),
       },
-      dailyTemporaryRosterWorker: {
-        findFirst: vi.fn().mockResolvedValue({ id: 'w-1', rosterId: 'roster-approved' }),
-      },
       $transaction: vi.fn().mockImplementation(async (callback) => {
         const tx = {
           dailyTemporaryRosterHistory: {
             create: vi.fn().mockResolvedValue({ id: 'hist-1' }),
           },
           dailyTemporaryRosterWorker: {
-            update: vi.fn().mockResolvedValue({ id: 'w-1', hoursWorked: 7.5 }),
+            findFirst: vi.fn().mockResolvedValue({ id: 'w-1', rosterId: 'roster-approved' }),
+            updateMany: vi.fn().mockResolvedValue({ count: 1 }),
           },
           dailyTemporaryRoster: {
             updateMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -500,5 +508,74 @@ describe('DailyRosterService (Unit)', () => {
     });
 
     expect(adjusted.version).toBe(2);
+  });
+
+  /**
+   * R2-03: the worker-ownership check used to run outside the transaction while
+   * the write ran inside it, leaving a check-to-use window. The check now runs
+   * inside the transaction AND `rosterId` is part of the write's own predicate,
+   * so ownership is enforced by the update itself.
+   */
+  it('R2-03: rejects the adjustment when the write predicate matches no worker on this roster', async () => {
+    const updateMany = vi.fn().mockResolvedValue({ count: 0 });
+
+    const prismaMock = {
+      departmentMembership: { findFirst: vi.fn().mockResolvedValue({ id: 'mem-1' }) },
+      dailyTemporaryRoster: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'roster-1',
+          status: 'closed',
+          version: 1,
+          departmentId: 'dept-catering',
+        }),
+      },
+      $transaction: vi.fn().mockImplementation(async (callback) =>
+        callback({
+          dailyTemporaryRosterHistory: { create: vi.fn().mockResolvedValue({ id: 'hist-1' }) },
+          dailyTemporaryRosterWorker: {
+            // Pre-check passes — this simulates the relationship changing (or
+            // being wrong) between the check and the write.
+            findFirst: vi.fn().mockResolvedValue({ id: 'w-1', rosterId: 'roster-1' }),
+            updateMany,
+          },
+          dailyTemporaryRoster: {
+            updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+            findUniqueOrThrow: vi.fn(),
+          },
+        }),
+      ),
+    } as any;
+
+    const service = new DailyRosterService(prismaMock);
+    await expect(
+      service.adjustClosedRoster({
+        organizationId: orgId,
+        facilityId,
+        actorUserId: 'u-mgr',
+        actorRole: 'manager',
+        rosterId: 'roster-1',
+        dto: { reason: 'Correcting hours', workerUpdates: [{ workerId: 'w-1', hoursWorked: 7 }] },
+      }),
+    ).rejects.toThrow(NotFoundException);
+
+    // The write must scope itself by rosterId, not just by worker id.
+    expect(updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'w-1', rosterId: 'roster-1' }),
+      }),
+    );
+  });
+
+  /**
+   * F-14: attendanceStatus is now a Postgres enum, and the DTO's allowed list
+   * is derived from that enum rather than hand-listed, so the application guard
+   * and the database constraint cannot drift apart.
+   */
+  it('F-14: DTO attendance statuses are derived from the Prisma enum', () => {
+    expect([...VALID_ATTENDANCE_STATUSES].sort()).toEqual(
+      Object.values(PrismaAttendanceStatus).sort(),
+    );
+    expect(VALID_ATTENDANCE_STATUSES).toContain('checked_in');
+    expect(VALID_ATTENDANCE_STATUSES).not.toContain('chekced_in');
   });
 });

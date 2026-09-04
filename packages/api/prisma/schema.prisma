@@ -3070,6 +3070,19 @@ enum DailyRosterStatus {
   closed
 }
 
+/// F-14: attendanceStatus was free-text, so any string was a valid state at
+/// both the DTO and database layer. The DTO half is guarded by
+/// VALID_ATTENDANCE_STATUSES (daily-roster.dto.ts, which derives its list from
+/// this enum); this is the database half, constraining direct writes and any
+/// future non-DTO code path.
+enum AttendanceStatus {
+  scheduled
+  checked_in
+  checked_out
+  no_show
+  excused
+}
+
 model Department {
   id              String                    @id @default(cuid())
   organizationId  String
@@ -3221,7 +3234,7 @@ model DailyTemporaryRosterWorker {
   hoursWorked       Float                @default(0.0)
   breakMinutes      Int                  @default(0)
   hourlyRateCents   Int                  @default(0)
-  attendanceStatus  String               @default("scheduled")
+  attendanceStatus  AttendanceStatus     @default(scheduled)
   notes             String?
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt

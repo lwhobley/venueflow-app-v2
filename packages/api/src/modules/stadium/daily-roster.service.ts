@@ -530,19 +530,23 @@ export class DailyRosterService {
       prisma: this.prisma,
     });
 
-    // F-06: Pre-verify all worker updates belong to this roster
-    if (dto.workerUpdates && dto.workerUpdates.length > 0) {
-      for (const update of dto.workerUpdates) {
-        const worker = await this.prisma.dailyTemporaryRosterWorker.findFirst({
-          where: { id: update.workerId, rosterId: roster.id },
-        });
-        if (!worker) {
-          throw new NotFoundException(`Worker ${update.workerId} does not belong to this roster`);
+    return this.prisma.$transaction(async (tx) => {
+      // F-06 / R2-03: verify every worker belongs to this roster INSIDE the
+      // transaction, so the relationship cannot change between the check and
+      // the write. The writes below additionally repeat `rosterId` in their
+      // own predicate, so ownership is enforced by the update itself rather
+      // than only by this pre-check.
+      if (dto.workerUpdates && dto.workerUpdates.length > 0) {
+        for (const update of dto.workerUpdates) {
+          const worker = await tx.dailyTemporaryRosterWorker.findFirst({
+            where: { id: update.workerId, rosterId: roster.id },
+          });
+          if (!worker) {
+            throw new NotFoundException(`Worker ${update.workerId} does not belong to this roster`);
+          }
         }
       }
-    }
 
-    return this.prisma.$transaction(async (tx) => {
       // F-08: CAS version update
       const updateResult = await tx.dailyTemporaryRoster.updateMany({
         where: { id: rosterId, version: roster.version },
@@ -575,8 +579,11 @@ export class DailyRosterService {
       // Apply worker updates if provided
       if (dto.workerUpdates && dto.workerUpdates.length > 0) {
         for (const update of dto.workerUpdates) {
-          await tx.dailyTemporaryRosterWorker.update({
-            where: { id: update.workerId },
+          // R2-03: `updateMany` (not `update`) so `rosterId` can be part of the
+          // write predicate. A worker that does not belong to this roster
+          // matches nothing and is rejected, closing the check-to-use window.
+          const workerResult = await tx.dailyTemporaryRosterWorker.updateMany({
+            where: { id: update.workerId, rosterId: roster.id },
             data: {
               ...(update.hoursWorked !== undefined ? { hoursWorked: update.hoursWorked } : {}),
               ...(update.breakMinutes !== undefined ? { breakMinutes: update.breakMinutes } : {}),
@@ -584,6 +591,10 @@ export class DailyRosterService {
               ...(update.notes !== undefined ? { notes: update.notes } : {}),
             },
           });
+
+          if (workerResult.count === 0) {
+            throw new NotFoundException(`Worker ${update.workerId} does not belong to this roster`);
+          }
         }
       }
 
