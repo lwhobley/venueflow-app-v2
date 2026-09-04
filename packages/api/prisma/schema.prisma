@@ -487,6 +487,12 @@ model Organization {
   dailyTemporaryRosters      DailyTemporaryRoster[]
   dailyTemporaryRosterWorkers DailyTemporaryRosterWorker[]
   dailyTemporaryRosterHistories DailyTemporaryRosterHistory[]
+  vmsVendors                 VmsVendor[]
+  vmsStaffMembers            VmsStaffMember[]
+  vmsStaffingOrders          VmsStaffingOrder[]
+  vmsTimeAttendances         VmsTimeAttendance[]
+  vmsInventorySyncLogs       VmsInventorySyncLog[]
+  vmsAuditLogs               VmsAuditLog[]
 }
 
 model Facility {
@@ -529,6 +535,12 @@ model Facility {
   dailyTemporaryRosters      DailyTemporaryRoster[]
   dailyTemporaryRosterWorkers DailyTemporaryRosterWorker[]
   dailyTemporaryRosterHistories DailyTemporaryRosterHistory[]
+  vmsVendors                 VmsVendor[]
+  vmsStaffMembers            VmsStaffMember[]
+  vmsStaffingOrders          VmsStaffingOrder[]
+  vmsTimeAttendances         VmsTimeAttendance[]
+  vmsInventorySyncLogs       VmsInventorySyncLog[]
+  vmsAuditLogs               VmsAuditLog[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -3265,4 +3277,262 @@ model DailyTemporaryRosterHistory {
   roster         DailyTemporaryRoster @relation(fields: [organizationId, facilityId, rosterId], references: [organizationId, facilityId, id], onDelete: Cascade)
 
   @@index([rosterId, version])
+}
+
+enum VmsVendorType {
+  staffing_agency
+  labor_contractor
+  local_supplier
+  concessions_operator
+  security_firm
+  cleaning_crew
+}
+
+enum VmsVendorStatus {
+  active
+  pending_onboarding
+  inactive
+  suspended
+}
+
+enum VmsWorkforceType {
+  internal_permanent
+  internal_part_time
+  agency_temp
+  contractor
+}
+
+enum VmsStaffStatus {
+  active
+  onboarding
+  offboarded
+  inactive
+}
+
+enum VmsOrderStatus {
+  draft
+  requested
+  quoted
+  booked
+  confirmed
+  completed
+  cancelled
+}
+
+enum VmsFulfillmentStatus {
+  bid_submitted
+  bid_accepted
+  bid_rejected
+  partially_filled
+  confirmed
+  completed
+}
+
+enum VmsAttendanceStatus {
+  clocked_in
+  clocked_out
+  approved
+  flagged_exception
+  rejected
+}
+
+enum VmsSyncSystem {
+  yellow_dog
+  marginedge
+  toast
+  adp
+  gusto
+}
+
+model VmsVendor {
+  id                    String                @id @default(cuid())
+  organizationId        String
+  facilityId            String
+  name                  String
+  code                  String
+  vendorType            VmsVendorType         @default(staffing_agency)
+  contactName           String?
+  contactEmail          String?
+  contactPhone          String?
+  rating                Float                 @default(5.0)
+  status                VmsVendorStatus       @default(active)
+  taxId                 String?
+  insuranceExpiry       DateTime?
+  billingRateMultiplier Float                 @default(1.35)
+  metadata              Json?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  services              VmsVendorService[]
+  staffMembers          VmsStaffMember[]
+  orderFulfillments     VmsOrderFulfillment[]
+
+  @@unique([organizationId, facilityId, code])
+  @@index([organizationId, facilityId, status])
+}
+
+model VmsVendorService {
+  id                    String                @id @default(cuid())
+  vendorId              String
+  serviceType           String
+  hourlyRateCents       Int                   @default(2500)
+  overtimeRateCents     Int                   @default(3750)
+  minimumNoticeHours    Int                   @default(24)
+  availabilityJson      Json?
+  active                Boolean               @default(true)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  vendor                VmsVendor             @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([vendorId, serviceType])
+}
+
+model VmsStaffMember {
+  id                    String                @id @default(cuid())
+  organizationId        String
+  facilityId            String
+  vendorId              String?
+  workforceType         VmsWorkforceType      @default(agency_temp)
+  firstName             String
+  lastName              String
+  email                 String?
+  phone                 String?
+  skills                String[]              @default([])
+  certifications        Json?
+  hourlyRateCents       Int                   @default(2500)
+  status                VmsStaffStatus        @default(active)
+  rating                Float                 @default(5.0)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  vendor                VmsVendor?            @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  attendances           VmsTimeAttendance[]
+
+  @@index([organizationId, facilityId, status])
+  @@index([vendorId])
+}
+
+model VmsStaffingOrder {
+  id                    String                @id @default(cuid())
+  organizationId        String
+  facilityId            String
+  eventId               String?
+  orderNumber           String
+  title                 String
+  roleRequired          String
+  quantityRequested     Int
+  quantityFulfilled     Int                   @default(0)
+  shiftDate             String
+  startTime             String
+  endTime               String
+  durationHours         Float                 @default(4.0)
+  budgetCents           Int                   @default(0)
+  actualCostCents       Int                   @default(0)
+  specialRequirements   String?
+  templateName          String?
+  status                VmsOrderStatus        @default(draft)
+  createdById           String
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  fulfillments          VmsOrderFulfillment[]
+  attendances           VmsTimeAttendance[]
+
+  @@unique([organizationId, facilityId, orderNumber])
+  @@index([facilityId, shiftDate, status])
+}
+
+model VmsOrderFulfillment {
+  id                    String                @id @default(cuid())
+  orderId               String
+  vendorId              String
+  staffCountAssigned    Int                   @default(0)
+  bidHourlyRateCents    Int                   @default(0)
+  totalBidCents         Int                   @default(0)
+  status                VmsFulfillmentStatus  @default(bid_submitted)
+  confirmedAt           DateTime?
+  completedAt           DateTime?
+  notes                 String?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  order                 VmsStaffingOrder      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  vendor                VmsVendor             @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+
+  @@index([orderId, vendorId])
+}
+
+model VmsTimeAttendance {
+  id                    String                @id @default(cuid())
+  organizationId        String
+  facilityId            String
+  staffMemberId         String
+  orderId               String?
+  clockIn               DateTime              @default(now())
+  clockOut              DateTime?
+  hoursWorked           Float                 @default(0.0)
+  breakMinutes          Int                   @default(0)
+  billableHours         Float                 @default(0.0)
+  billedRateCents       Int                   @default(0)
+  totalBilledCents      Int                   @default(0)
+  status                VmsAttendanceStatus   @default(clocked_in)
+  deviceInfo            String?
+  gpsLatitude           Float?
+  gpsLongitude          Float?
+  isWithinGeofence      Boolean               @default(true)
+  deviationFlags        String[]              @default([])
+  approvedByUserId      String?
+  approvedAt            DateTime?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  staffMember           VmsStaffMember        @relation(fields: [staffMemberId], references: [id], onDelete: Cascade)
+  order                 VmsStaffingOrder?     @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([facilityId, staffMemberId, status])
+  @@index([facilityId, clockIn])
+}
+
+model VmsInventorySyncLog {
+  id                    String                @id @default(cuid())
+  organizationId        String
+  facilityId            String
+  system                VmsSyncSystem         @default(yellow_dog)
+  syncType              String                @default("stock_and_supplies")
+  status                String                @default("success")
+  itemsSyncedCount      Int                   @default(0)
+  details               String?
+  metadata              Json?
+  createdAt             DateTime              @default(now())
+
+  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+
+  @@index([facilityId, system, createdAt])
+}
+
+model VmsAuditLog {
+  id                    String                @id @default(cuid())
+  organizationId        String
+  facilityId            String
+  entityType            String
+  entityId              String
+  action                String
+  performedByUserId     String
+  changes               Json?
+  timestamp             DateTime              @default(now())
+
+  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+
+  @@index([facilityId, entityType, timestamp])
 }

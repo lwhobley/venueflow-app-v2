@@ -598,6 +598,40 @@ function StaffScreen() {
             </Card.Content>
           </Card>
 
+          {/* Vendor Management System (VMS) Command Tile */}
+          <Card
+            style={{
+              backgroundColor: '#1E2430',
+              borderRadius: radius.sharp,
+              borderWidth: 1,
+              borderColor: '#3B82F6',
+            }}
+          >
+            <Card.Content style={{ gap: spacing.xs }}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Text style={{ fontWeight: "800", color: "#60A5FA", fontSize: 16 }}>
+                  Vendor Management System (VMS)
+                </Text>
+                <View style={{ backgroundColor: "#2563EB", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
+                  <Text style={{ color: "#FFFFFF", fontWeight: "800", fontSize: 11 }}>ENTERPRISE VMS</Text>
+                </View>
+              </View>
+              <Text style={{ color: "#D1D5DB", fontSize: 13 }}>
+                Unified platform for internal workforces, staffing agencies, and local suppliers. Gemini 3.8 smart matching, Yellow Dog inventory sync, and ADP/Gusto payroll integration.
+              </Text>
+              <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs }}>
+                <Button
+                  mode="contained"
+                  buttonColor="#2563EB"
+                  icon="domain"
+                  onPress={() => router.push("/stadium/vms")}
+                >
+                  Open VMS Dashboard
+                </Button>
+              </View>
+            </Card.Content>
+          </Card>
+
           {/* Roles / positions */}
           <Card
             style={{

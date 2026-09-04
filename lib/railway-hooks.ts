@@ -129,6 +129,18 @@ const queryRoutes: Record<string, Route> = {
   'reservations.listHolds': { path: '/v1/reservations/holds' },
   'reservationIntegrations.getReservationIntegrationOverview': { path: '/v1/integrations/reservations' },
   'documents.list': { path: '/v1/documents' },
+  'vms.listVendors': { path: '/v1/vms/vendors' },
+  'vms.getVendor': { path: (args) => `/v1/vms/vendors/${args.id}` },
+  'vms.listOrders': { path: '/v1/vms/orders' },
+  'vms.getOrder': { path: (args) => `/v1/vms/orders/${args.id}` },
+  'vms.listStaff': { path: '/v1/vms/staff' },
+  'vms.listAttendance': { path: '/v1/vms/attendance/reports' },
+  'vms.getScorecard': { path: '/v1/vms/analytics/vendor-scorecard' },
+  'vms.getCostBreakdown': { path: '/v1/vms/analytics/cost-breakdown' },
+  'vms.getForecast': { path: '/v1/vms/analytics/forecast' },
+  'vms.getAnomalies': { path: '/v1/vms/analytics/anomalies' },
+  'vms.getInventoryStatus': { path: '/v1/vms/inventory/status' },
+  'vms.getAuditLogs': { path: '/v1/vms/audit-logs' },
 };
 
 const mutationRoutes: Record<string, Route> = {
@@ -137,6 +149,64 @@ const mutationRoutes: Record<string, Route> = {
     method: 'POST',
     body: stripVenue,
     invalidate: [['pos', 'getAggregatorChannels']],
+  },
+  'vms.createVendor': {
+    path: '/v1/vms/vendors',
+    method: 'POST',
+    body: (args) => args,
+    invalidate: [['vms.listVendors']],
+  },
+  'vms.createOrder': {
+    path: '/v1/vms/orders',
+    method: 'POST',
+    body: (args) => args,
+    invalidate: [['vms.listOrders'], ['vms.getCostBreakdown']],
+  },
+  'vms.submitBid': {
+    path: (args) => `/v1/vms/orders/${args.orderId}/bids`,
+    method: 'POST',
+    body: (args) => args,
+    invalidate: [['vms.listOrders']],
+  },
+  'vms.confirmBid': {
+    path: (args) => `/v1/vms/orders/fulfillments/${args.fulfillmentId}/confirm`,
+    method: 'POST',
+    body: () => ({}),
+    invalidate: [['vms.listOrders'], ['vms.getScorecard'], ['vms.getCostBreakdown']],
+  },
+  'vms.matchVendors': {
+    path: (args) => `/v1/vms/orders/${args.orderId}/match`,
+    method: 'POST',
+    body: () => ({}),
+  },
+  'vms.aiParseOrder': {
+    path: '/v1/vms/orders/ai-parse',
+    method: 'POST',
+    body: (args) => args,
+  },
+  'vms.clockIn': {
+    path: '/v1/vms/attendance/clock-in',
+    method: 'POST',
+    body: (args) => args,
+    invalidate: [['vms.listAttendance']],
+  },
+  'vms.clockOut': {
+    path: '/v1/vms/attendance/clock-out',
+    method: 'POST',
+    body: (args) => args,
+    invalidate: [['vms.listAttendance'], ['vms.getScorecard']],
+  },
+  'vms.approveAttendance': {
+    path: (args) => `/v1/vms/attendance/${args.id}/approve`,
+    method: 'POST',
+    body: (args) => args,
+    invalidate: [['vms.listAttendance']],
+  },
+  'vms.syncInventory': {
+    path: '/v1/vms/integrations/sync',
+    method: 'POST',
+    body: (args) => args,
+    invalidate: [['vms.getInventoryStatus']],
   },
   'pos.updateAggregatorChannelStatus': {
     path: (args) => `/v1/pos/aggregator/channels/${args.channelId}/status`,
