@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { VmsNotificationEvent, VmsOrderStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { tryAcquireSharedLease, releaseSharedLease } from '../../common/shared-lease';
+import { zonedIsoDate } from '../../common/venue-time';
 import { VmsService } from './vms.service';
 import { VmsNotificationsService } from './vms-notifications.service';
 
@@ -20,7 +22,19 @@ const SHIFT_REMINDER_HOURS = 24;
 interface FacilityRef {
   organizationId: string;
   id: string;
+  timezone: string | null;
 }
+
+/**
+ * Lease TTLs, each comfortably under the sweep's own interval so a crashed
+ * replica cannot block the next tick for long.
+ */
+const LEASE_TTL_MS: Record<string, number> = {
+  'vms:no-show-sweep': 10 * 60 * 1000,
+  'vms:fulfillment-escalation': 30 * 60 * 1000,
+  'vms:certification-expiry': 6 * 60 * 60 * 1000,
+  'vms:shift-reminders': 6 * 60 * 60 * 1000,
+};
 
 /**
  * Scheduled VMS jobs.
@@ -49,7 +63,7 @@ export class VmsSchedulerService {
     try {
       return await this.prisma.facility.findMany({
         where: { active: true },
-        select: { organizationId: true, id: true },
+        select: { organizationId: true, id: true, timezone: true },
       });
     } catch (err) {
       this.logger.error(
@@ -60,11 +74,45 @@ export class VmsSchedulerService {
   }
 
   /**
+   * Run `work` only if this replica wins the lease for `key`.
+   *
+   * These sweeps insert rows and send email, so they are not safe to run twice
+   * concurrently: with more than one API instance every replica's cron fires on
+   * the same tick, and the read-then-write idempotency check inside the sweep
+   * has no unique constraint behind it to resolve the race. The lease makes one
+   * replica the runner; the rest no-op. It is released on failure so the next
+   * tick can retry immediately rather than waiting out the TTL.
+   */
+  private async withLease<T>(key: string, work: () => Promise<T>): Promise<T | null> {
+    const acquired = await tryAcquireSharedLease(this.prisma, key, LEASE_TTL_MS[key] ?? 10 * 60 * 1000);
+    if (!acquired) {
+      this.logger.debug(`Skipping ${key}: another replica holds the lease.`);
+      return null;
+    }
+
+    try {
+      return await work();
+    } catch (err) {
+      await releaseSharedLease(this.prisma, key).catch(() => undefined);
+      throw err;
+    }
+  }
+
+  /**
    * Every 15 minutes: flag staff who never reported for a confirmed shift and
    * alert managers. Replaces "someone opens the screen and presses a button".
    */
   @Cron(CronExpression.EVERY_30_MINUTES)
   async runNoShowSweep(): Promise<{ facilities: number; flagged: number }> {
+    return (
+      (await this.withLease('vms:no-show-sweep', () => this.noShowSweep())) ?? {
+        facilities: 0,
+        flagged: 0,
+      }
+    );
+  }
+
+  private async noShowSweep(): Promise<{ facilities: number; flagged: number }> {
     const facilities = await this.activeFacilities();
     let flagged = 0;
 
@@ -106,6 +154,15 @@ export class VmsSchedulerService {
    */
   @Cron(CronExpression.EVERY_HOUR)
   async runFulfillmentEscalation(): Promise<{ facilities: number; escalated: number }> {
+    return (
+      (await this.withLease('vms:fulfillment-escalation', () => this.fulfillmentEscalation())) ?? {
+        facilities: 0,
+        escalated: 0,
+      }
+    );
+  }
+
+  private async fulfillmentEscalation(): Promise<{ facilities: number; escalated: number }> {
     const facilities = await this.activeFacilities();
     let escalated = 0;
 
@@ -153,6 +210,15 @@ export class VmsSchedulerService {
    */
   @Cron(CronExpression.EVERY_DAY_AT_7AM)
   async runCertificationExpiryCheck(): Promise<{ facilities: number; expiring: number }> {
+    return (
+      (await this.withLease('vms:certification-expiry', () => this.certificationExpiryCheck())) ?? {
+        facilities: 0,
+        expiring: 0,
+      }
+    );
+  }
+
+  private async certificationExpiryCheck(): Promise<{ facilities: number; expiring: number }> {
     const facilities = await this.activeFacilities();
     let expiring = 0;
 
@@ -196,14 +262,27 @@ export class VmsSchedulerService {
    */
   @Cron(CronExpression.EVERY_DAY_AT_8AM)
   async runShiftReminders(): Promise<{ facilities: number; reminded: number }> {
+    return (
+      (await this.withLease('vms:shift-reminders', () => this.shiftReminders())) ?? {
+        facilities: 0,
+        reminded: 0,
+      }
+    );
+  }
+
+  private async shiftReminders(): Promise<{ facilities: number; reminded: number }> {
     const facilities = await this.activeFacilities();
-    const targetDate = new Date(Date.now() + SHIFT_REMINDER_HOURS * 3600 * 1000)
-      .toISOString()
-      .split('T')[0];
     let reminded = 0;
 
     for (const facility of facilities) {
       try {
+        // "Tomorrow" is the venue's calendar day, not the server's. Deriving it
+        // from a UTC date string sent reminders a day early — or not at all —
+        // for any venue west of UTC.
+        const targetDate = zonedIsoDate(
+          facility.timezone,
+          Date.now() + SHIFT_REMINDER_HOURS * 3600 * 1000,
+        );
         const assignments = await this.prisma.vmsStaffAssignment.findMany({
           where: {
             organizationId: facility.organizationId,

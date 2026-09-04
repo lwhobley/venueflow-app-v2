@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { VmsService, hashPin } from './vms.service';
 import { VmsAiService } from './vms-ai.service';
 import { VmsIntegrationsService } from './vms-integrations.service';
@@ -57,7 +57,7 @@ describe('VmsService', () => {
         count: vi.fn(),
       },
       facility: {
-        findUnique: vi.fn(),
+        findUnique: vi.fn().mockResolvedValue({ timezone: 'UTC' }),
       },
       vmsTimeAttendance: {
         findFirst: vi.fn(),
@@ -717,6 +717,7 @@ describe('VmsService', () => {
           assignments: [
             {
               id: 'assign-1',
+              status: 'assigned',
               staffMemberId: 'staff-rostered',
               staffMember: {
                 id: 'staff-rostered',
@@ -751,6 +752,65 @@ describe('VmsService', () => {
       );
     });
 
+    describe('venue-local shift times', () => {
+      // Fixed clock so the assertion does not depend on when the suite runs.
+      // 2026-09-12T19:00Z is 12:00 in Los Angeles (PDT, UTC-7).
+      beforeEach(() => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-09-12T19:00:00Z'));
+        prisma.facility.findUnique.mockResolvedValue({ timezone: 'America/Los_Angeles' });
+      });
+
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      const laOrder = (startTime: string) => [
+        {
+          id: 'order-tz',
+          orderNumber: 'ORD-TZ',
+          roleRequired: 'Bartender',
+          shiftDate: '2026-09-12',
+          startTime,
+          quantityFulfilled: 1,
+          fulfillments: [{ id: 'f-1', vendorId: 'v-1' }],
+          assignments: [
+            {
+              id: 'assign-tz',
+              status: 'assigned',
+              staffMemberId: 'staff-tz',
+              staffMember: { id: 'staff-tz', firstName: 'T', lastName: 'Z', vendorId: 'v-1' },
+            },
+          ],
+          attendances: [],
+        },
+      ];
+
+      it('does not flag a shift that has not started in the venue timezone', async () => {
+        // 17:00 in Los Angeles is 00:00Z the next day, so at 19:00Z the shift is
+        // still five hours away. Read as UTC it looks 90 minutes overdue, which
+        // is what made the sweep invent absences before anyone was due.
+        prisma.vmsStaffingOrder.findMany.mockResolvedValue(laOrder('17:00'));
+
+        const res = await service.detectNoShows(mockOrgId, mockFacilityId, 30);
+
+        expect(res.flaggedNoShowsCount).toBe(0);
+        expect(prisma.vmsTimeAttendance.create).not.toHaveBeenCalled();
+      });
+
+      it('still flags a shift that is genuinely overdue in the venue timezone', async () => {
+        // 04:00 Los Angeles is 11:00Z — eight hours before the fixed clock — so
+        // this one really has passed its grace period.
+        prisma.vmsStaffingOrder.findMany.mockResolvedValue(laOrder('04:00'));
+        prisma.vmsTimeAttendance.create.mockResolvedValue({ id: 'att-tz' });
+
+        const res = await service.detectNoShows(mockOrgId, mockFacilityId, 30);
+
+        expect(res.flaggedNoShowsCount).toBe(1);
+        expect(res.flaggedNoShows[0].staffMemberId).toBe('staff-tz');
+      });
+    });
+
     it('records an unstaffed confirmed slot against the vendor with no worker (Q1)', async () => {
       const pastShiftDate = new Date(Date.now() - 2 * 3600 * 1000).toISOString().split('T')[0];
       prisma.vmsStaffingOrder.findMany.mockResolvedValue([
@@ -783,7 +843,7 @@ describe('VmsService', () => {
       );
     });
 
-    it('is idempotent across repeated no-show sweeps (P3)', async () => {
+    it('is idempotent once the first sweep has resolved the assignment (P3)', async () => {
       const pastShiftDate = new Date(Date.now() - 2 * 3600 * 1000).toISOString().split('T')[0];
       prisma.vmsStaffingOrder.findMany.mockResolvedValue([
         {
@@ -797,11 +857,16 @@ describe('VmsService', () => {
           assignments: [
             {
               id: 'assign-1',
+              status: 'no_show',
               staffMemberId: 'staff-a',
               staffMember: { id: 'staff-a', firstName: 'A', lastName: 'One', vendorId: 'v-1' },
             },
           ],
-          // One absentee already flagged, one unfilled slot already recorded.
+          // State after sweep 1: the absentee is flagged and their assignment
+          // has moved to no_show, and the unstaffed slot is recorded. A second
+          // sweep must add nothing — the earlier implementation dropped the
+          // resolved assignment from its slot arithmetic and invented a fresh
+          // unfilled_shift row here.
           attendances: [
             { id: 'att-1', staffMemberId: 'staff-a', deviationFlags: ['no_show'] },
             { id: 'att-2', staffMemberId: null, deviationFlags: ['no_show', 'unfilled_shift'] },

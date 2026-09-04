@@ -262,6 +262,34 @@ export class VmsNotificationsService {
     return result;
   }
 
+  /**
+   * Queue a notification to be delivered after the caller's request has
+   * finished.
+   *
+   * HTTP handlers run inside TenantRequestTransactionInterceptor's interactive
+   * transaction (15s timeout). Awaiting notify() there put an unbounded
+   * outbound HTTPS call per recipient inside that window: a slow provider
+   * exhausted the budget, Prisma aborted the transaction, and the business row
+   * rolled back *after* the emails had gone out. It also pinned a Postgres
+   * connection open for the duration of every send.
+   *
+   * Deferring to the next macrotask lets the transaction commit first, so a
+   * notification is only ever sent for work that is durable, and delivery
+   * latency never reaches the caller. Failures are already captured in
+   * VmsNotificationLog, so nothing is silently lost.
+   */
+  notifyAfterCommit(args: VmsNotifyArgs): void {
+    setImmediate(() => {
+      this.notify(args).catch((err) => {
+        this.logger.error(
+          `Deferred VMS notification (${args.eventType}) failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      });
+    });
+  }
+
   /** Delivery log for the notifications tab and compliance review. */
   async listDeliveryLog(
     organizationId: string,

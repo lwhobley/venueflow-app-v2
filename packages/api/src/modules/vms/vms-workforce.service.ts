@@ -1,5 +1,11 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { VmsAssignmentStatus, VmsOrderStatus, VmsVendorStatus, VmsVendorType } from '@prisma/client';
+import {
+  Prisma,
+  VmsAssignmentStatus,
+  VmsOrderStatus,
+  VmsVendorStatus,
+  VmsVendorType,
+} from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 
 export interface CertificationDue {
@@ -452,7 +458,15 @@ export class VmsWorkforceService {
     withinDays = 30,
   ): Promise<CertificationDue[]> {
     const staff = await this.prisma.vmsStaffMember.findMany({
-      where: { organizationId, facilityId, status: 'active', NOT: { certifications: undefined } },
+      // `NOT: { certifications: undefined }` reads as a filter but Prisma treats
+      // undefined as "no condition", so it silently loaded the whole roster.
+      // Prisma.DbNull is the JSON-column null the filter actually needs.
+      where: {
+        organizationId,
+        facilityId,
+        status: 'active',
+        certifications: { not: Prisma.DbNull },
+      },
       select: { id: true, firstName: true, lastName: true, certifications: true },
     });
 
@@ -712,14 +726,28 @@ export class VmsWorkforceService {
       const email = emailIdx >= 0 ? row[emailIdx]?.trim() || undefined : undefined;
 
       try {
-        const duplicate = await this.prisma.vmsStaffMember.findFirst({
-          where: { organizationId, facilityId, firstName, lastName, email: email ?? null },
-          select: { id: true },
-        });
-        if (duplicate) {
-          result.skipped += 1;
-          result.errors.push({ row: i + 1, reason: `${firstName} ${lastName} already on the roster.` });
-          continue;
+        // Only dedupe on something that actually identifies a person. Matching
+        // on `email ?? null` collapsed every unnamed-email row together, so a
+        // second genuine "John Smith" — routine for bulk agency temps — was
+        // silently dropped as a duplicate. With no email and no badge there is
+        // nothing to match on, so the row is imported and the caller decides.
+        const badgeNumber = badgeIdx >= 0 ? row[badgeIdx]?.trim() || undefined : undefined;
+        const identity = email
+          ? { email }
+          : badgeNumber
+          ? { badgeNumber }
+          : null;
+
+        if (identity) {
+          const duplicate = await this.prisma.vmsStaffMember.findFirst({
+            where: { organizationId, facilityId, firstName, lastName, ...identity },
+            select: { id: true },
+          });
+          if (duplicate) {
+            result.skipped += 1;
+            result.errors.push({ row: i + 1, reason: `${firstName} ${lastName} already on the roster.` });
+            continue;
+          }
         }
 
         let vendorId: string | undefined;
@@ -763,7 +791,7 @@ export class VmsWorkforceService {
             phone: phoneIdx >= 0 ? row[phoneIdx]?.trim() || undefined : undefined,
             skills,
             hourlyRateCents: Number.isFinite(rawRate) && rawRate > 0 ? rawRate : 2500,
-            badgeNumber: badgeIdx >= 0 ? row[badgeIdx]?.trim() || undefined : undefined,
+            badgeNumber,
           },
         });
         result.imported += 1;

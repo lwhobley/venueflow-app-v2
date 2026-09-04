@@ -34,6 +34,7 @@ import { VmsIntegrationsService } from './vms-integrations.service';
 import { VmsWorkforceService } from './vms-workforce.service';
 import { VmsNotificationsService } from './vms-notifications.service';
 import { VmsNotificationEvent } from '@prisma/client';
+import { zonedIsoDate, zonedWallClockToUtc } from '../../common/venue-time';
 
 /** Failed punch attempts before a worker is locked out, and for how long. */
 export const MAX_PUNCH_ATTEMPTS = 5;
@@ -593,7 +594,7 @@ export class VmsService {
       changes: { orderNumber: order.orderNumber, role: order.roleRequired },
     });
 
-    await this.notifications.notify({
+    this.notifications.notifyAfterCommit({
       organizationId,
       facilityId,
       eventType: VmsNotificationEvent.order_submitted,
@@ -735,7 +736,7 @@ export class VmsService {
       },
     });
 
-    await this.notifications.notify({
+    this.notifications.notifyAfterCommit({
       organizationId,
       facilityId,
       eventType: VmsNotificationEvent.bid_received,
@@ -807,7 +808,7 @@ export class VmsService {
       changes: { vendorId: fulfillment.vendorId, staffCount: fulfillment.staffCountAssigned },
     });
 
-    await this.notifications.notify({
+    this.notifications.notifyAfterCommit({
       organizationId,
       facilityId,
       eventType: VmsNotificationEvent.order_confirmed,
@@ -912,11 +913,14 @@ export class VmsService {
     });
     if (!staff) throw new NotFoundException('Staff member not found');
 
-    // Check lockout
-    await this.checkPunchLockout(organizationId, facilityId, staff.id);
-
     // Worker credential check (B4, N3, N5):
     if (!options?.isManager) {
+      // Lockout guards the self-service path only. Applying it to a manager
+      // punch would block the documented remedy for a locked-out worker and
+      // leave their shift unrecorded, which the no-show sweep later reads as
+      // an absence.
+      await this.checkPunchLockout(organizationId, facilityId, staff.id);
+
       if (!staff.pinHash && !staff.badgeNumber) {
         throw new ForbiddenException(
           'Staff member has no PIN or badge credential configured on file. A manager must record this punch.',
@@ -1136,7 +1140,7 @@ export class VmsService {
     }
 
     if (deviationFlags.length > 0 && updated.staffMember) {
-      await this.notifications.notify({
+      this.notifications.notifyAfterCommit({
         organizationId,
         facilityId,
         eventType: VmsNotificationEvent.time_deviation,
@@ -1238,22 +1242,36 @@ export class VmsService {
    */
   async detectNoShows(organizationId: string, facilityId: string, gracePeriodMinutes = 30) {
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
+
+    // Shift times are venue-local wall clock. Reading them as UTC moves every
+    // venue by its own offset, so a US evening shift looked overdue in the
+    // early afternoon and the sweep flagged workers before they were due.
+    const facility = await this.prisma.facility.findUnique({
+      where: { organizationId_id: { organizationId, id: facilityId } },
+      select: { timezone: true },
+    });
+    const timezone = facility?.timezone ?? null;
+
+    // Bound the scan by the venue's own calendar date, not the server's.
+    const todayLocal = zonedIsoDate(timezone, now.getTime());
 
     const orders = await this.prisma.vmsStaffingOrder.findMany({
       where: {
         organizationId,
         facilityId,
         status: { in: [VmsOrderStatus.confirmed, VmsOrderStatus.booked] },
-        shiftDate: { lte: todayStr },
+        shiftDate: { lte: todayLocal },
       },
       include: {
         fulfillments: {
           where: { status: { in: [VmsFulfillmentStatus.confirmed, VmsFulfillmentStatus.completed] } },
           select: { id: true, vendorId: true },
         },
+        // Every assignment, whatever its status. Filtering to assigned|confirmed
+        // here would drop workers this sweep already marked no_show, and the
+        // unfilled-slot arithmetic below would then invent a phantom shortfall
+        // for a slot that was in fact staffed.
         assignments: {
-          where: { status: { in: [VmsAssignmentStatus.assigned, VmsAssignmentStatus.confirmed] } },
           include: { staffMember: { select: { id: true, firstName: true, lastName: true, vendorId: true } } },
         },
         attendances: {
@@ -1273,11 +1291,15 @@ export class VmsService {
     }> = [];
 
     for (const order of orders) {
-      const [startH, startM] = (order.startTime || '09:00').split(':').map(Number);
-      const scheduledStart = new Date(order.shiftDate + 'T00:00:00Z');
-      scheduledStart.setUTCHours(startH || 9, startM || 0, 0, 0);
-
-      const threshold = new Date(scheduledStart.getTime() + gracePeriodMinutes * 60 * 1000);
+      const scheduledStartMs = zonedWallClockToUtc(timezone, order.shiftDate, order.startTime || '09:00');
+      if (!Number.isFinite(scheduledStartMs)) {
+        this.logger.warn(
+          'Skipping no-show check for order ' + order.orderNumber + ': unparseable shift date/time',
+        );
+        continue;
+      }
+      const scheduledStart = new Date(scheduledStartMs);
+      const threshold = new Date(scheduledStartMs + gracePeriodMinutes * 60 * 1000);
       if (now <= threshold) continue;
 
       const punchedStaffIds = new Set(
@@ -1294,48 +1316,63 @@ export class VmsService {
 
       const defaultVendorId = order.fulfillments[0]?.vendorId ?? null;
 
-      // 1. Workers who were assigned to this shift and never punched in.
+      // 1. Workers rostered onto this shift who never punched in. Assignments
+      //    already resolved to no_show or released are not re-flagged.
       const absentees = order.assignments.filter(
-        (a) => !punchedStaffIds.has(a.staffMemberId) && !alreadyFlagged.has(a.staffMemberId),
+        (a) =>
+          (a.status === VmsAssignmentStatus.assigned || a.status === VmsAssignmentStatus.confirmed) &&
+          !punchedStaffIds.has(a.staffMemberId) &&
+          !alreadyFlagged.has(a.staffMemberId),
       );
 
       for (const absentee of absentees) {
         const vendorId = absentee.staffMember.vendorId ?? defaultVendorId;
-        const record = await this.prisma.vmsTimeAttendance.create({
-          data: {
-            organizationId,
-            facilityId,
-            staffMemberId: absentee.staffMemberId,
-            orderId: order.id,
-            clockIn: scheduledStart,
-            clockOut: scheduledStart,
-            billableHours: 0,
-            billedRateCents: 0,
-            totalBilledCents: 0,
-            status: VmsAttendanceStatus.flagged_exception,
-            isWithinGeofence: false,
-            deviationFlags: ['no_show'],
-          },
-        });
 
-        await this.prisma.vmsStaffAssignment.update({
-          where: { id: absentee.id },
-          data: { status: VmsAssignmentStatus.no_show },
-        });
+        // The attendance row, the assignment transition and the audit entry are
+        // one unit: cron work has no ambient request transaction, so without
+        // this a failed audit write would leave an unaudited no-show behind.
+        const record = await this.prisma.$transaction(async (tx) => {
+          const created = await tx.vmsTimeAttendance.create({
+            data: {
+              organizationId,
+              facilityId,
+              staffMemberId: absentee.staffMemberId,
+              orderId: order.id,
+              clockIn: scheduledStart,
+              clockOut: scheduledStart,
+              billableHours: 0,
+              billedRateCents: 0,
+              totalBilledCents: 0,
+              status: VmsAttendanceStatus.flagged_exception,
+              isWithinGeofence: false,
+              deviationFlags: ['no_show'],
+            },
+          });
 
-        await this.logAudit({
-          organizationId,
-          facilityId,
-          entityType: 'VmsTimeAttendance',
-          entityId: record.id,
-          action: 'EXCEPTION_FLAGGED',
-          userId: 'system_scheduler',
-          changes: {
-            orderId: order.id,
-            vendorId,
-            staffMemberId: absentee.staffMemberId,
-            reason: 'Assigned worker did not report before the grace period elapsed',
-          },
+          await tx.vmsStaffAssignment.update({
+            where: { id: absentee.id },
+            data: { status: VmsAssignmentStatus.no_show },
+          });
+
+          await this.logAudit(
+            {
+              organizationId,
+              facilityId,
+              entityType: 'VmsTimeAttendance',
+              entityId: created.id,
+              action: 'EXCEPTION_FLAGGED',
+              userId: 'system_scheduler',
+              changes: {
+                orderId: order.id,
+                vendorId,
+                staffMemberId: absentee.staffMemberId,
+                reason: 'Assigned worker did not report before the grace period elapsed',
+              },
+            },
+            tx,
+          );
+
+          return created;
         });
 
         flaggedNoShows.push({
@@ -1347,11 +1384,13 @@ export class VmsService {
           role: order.roleRequired,
           reason: 'Assigned but no clock-in ' + gracePeriodMinutes + 'm after shift start',
         });
+
+        void record;
       }
 
-      // 2. Headcount the vendor confirmed but never staffed at all. Recorded
-      //    against the vendor with no staff member, because no individual was
-      //    ever named for the slot.
+      // 2. Headcount the vendor confirmed but never named a worker for. Counted
+      //    against every assignment regardless of status, so a slot that was
+      //    assigned and then flagged absent is not also billed as unstaffed.
       const unfilledSlots = Math.max(
         0,
         order.quantityFulfilled -
@@ -1363,36 +1402,41 @@ export class VmsService {
         const fulfillment = order.fulfillments[i % (order.fulfillments.length || 1)];
         const vendorId = fulfillment?.vendorId ?? null;
 
-        const record = await this.prisma.vmsTimeAttendance.create({
-          data: {
-            organizationId,
-            facilityId,
-            staffMemberId: null,
-            orderId: order.id,
-            clockIn: scheduledStart,
-            clockOut: scheduledStart,
-            billableHours: 0,
-            billedRateCents: 0,
-            totalBilledCents: 0,
-            status: VmsAttendanceStatus.flagged_exception,
-            isWithinGeofence: false,
-            deviationFlags: ['no_show', 'unfilled_shift'],
-          },
-        });
+        await this.prisma.$transaction(async (tx) => {
+          const created = await tx.vmsTimeAttendance.create({
+            data: {
+              organizationId,
+              facilityId,
+              staffMemberId: null,
+              orderId: order.id,
+              clockIn: scheduledStart,
+              clockOut: scheduledStart,
+              billableHours: 0,
+              billedRateCents: 0,
+              totalBilledCents: 0,
+              status: VmsAttendanceStatus.flagged_exception,
+              isWithinGeofence: false,
+              deviationFlags: ['no_show', 'unfilled_shift'],
+            },
+          });
 
-        await this.logAudit({
-          organizationId,
-          facilityId,
-          entityType: 'VmsTimeAttendance',
-          entityId: record.id,
-          action: 'EXCEPTION_FLAGGED',
-          userId: 'system_scheduler',
-          changes: {
-            orderId: order.id,
-            vendorId,
-            staffMemberId: null,
-            reason: 'Vendor confirmed headcount was never assigned to a worker',
-          },
+          await this.logAudit(
+            {
+              organizationId,
+              facilityId,
+              entityType: 'VmsTimeAttendance',
+              entityId: created.id,
+              action: 'EXCEPTION_FLAGGED',
+              userId: 'system_scheduler',
+              changes: {
+                orderId: order.id,
+                vendorId,
+                staffMemberId: null,
+                reason: 'Vendor confirmed headcount was never assigned to a worker',
+              },
+            },
+            tx,
+          );
         });
 
         flaggedNoShows.push({
@@ -1563,13 +1607,18 @@ export class VmsService {
         UNION ALL
 
         -- Unattributed no-shows, attributed through the confirmed fulfillment.
-        SELECT f."vendorId", a."deviationFlags", a."totalBilledCents"
+        -- DISTINCT ON pins each attendance row to exactly one vendor: an order
+        -- filled by two agencies has two confirmed fulfillments, and a plain
+        -- join would charge the same missing slot to both of them.
+        SELECT DISTINCT ON (a."id")
+          f."vendorId", a."deviationFlags", a."totalBilledCents"
         FROM "VmsTimeAttendance" a
         JOIN "VmsOrderFulfillment" f ON f."orderId" = a."orderId"
         WHERE a."organizationId" = ${organizationId}
           AND a."facilityId" = ${facilityId}
           AND a."staffMemberId" IS NULL
           AND f."status" IN ('confirmed', 'completed')
+        ORDER BY a."id", f."createdAt" ASC, f."id" ASC
       ) v
       WHERE v."vendorId" IS NOT NULL
       GROUP BY v."vendorId"
@@ -1723,17 +1772,26 @@ export class VmsService {
   // AUDIT LOGGING
   // ---------------------------------------------------------------------------
 
-  async logAudit(params: {
-    organizationId: string;
-    facilityId: string;
-    entityType: string;
-    entityId: string;
-    action: string;
-    userId: string;
-    changes?: Record<string, unknown>;
-    before?: Record<string, unknown>;
-    ipAddress?: string;
-  }) {
+  async logAudit(
+    params: {
+      organizationId: string;
+      facilityId: string;
+      entityType: string;
+      entityId: string;
+      action: string;
+      userId: string;
+      changes?: Record<string, unknown>;
+      before?: Record<string, unknown>;
+      ipAddress?: string;
+    },
+    /**
+     * Transaction client to write through. HTTP requests already run inside
+     * TenantRequestTransactionInterceptor's transaction, but cron work does
+     * not — background callers must pass their own so a failed audit write
+     * rolls back the row it was recording rather than leaving it unaudited.
+     */
+    client?: Pick<PrismaService, 'vmsAuditLog'>,
+  ) {
     try {
       const payload = {
         ...(params.changes || {}),
@@ -1741,7 +1799,7 @@ export class VmsService {
         ipAddress: params.ipAddress,
       };
 
-      await this.prisma.vmsAuditLog.create({
+      await (client ?? this.prisma).vmsAuditLog.create({
         data: {
           organizationId: params.organizationId,
           facilityId: params.facilityId,
