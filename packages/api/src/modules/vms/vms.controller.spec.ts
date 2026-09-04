@@ -81,10 +81,21 @@ describe('VmsController', () => {
     expect(service.matchVendorsForOrder).toHaveBeenCalledWith('ord-1', 'org-1', 'fac-1');
   });
 
-  it('allows staff to clock in', async () => {
-    const punch = await controller.clockIn(staffScope, { staffMemberId: 'staff-123' });
+  it('allows staff to clock in with credential', async () => {
+    const punch = await controller.clockIn(staffScope, { staffMemberId: 'staff-123', pin: '1234' }, { ip: '127.0.0.1' });
     expect(punch.status).toBe('clocked_in');
-    expect(service.clockIn).toHaveBeenCalledWith('org-1', 'fac-1', { staffMemberId: 'staff-123' });
+    expect(service.clockIn).toHaveBeenCalledWith(
+      'org-1',
+      'fac-1',
+      { staffMemberId: 'staff-123', pin: '1234' },
+      expect.objectContaining({ isManager: false }),
+    );
+  });
+
+  it('rejects uncredentialed self-punch from non-manager', async () => {
+    await expect(
+      controller.clockIn(staffScope, { staffMemberId: 'staff-123' }, { ip: '127.0.0.1' }),
+    ).rejects.toThrow(ForbiddenException);
   });
 
   it('triggers Yellow Dog inventory synchronization', async () => {

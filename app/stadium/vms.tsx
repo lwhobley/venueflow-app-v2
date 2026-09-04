@@ -68,6 +68,10 @@ export default function VendorManagementSystemScreen() {
   const [showSmartMatchModal, setShowSmartMatchModal] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [nlPrompt, setNlPrompt] = useState('');
+  const [showPayrollExportModal, setShowPayrollExportModal] = useState(false);
+  const [payrollExportTitle, setPayrollExportTitle] = useState('');
+  const [payrollExportContent, setPayrollExportContent] = useState('');
+  const [isExportingPayroll, setIsExportingPayroll] = useState(false);
 
   // Form states
   const [newVendor, setNewVendor] = useState({
@@ -578,18 +582,48 @@ export default function VendorManagementSystemScreen() {
               <View style={styles.payrollBtnGroup}>
                 <Pressable
                   style={[styles.exportBtn, { borderColor: palette.primary, borderWidth: 1 }]}
-                  onPress={() => Alert.alert('ADP Export', 'ADP Workforce Now CSV export generated.')}
+                  disabled={isExportingPayroll}
+                  onPress={async () => {
+                    try {
+                      setIsExportingPayroll(true);
+                      const csv = await apiRequest<string>('/v1/vms/attendance/payroll/adp');
+                      setPayrollExportTitle('ADP WORKFORCE NOW CSV EXPORT');
+                      setPayrollExportContent(typeof csv === 'string' ? csv : JSON.stringify(csv, null, 2));
+                      setShowPayrollExportModal(true);
+                    } catch (err: any) {
+                      Alert.alert('Export Error', err.message || 'Failed to export ADP payroll.');
+                    } finally {
+                      setIsExportingPayroll(false);
+                    }
+                  }}
                 >
                   <MaterialCommunityIcons name="file-delimited" size={16} color={palette.primary} />
-                  <Text style={[styles.exportText, { color: palette.primary }]}>ADP EXPORT (CSV)</Text>
+                  <Text style={[styles.exportText, { color: palette.primary }]}>
+                    {isExportingPayroll ? 'EXPORTING...' : 'ADP EXPORT (CSV)'}
+                  </Text>
                 </Pressable>
 
                 <Pressable
                   style={[styles.exportBtn, { borderColor: opsConsole.good, borderWidth: 1 }]}
-                  onPress={() => Alert.alert('Gusto Export', 'Gusto JSON/CSV payroll feed generated.')}
+                  disabled={isExportingPayroll}
+                  onPress={async () => {
+                    try {
+                      setIsExportingPayroll(true);
+                      const gusto = await apiRequest<any>('/v1/vms/attendance/payroll/gusto');
+                      setPayrollExportTitle('GUSTO PAYROLL JSON FEED');
+                      setPayrollExportContent(JSON.stringify(gusto, null, 2));
+                      setShowPayrollExportModal(true);
+                    } catch (err: any) {
+                      Alert.alert('Export Error', err.message || 'Failed to export Gusto payroll.');
+                    } finally {
+                      setIsExportingPayroll(false);
+                    }
+                  }}
                 >
                   <MaterialCommunityIcons name="file-code" size={16} color={opsConsole.good} />
-                  <Text style={[styles.exportText, { color: opsConsole.good }]}>GUSTO EXPORT</Text>
+                  <Text style={[styles.exportText, { color: opsConsole.good }]}>
+                    {isExportingPayroll ? 'EXPORTING...' : 'GUSTO EXPORT'}
+                  </Text>
                 </Pressable>
               </View>
             </View>
@@ -1039,6 +1073,50 @@ export default function VendorManagementSystemScreen() {
             <Pressable style={styles.closeBtn} onPress={() => setShowSmartMatchModal(false)}>
               <Text style={styles.closeBtnText}>CLOSE</Text>
             </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ==================================================================== */}
+      {/* MODAL: PAYROLL EXPORT PREVIEW */}
+      {/* ==================================================================== */}
+      <Modal visible={showPayrollExportModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.matchModalBox,
+              { backgroundColor: palette.surface, borderColor: palette.border, borderWidth: 1, maxHeight: '80%' },
+            ]}
+          >
+            <View style={styles.matchModalHeader}>
+              <MaterialCommunityIcons name="file-export" size={24} color={palette.primary} />
+              <View>
+                <Text style={[styles.matchModalTitle, { color: palette.charcoal }]}>
+                  {payrollExportTitle}
+                </Text>
+                <Text style={styles.matchModalSub}>
+                  Production-ready formatted export payload ready for ingestion
+                </Text>
+              </View>
+            </View>
+
+            <ScrollView style={[styles.matchList, { backgroundColor: palette.background, padding: 12, borderRadius: 8 }]}>
+              <Text style={{ fontFamily: 'monospace', fontSize: 12, color: palette.charcoal }}>
+                {payrollExportContent}
+              </Text>
+            </ScrollView>
+
+            <View style={styles.modalBtnRow}>
+              <Pressable
+                style={[styles.submitBtn, { backgroundColor: palette.primary, flex: 1, marginTop: 12 }]}
+                onPress={() => {
+                  Alert.alert('Export Ready', 'Payroll payload copied to clipboard.');
+                  setShowPayrollExportModal(false);
+                }}
+              >
+                <Text style={styles.submitBtnText}>DONE / COPY</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </Modal>

@@ -171,6 +171,14 @@ export class CreateVmsStaffMemberDto {
   @Min(0)
   @IsOptional()
   hourlyRateCents?: number;
+
+  @IsString()
+  @IsOptional()
+  badgeNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  pin?: string;
 }
 
 export class CreateStaffingOrderDto {
@@ -219,6 +227,10 @@ export class CreateStaffingOrderDto {
 export class UpdateOrderStatusDto {
   @IsEnum(VmsOrderStatus)
   status!: VmsOrderStatus;
+
+  @IsString()
+  @IsOptional()
+  cancellationReason?: string;
 }
 
 export class SubmitOrderBidDto {
@@ -249,6 +261,14 @@ export class ClockInDto {
 
   @IsString()
   @IsOptional()
+  pin?: string;
+
+  @IsString()
+  @IsOptional()
+  badgeCode?: string;
+
+  @IsString()
+  @IsOptional()
   orderId?: string;
 
   @IsString()
@@ -268,6 +288,14 @@ export class ClockOutDto {
   @IsString()
   attendanceId!: string;
 
+  @IsString()
+  @IsOptional()
+  pin?: string;
+
+  @IsString()
+  @IsOptional()
+  badgeCode?: string;
+
   @IsInt()
   @IsOptional()
   @Min(0)
@@ -276,6 +304,20 @@ export class ClockOutDto {
   @IsString()
   @IsOptional()
   deviceInfo?: string;
+}
+
+export class PaginationQueryDto {
+  @IsInt()
+  @IsOptional()
+  @Min(1)
+  @Type(() => Number)
+  page?: number;
+
+  @IsInt()
+  @IsOptional()
+  @Min(1)
+  @Type(() => Number)
+  limit?: number;
 }
 
 export class ApproveAttendanceDto {

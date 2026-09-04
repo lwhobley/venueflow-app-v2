@@ -40,6 +40,8 @@ export const FACILITY_SCOPED_MODELS: ReadonlySet<string> = new Set([
   'KitchenFulfillmentTicket', 'KitchenFulfillmentStatusHistory',
   'Department', 'DepartmentMembership', 'DepartmentAreaRule', 'UserAreaOverride',
   'DailyTemporaryRoster', 'DailyTemporaryRosterWorker', 'DailyTemporaryRosterHistory',
+  'VmsVendor', 'VmsStaffMember', 'VmsStaffingOrder',
+  'VmsTimeAttendance', 'VmsInventorySyncLog', 'VmsAuditLog',
 ]);
 
 /**

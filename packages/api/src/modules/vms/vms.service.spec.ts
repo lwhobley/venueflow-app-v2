@@ -49,6 +49,10 @@ describe('VmsService', () => {
         findMany: vi.fn(),
         create: vi.fn(),
         update: vi.fn(),
+        count: vi.fn(),
+      },
+      facility: {
+        findUnique: vi.fn(),
       },
       vmsTimeAttendance: {
         findFirst: vi.fn(),
@@ -58,6 +62,7 @@ describe('VmsService', () => {
       },
       vmsInventorySyncLog: {
         create: vi.fn(),
+        findFirst: vi.fn(),
         findMany: vi.fn(),
       },
       vmsAuditLog: {
@@ -176,6 +181,12 @@ describe('VmsService', () => {
         facilityId: mockFacilityId,
         durationHours: 5.0,
       });
+      prisma.vmsVendor.findFirst.mockResolvedValue({
+        id: 'v-1',
+        name: 'Apex Staffing',
+        organizationId: mockOrgId,
+        facilityId: mockFacilityId,
+      });
       prisma.vmsOrderFulfillment.create.mockResolvedValue({
         id: 'ful-1',
         orderId: 'order-1',
@@ -200,6 +211,23 @@ describe('VmsService', () => {
           }),
         }),
       );
+    });
+
+    it('rejects cross-tenant vendor bid', async () => {
+      prisma.vmsStaffingOrder.findFirst.mockResolvedValue({
+        id: 'order-1',
+        facilityId: mockFacilityId,
+        durationHours: 5.0,
+      });
+      prisma.vmsVendor.findFirst.mockResolvedValue(null); // Vendor not in tenant/facility
+
+      await expect(
+        service.submitOrderBid('order-1', mockOrgId, mockFacilityId, {
+          vendorId: 'foreign-vendor',
+          staffCountAssigned: 4,
+          bidHourlyRateCents: 3000,
+        }),
+      ).rejects.toThrow('Vendor not found');
     });
 
     it('confirms order bid and updates order fulfilled quantity transactionally', async () => {
@@ -268,6 +296,7 @@ describe('VmsService', () => {
         clockIn: clockInTime,
         status: VmsAttendanceStatus.clocked_in,
         billedRateCents: 2500,
+        staffMember: { id: 'staff-1', pinHash: null, pinSalt: null, badgeNumber: null },
       });
       prisma.vmsTimeAttendance.update.mockImplementation((args: any) => Promise.resolve(args.data));
 
@@ -376,10 +405,109 @@ describe('VmsService', () => {
     it('triggers Yellow Dog inventory sync', async () => {
       const res = await service.syncInventory(mockOrgId, mockFacilityId);
 
-      expect(res.status).toBe('success');
+      expect(['success', 'demo_mode']).toContain(res.status);
       expect(res.itemsSynced).toBeGreaterThan(0);
       expect(res.supplies.length).toBeGreaterThan(0);
       expect(prisma.vmsInventorySyncLog.create).toHaveBeenCalled();
+    });
+
+    it('reads inventory status without inserting new sync logs', async () => {
+      prisma.vmsInventorySyncLog.findMany.mockResolvedValue([
+        { id: 'log-1', system: 'yellow_dog', createdAt: new Date() },
+      ]);
+      prisma.vmsInventorySyncLog.findFirst.mockResolvedValue({
+        id: 'log-1',
+        createdAt: new Date(),
+        status: 'success',
+        metadata: { catalogSnapshot: [{ sku: 'YD-UNI-1', remainingStock: 50 }] },
+      });
+      prisma.vmsInventorySyncLog.create.mockClear();
+
+      const status = await service.getInventoryStatus(mockOrgId, mockFacilityId);
+
+      expect(status.supplies).toHaveLength(1);
+      expect(prisma.vmsInventorySyncLog.create).not.toHaveBeenCalled();
+    });
+
+    it('guards vendor deletion against active fulfillments', async () => {
+      prisma.vmsVendor.findFirst.mockResolvedValue({ id: 'v-1', name: 'Busy Vendor' });
+      prisma.vmsOrderFulfillment.count.mockResolvedValue(2);
+
+      await expect(
+        service.deleteVendor('v-1', mockOrgId, mockFacilityId, mockUserId),
+      ).rejects.toThrow('Cannot delete vendor');
+    });
+
+    it('soft deactivates vendor successfully', async () => {
+      prisma.vmsVendor.findFirst.mockResolvedValue({ id: 'v-1', name: 'Vendor To Pause', status: VmsVendorStatus.active });
+      prisma.vmsVendor.update.mockResolvedValue({ id: 'v-1', status: VmsVendorStatus.inactive });
+
+      const res = await service.deactivateVendor('v-1', mockOrgId, mockFacilityId, mockUserId, 'Seasonal end');
+      expect(res.status).toBe(VmsVendorStatus.inactive);
+      expect(prisma.vmsVendor.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { status: VmsVendorStatus.inactive } }),
+      );
+    });
+
+    it('detects off-site punch when GPS exceeds 500m geofence', async () => {
+      prisma.vmsStaffMember.findFirst.mockResolvedValue({
+        id: 'staff-1',
+        hourlyRateCents: 2500,
+      });
+      prisma.vmsTimeAttendance.findFirst.mockResolvedValue(null);
+      prisma.facility.findUnique.mockResolvedValue({
+        latitude: 37.7749, // San Francisco
+        longitude: -122.4194,
+      });
+      prisma.vmsTimeAttendance.create.mockImplementation((args: any) => Promise.resolve(args.data));
+
+      const punch = await service.clockIn(mockOrgId, mockFacilityId, {
+        staffMemberId: 'staff-1',
+        gpsLatitude: 37.8049, // ~3.3km away (out of 500m geofence)
+        gpsLongitude: -122.4194,
+      }, { isManager: true });
+
+      expect(punch.isWithinGeofence).toBe(false);
+      expect(punch.deviationFlags).toContain('off_site_punch');
+    });
+
+    it('rejects clock-out when break minutes exceed shift hours', async () => {
+      const clockInTime = new Date(Date.now() - 2 * 3600 * 1000); // 2 hours ago
+      prisma.vmsTimeAttendance.findFirst.mockResolvedValue({
+        id: 'att-1',
+        staffMember: { id: 'staff-1' },
+        clockIn: clockInTime,
+        status: VmsAttendanceStatus.clocked_in,
+        billedRateCents: 2500,
+        deviationFlags: [],
+      });
+
+      await expect(
+        service.clockOut(mockOrgId, mockFacilityId, {
+          attendanceId: 'att-1',
+          breakMinutes: 180, // 3 hours break on a 2 hour shift!
+        }, { isManager: true }),
+      ).rejects.toThrow('Break minutes cannot exceed total shift duration');
+    });
+
+    it('returns explicit null without fabricated fallback when vendor has 0 punches', async () => {
+      prisma.vmsVendor.findMany.mockResolvedValue([
+        {
+          id: 'v-new',
+          name: 'Brand New Vendor',
+          code: 'NEW',
+          rating: 5.0,
+          orderFulfillments: [],
+          staffMembers: [],
+        },
+      ]);
+
+      const scorecard = await service.getVendorScorecard(mockOrgId, mockFacilityId);
+
+      expect(scorecard).toHaveLength(1);
+      expect(scorecard[0].onTimeRatePercent).toBeNull();
+      expect(scorecard[0].fulfillmentRatePercent).toBeNull();
+      expect(scorecard[0].hasData).toBe(false);
     });
   });
 });

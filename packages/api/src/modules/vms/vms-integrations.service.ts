@@ -123,6 +123,9 @@ export class VmsIntegrationsService {
       },
     ];
 
+    const isConfigured = Boolean(process.env.YELLOW_DOG_API_KEY || process.env.YELLOW_DOG_API_URL);
+    const syncStatus = isConfigured ? 'success' : 'demo_mode';
+
     const supplies = params.customItems
       ? params.customItems.map((item, idx) => ({
           sku: item.sku || `YD-CUSTOM-${idx + 1}`,
@@ -142,25 +145,59 @@ export class VmsIntegrationsService {
         facilityId: params.facilityId,
         system,
         syncType,
-        status: 'success',
+        status: syncStatus,
         itemsSyncedCount: supplies.length,
-        details: `Successfully synchronized ${supplies.length} stock line items with ${system}.`,
+        details: isConfigured
+          ? `Successfully synchronized ${supplies.length} stock line items with ${system}.`
+          : `Demonstration sync performed for ${supplies.length} stock line items (${system} API key not configured).`,
         metadata: {
           timestamp: new Date().toISOString(),
-          catalogSnapshot: supplies.map((s) => ({ sku: s.sku, remainingStock: s.remainingStock })),
+          catalogSnapshot: supplies,
         },
       },
     });
 
-    this.logger.log(`Synced ${supplies.length} items with ${system} for facility ${params.facilityId}`);
+    this.logger.log(`Synced ${supplies.length} items with ${system} for facility ${params.facilityId} (status=${syncStatus})`);
 
     return {
       system,
       syncType,
       itemsSynced: supplies.length,
-      status: 'success',
-      message: `Sync with ${system.toUpperCase()} completed. Equipment allocation and consumption logged.`,
+      status: syncStatus,
+      message: isConfigured
+        ? `Sync with ${system.toUpperCase()} completed. Equipment allocation and consumption logged.`
+        : `Demonstration sync completed for ${supplies.length} items. Configure YELLOW_DOG_API_KEY for live push.`,
       supplies,
+    };
+  }
+
+  /**
+   * Pure read query for the latest inventory snapshot without writing a sync log.
+   */
+  async getLatestInventorySnapshot(params: {
+    organizationId: string;
+    facilityId: string;
+  }): Promise<{ supplies: ShiftSupplyItem[]; lastSyncTime: Date | null; status: string }> {
+    const latestLog = await this.prisma.vmsInventorySyncLog.findFirst({
+      where: { organizationId: params.organizationId, facilityId: params.facilityId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (latestLog?.metadata && typeof latestLog.metadata === 'object') {
+      const meta = latestLog.metadata as any;
+      if (Array.isArray(meta.catalogSnapshot)) {
+        return {
+          supplies: meta.catalogSnapshot,
+          lastSyncTime: latestLog.createdAt,
+          status: latestLog.status,
+        };
+      }
+    }
+
+    return {
+      supplies: [],
+      lastSyncTime: latestLog?.createdAt ?? null,
+      status: 'no_sync_history',
     };
   }
 

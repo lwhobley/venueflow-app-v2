@@ -3405,6 +3405,9 @@ model VmsStaffMember {
   hourlyRateCents       Int                   @default(2500)
   status                VmsStaffStatus        @default(active)
   rating                Float                 @default(5.0)
+  badgeNumber           String?
+  pinHash               String?
+  pinSalt               String?
   createdAt             DateTime              @default(now())
   updatedAt             DateTime              @updatedAt
 
@@ -3435,6 +3438,7 @@ model VmsStaffingOrder {
   actualCostCents       Int                   @default(0)
   specialRequirements   String?
   templateName          String?
+  cancellationReason    String?
   status                VmsOrderStatus        @default(draft)
   createdById           String
   createdAt             DateTime              @default(now())

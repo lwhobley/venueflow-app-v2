@@ -10,6 +10,7 @@ import {
   Post,
   Put,
   Query,
+  Req,
   UseInterceptors,
 } from '@nestjs/common';
 import { VmsService } from './vms.service';
@@ -75,6 +76,8 @@ export class VmsController {
     @Query('status') status?: VmsVendorStatus,
     @Query('vendorType') vendorType?: VmsVendorType,
     @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     this.assertManager(scope);
     const orgId = await this.organizationIdFor(scope.venueId);
@@ -84,6 +87,8 @@ export class VmsController {
       status,
       vendorType,
       search,
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
     });
   }
 
@@ -110,6 +115,17 @@ export class VmsController {
     this.assertManager(scope);
     const orgId = await this.organizationIdFor(scope.venueId);
     return this.service.updateVendor(id, orgId, scope.venueId, body, scope.userId);
+  }
+
+  @Patch('vendors/:id/deactivate')
+  async deactivateVendor(
+    @VenueScope() scope: Scope,
+    @Param('id') id: string,
+    @Body('reason') reason?: string,
+  ) {
+    this.assertManager(scope);
+    const orgId = await this.organizationIdFor(scope.venueId);
+    return this.service.deactivateVendor(id, orgId, scope.venueId, scope.userId, reason);
   }
 
   @Delete('vendors/:id')
@@ -139,6 +155,8 @@ export class VmsController {
     @VenueScope() scope: Scope,
     @Query('vendorId') vendorId?: string,
     @Query('role') role?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     this.assertManager(scope);
     const orgId = await this.organizationIdFor(scope.venueId);
@@ -147,6 +165,8 @@ export class VmsController {
       facilityId: scope.venueId,
       vendorId,
       role,
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
     });
   }
 
@@ -154,7 +174,7 @@ export class VmsController {
   async createStaffMember(@VenueScope() scope: Scope, @Body() body: CreateVmsStaffMemberDto) {
     this.assertManager(scope);
     const orgId = await this.organizationIdFor(scope.venueId);
-    return this.service.createStaffMember(orgId, scope.venueId, body);
+    return this.service.createStaffMember(orgId, scope.venueId, body, scope.userId);
   }
 
   // ---------------------------------------------------------------------------
@@ -166,6 +186,8 @@ export class VmsController {
     @VenueScope() scope: Scope,
     @Query('status') status?: VmsOrderStatus,
     @Query('shiftDate') shiftDate?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     this.assertManager(scope);
     const orgId = await this.organizationIdFor(scope.venueId);
@@ -174,7 +196,16 @@ export class VmsController {
       facilityId: scope.venueId,
       status,
       shiftDate,
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
     });
+  }
+
+  @Get('orders/escalations')
+  async getUnfilledOrdersNeedingEscalation(@VenueScope() scope: Scope) {
+    this.assertManager(scope);
+    const orgId = await this.organizationIdFor(scope.venueId);
+    return this.service.getUnfilledOrdersNeedingEscalation(orgId, scope.venueId);
   }
 
   @Get('orders/:id')
@@ -199,7 +230,14 @@ export class VmsController {
   ) {
     this.assertManager(scope);
     const orgId = await this.organizationIdFor(scope.venueId);
-    return this.service.updateOrderStatus(id, orgId, scope.venueId, body.status, scope.userId);
+    return this.service.updateOrderStatus(
+      id,
+      orgId,
+      scope.venueId,
+      body.status,
+      scope.userId,
+      body.cancellationReason,
+    );
   }
 
   @Post('orders/:id/bids')
@@ -210,7 +248,7 @@ export class VmsController {
   ) {
     this.assertManager(scope);
     const orgId = await this.organizationIdFor(scope.venueId);
-    return this.service.submitOrderBid(id, orgId, scope.venueId, body);
+    return this.service.submitOrderBid(id, orgId, scope.venueId, body, scope.userId);
   }
 
   @Post('orders/fulfillments/:fulfillmentId/confirm')
@@ -244,15 +282,39 @@ export class VmsController {
   // ---------------------------------------------------------------------------
 
   @Post('attendance/clock-in')
-  async clockIn(@VenueScope() scope: Scope, @Body() body: ClockInDto) {
+  async clockIn(
+    @VenueScope() scope: Scope,
+    @Body() body: ClockInDto,
+    @Req() req: any,
+  ) {
+    const isManager = canManageVenue(scope.role, scope.allAccess);
+    if (!isManager && !body.pin && !body.badgeCode) {
+      throw new ForbiddenException('Worker PIN or badge credential required for self-service clock punch.');
+    }
     const orgId = await this.organizationIdFor(scope.venueId);
-    return this.service.clockIn(orgId, scope.venueId, body);
+    return this.service.clockIn(orgId, scope.venueId, body, {
+      isManager,
+      callerUserId: scope.userId,
+      ipAddress: req.ip || req.headers?.['x-forwarded-for'],
+    });
   }
 
   @Post('attendance/clock-out')
-  async clockOut(@VenueScope() scope: Scope, @Body() body: ClockOutDto) {
+  async clockOut(
+    @VenueScope() scope: Scope,
+    @Body() body: ClockOutDto,
+    @Req() req: any,
+  ) {
+    const isManager = canManageVenue(scope.role, scope.allAccess);
+    if (!isManager && !body.pin && !body.badgeCode) {
+      throw new ForbiddenException('Worker PIN or badge credential required for self-service clock punch.');
+    }
     const orgId = await this.organizationIdFor(scope.venueId);
-    return this.service.clockOut(orgId, scope.venueId, body);
+    return this.service.clockOut(orgId, scope.venueId, body, {
+      isManager,
+      callerUserId: scope.userId,
+      ipAddress: req.ip || req.headers?.['x-forwarded-for'],
+    });
   }
 
   @Post('attendance/:id/approve')
@@ -366,9 +428,18 @@ export class VmsController {
   }
 
   @Get('audit-logs')
-  async getAuditLogs(@VenueScope() scope: Scope) {
+  async getAuditLogs(
+    @VenueScope() scope: Scope,
+    @Query('entityType') entityType?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
     this.assertManager(scope);
     const orgId = await this.organizationIdFor(scope.venueId);
-    return this.service.getAuditLogs(orgId, scope.venueId);
+    return this.service.getAuditLogs(orgId, scope.venueId, {
+      entityType,
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+    });
   }
 }

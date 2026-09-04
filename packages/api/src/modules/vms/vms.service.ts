@@ -4,6 +4,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import * as crypto from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   VmsAttendanceStatus,
@@ -47,6 +48,8 @@ export class VmsService {
     status?: VmsVendorStatus;
     vendorType?: VmsVendorType;
     search?: string;
+    page?: number;
+    limit?: number;
   }) {
     const where: any = {
       organizationId: params.organizationId,
@@ -62,8 +65,14 @@ export class VmsService {
       ];
     }
 
+    const page = Math.max(1, params.page ?? 1);
+    const limit = Math.min(100, Math.max(1, params.limit ?? 50));
+    const skip = (page - 1) * limit;
+
     return this.prisma.vmsVendor.findMany({
       where,
+      skip,
+      take: limit,
       include: {
         services: true,
         _count: {
@@ -150,7 +159,7 @@ export class VmsService {
     dto: UpdateVendorDto,
     userId: string,
   ) {
-    await this.getVendor(id, organizationId, facilityId);
+    const previous = await this.getVendor(id, organizationId, facilityId);
 
     const updated = await this.prisma.vmsVendor.update({
       where: { id },
@@ -176,14 +185,61 @@ export class VmsService {
       entityId: id,
       action: 'UPDATE',
       userId,
+      before: { name: previous.name, status: previous.status, rating: previous.rating },
       changes: dto as Record<string, unknown>,
     });
 
     return updated;
   }
 
+  async deactivateVendor(
+    id: string,
+    organizationId: string,
+    facilityId: string,
+    userId: string,
+    reason?: string,
+  ) {
+    const vendor = await this.getVendor(id, organizationId, facilityId);
+    const updated = await this.prisma.vmsVendor.update({
+      where: { id },
+      data: { status: VmsVendorStatus.inactive },
+    });
+
+    await this.logAudit({
+      organizationId,
+      facilityId,
+      entityType: 'VmsVendor',
+      entityId: id,
+      action: 'DEACTIVATE',
+      userId,
+      before: { status: vendor.status },
+      changes: { status: VmsVendorStatus.inactive, reason },
+    });
+
+    return updated;
+  }
+
   async deleteVendor(id: string, organizationId: string, facilityId: string, userId: string) {
-    await this.getVendor(id, organizationId, facilityId);
+    const vendor = await this.getVendor(id, organizationId, facilityId);
+    const activeFulfillments = await this.prisma.vmsOrderFulfillment.count({
+      where: {
+        vendorId: id,
+        status: {
+          in: [
+            VmsFulfillmentStatus.bid_submitted,
+            VmsFulfillmentStatus.bid_accepted,
+            VmsFulfillmentStatus.confirmed,
+          ],
+        },
+      },
+    });
+
+    if (activeFulfillments > 0) {
+      throw new BadRequestException(
+        `Cannot delete vendor '${vendor.name}': there are ${activeFulfillments} active or confirmed order fulfillments associated with this vendor. Please deactivate the vendor instead to preserve historical records.`,
+      );
+    }
+
     await this.prisma.vmsVendor.delete({ where: { id } });
 
     await this.logAudit({
@@ -193,6 +249,7 @@ export class VmsService {
       entityId: id,
       action: 'DELETE',
       userId,
+      before: { id: vendor.id, code: vendor.code, name: vendor.name },
       changes: {},
     });
 
@@ -229,15 +286,24 @@ export class VmsService {
     facilityId: string;
     vendorId?: string;
     role?: string;
+    page?: number;
+    limit?: number;
   }) {
     const where: any = {
       organizationId: params.organizationId,
       facilityId: params.facilityId,
     };
     if (params.vendorId) where.vendorId = params.vendorId;
+    if (params.role) where.skills = { has: params.role };
+
+    const page = Math.max(1, params.page ?? 1);
+    const limit = Math.min(100, Math.max(1, params.limit ?? 50));
+    const skip = (page - 1) * limit;
 
     return this.prisma.vmsStaffMember.findMany({
       where,
+      skip,
+      take: limit,
       include: {
         vendor: { select: { id: true, name: true, code: true, vendorType: true } },
       },
@@ -249,8 +315,21 @@ export class VmsService {
     organizationId: string,
     facilityId: string,
     dto: CreateVmsStaffMemberDto,
+    userId?: string,
   ) {
-    return this.prisma.vmsStaffMember.create({
+    // Validate vendor ownership if supplied (F3)
+    if (dto.vendorId) {
+      await this.getVendor(dto.vendorId, organizationId, facilityId);
+    }
+
+    let pinHash: string | undefined;
+    let pinSalt: string | undefined;
+    if (dto.pin) {
+      pinSalt = crypto.randomBytes(16).toString('hex');
+      pinHash = crypto.createHash('sha256').update(dto.pin + pinSalt).digest('hex');
+    }
+
+    const staff = await this.prisma.vmsStaffMember.create({
       data: {
         organizationId,
         facilityId,
@@ -263,8 +342,26 @@ export class VmsService {
         skills: dto.skills ?? [],
         certifications: dto.certifications ? (dto.certifications as any) : undefined,
         hourlyRateCents: dto.hourlyRateCents ?? 2500,
+        badgeNumber: dto.badgeNumber,
+        pinHash,
+        pinSalt,
+      },
+      include: {
+        vendor: true,
       },
     });
+
+    await this.logAudit({
+      organizationId,
+      facilityId,
+      entityType: 'VmsStaffMember',
+      entityId: staff.id,
+      action: 'CREATE',
+      userId: userId || 'system',
+      changes: { firstName: staff.firstName, lastName: staff.lastName, vendorId: staff.vendorId },
+    });
+
+    return staff;
   }
 
   // ---------------------------------------------------------------------------
@@ -276,6 +373,8 @@ export class VmsService {
     facilityId: string;
     status?: VmsOrderStatus;
     shiftDate?: string;
+    page?: number;
+    limit?: number;
   }) {
     const where: any = {
       organizationId: params.organizationId,
@@ -284,8 +383,14 @@ export class VmsService {
     if (params.status) where.status = params.status;
     if (params.shiftDate) where.shiftDate = params.shiftDate;
 
+    const page = Math.max(1, params.page ?? 1);
+    const limit = Math.min(100, Math.max(1, params.limit ?? 50));
+    const skip = (page - 1) * limit;
+
     return this.prisma.vmsStaffingOrder.findMany({
       where,
+      skip,
+      take: limit,
       include: {
         fulfillments: {
           include: {
@@ -367,11 +472,34 @@ export class VmsService {
     facilityId: string,
     status: VmsOrderStatus,
     userId: string,
+    cancellationReason?: string,
   ) {
     const order = await this.getOrder(orderId, organizationId, facilityId);
+
+    // Order status transition state machine (F7)
+    const validTransitions: Record<VmsOrderStatus, VmsOrderStatus[]> = {
+      [VmsOrderStatus.draft]: [VmsOrderStatus.requested, VmsOrderStatus.cancelled],
+      [VmsOrderStatus.requested]: [VmsOrderStatus.quoted, VmsOrderStatus.booked, VmsOrderStatus.confirmed, VmsOrderStatus.cancelled],
+      [VmsOrderStatus.quoted]: [VmsOrderStatus.booked, VmsOrderStatus.confirmed, VmsOrderStatus.cancelled],
+      [VmsOrderStatus.booked]: [VmsOrderStatus.confirmed, VmsOrderStatus.completed, VmsOrderStatus.cancelled],
+      [VmsOrderStatus.confirmed]: [VmsOrderStatus.completed, VmsOrderStatus.cancelled],
+      [VmsOrderStatus.completed]: [],
+      [VmsOrderStatus.cancelled]: [],
+    };
+
+    const allowed = validTransitions[order.status] ?? [];
+    if (!allowed.includes(status)) {
+      throw new BadRequestException(
+        `Invalid order status transition from '${order.status}' to '${status}'. Allowed transitions: [${allowed.join(', ')}]`,
+      );
+    }
+
     const updated = await this.prisma.vmsStaffingOrder.update({
       where: { id: order.id },
-      data: { status },
+      data: {
+        status,
+        cancellationReason: status === VmsOrderStatus.cancelled ? cancellationReason : undefined,
+      },
     });
 
     await this.logAudit({
@@ -381,10 +509,37 @@ export class VmsService {
       entityId: order.id,
       action: 'STATUS_CHANGE',
       userId,
-      changes: { from: order.status, to: status },
+      before: { status: order.status },
+      changes: { from: order.status, to: status, cancellationReason },
     });
 
     return updated;
+  }
+
+  async getUnfilledOrdersNeedingEscalation(organizationId: string, facilityId: string) {
+    const now = new Date();
+    const in48Hours = new Date(now.getTime() + 48 * 3600 * 1000);
+    const shiftDateCutoff = in48Hours.toISOString().split('T')[0];
+
+    return this.prisma.vmsStaffingOrder.findMany({
+      where: {
+        organizationId,
+        facilityId,
+        status: {
+          in: [
+            VmsOrderStatus.draft,
+            VmsOrderStatus.requested,
+            VmsOrderStatus.quoted,
+            VmsOrderStatus.booked,
+          ],
+        },
+        shiftDate: { lte: shiftDateCutoff },
+      },
+      include: {
+        fulfillments: { include: { vendor: true } },
+      },
+      orderBy: { shiftDate: 'asc' },
+    });
   }
 
   async submitOrderBid(
@@ -392,13 +547,17 @@ export class VmsService {
     organizationId: string,
     facilityId: string,
     dto: SubmitOrderBidDto,
+    userId?: string,
   ) {
     const order = await this.getOrder(orderId, organizationId, facilityId);
+    // Validate vendor belongs to caller's organization and facility (F3)
+    const vendor = await this.getVendor(dto.vendorId, organizationId, facilityId);
+
     const totalBidCents = Math.round(
       dto.staffCountAssigned * order.durationHours * dto.bidHourlyRateCents,
     );
 
-    return this.prisma.vmsOrderFulfillment.create({
+    const fulfillment = await this.prisma.vmsOrderFulfillment.create({
       data: {
         orderId: order.id,
         vendorId: dto.vendorId,
@@ -412,6 +571,24 @@ export class VmsService {
         vendor: true,
       },
     });
+
+    await this.logAudit({
+      organizationId,
+      facilityId,
+      entityType: 'VmsOrderFulfillment',
+      entityId: fulfillment.id,
+      action: 'SUBMIT_BID',
+      userId: userId || 'system',
+      changes: {
+        orderId: order.id,
+        vendorId: vendor.id,
+        vendorName: vendor.name,
+        staffCount: dto.staffCountAssigned,
+        bidHourlyRateCents: dto.bidHourlyRateCents,
+      },
+    });
+
+    return fulfillment;
   }
 
   async confirmOrderBid(
@@ -532,16 +709,49 @@ export class VmsService {
   // TIME & ATTENDANCE TRACKING
   // ---------------------------------------------------------------------------
 
+  calculateHaversineDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371e3; // Earth's radius in meters
+    const phi1 = (lat1 * Math.PI) / 180;
+    const phi2 = (lat2 * Math.PI) / 180;
+    const deltaPhi = ((lat2 - lat1) * Math.PI) / 180;
+    const deltaLambda = ((lon2 - lon1) * Math.PI) / 180;
+
+    const a =
+      Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+      Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
+  }
+
   async clockIn(
     organizationId: string,
     facilityId: string,
     dto: ClockInDto,
+    options?: { isManager?: boolean; callerUserId?: string; ipAddress?: string },
   ) {
     const staff = await this.prisma.vmsStaffMember.findFirst({
       where: { id: dto.staffMemberId, organizationId, facilityId },
       include: { vendor: true },
     });
     if (!staff) throw new NotFoundException('Staff member not found');
+
+    // Worker credential check (B4):
+    if (!options?.isManager) {
+      if (staff.pinHash && staff.pinSalt) {
+        if (!dto.pin) {
+          throw new BadRequestException('Worker PIN required for clock-in.');
+        }
+        const hash = crypto.createHash('sha256').update(dto.pin + staff.pinSalt).digest('hex');
+        if (hash !== staff.pinHash) {
+          throw new BadRequestException('Invalid worker PIN.');
+        }
+      } else if (staff.badgeNumber) {
+        if (!dto.badgeCode || dto.badgeCode.trim().toLowerCase() !== staff.badgeNumber.trim().toLowerCase()) {
+          throw new BadRequestException('Invalid worker badge code.');
+        }
+      }
+    }
 
     const activePunch = await this.prisma.vmsTimeAttendance.findFirst({
       where: {
@@ -554,9 +764,35 @@ export class VmsService {
       throw new BadRequestException('Staff member already clocked in.');
     }
 
-    const rateCents = staff.hourlyRateCents;
+    // Geofencing verification (F1):
+    let isWithinGeofence = true;
+    const deviationFlags: string[] = [];
 
-    return this.prisma.vmsTimeAttendance.create({
+    if (dto.gpsLatitude != null && dto.gpsLongitude != null) {
+      const facility = await this.prisma.facility.findUnique({
+        where: { organizationId_id: { organizationId, id: facilityId } },
+        select: { latitude: true, longitude: true },
+      });
+
+      if (facility?.latitude != null && facility?.longitude != null) {
+        const distanceMeters = this.calculateHaversineDistanceMeters(
+          dto.gpsLatitude,
+          dto.gpsLongitude,
+          facility.latitude,
+          facility.longitude,
+        );
+        if (distanceMeters > 500) {
+          isWithinGeofence = false;
+          deviationFlags.push('off_site_punch');
+        }
+      }
+    }
+
+    // Apply vendor billing rate multiplier (F11):
+    const multiplier = staff.vendor?.billingRateMultiplier ?? 1.0;
+    const rateCents = Math.round(staff.hourlyRateCents * multiplier);
+
+    const attendance = await this.prisma.vmsTimeAttendance.create({
       data: {
         organizationId,
         facilityId,
@@ -564,53 +800,90 @@ export class VmsService {
         orderId: dto.orderId,
         clockIn: new Date(),
         billedRateCents: rateCents,
-        status: VmsAttendanceStatus.clocked_in,
+        status: deviationFlags.length > 0 ? VmsAttendanceStatus.flagged_exception : VmsAttendanceStatus.clocked_in,
         deviceInfo: dto.deviceInfo,
         gpsLatitude: dto.gpsLatitude,
         gpsLongitude: dto.gpsLongitude,
-        isWithinGeofence: true,
+        isWithinGeofence,
+        deviationFlags,
       },
       include: {
         staffMember: true,
       },
     });
+
+    await this.logAudit({
+      organizationId,
+      facilityId,
+      entityType: 'VmsTimeAttendance',
+      entityId: attendance.id,
+      action: 'CLOCK_IN',
+      userId: options?.callerUserId || staff.id,
+      ipAddress: options?.ipAddress,
+      changes: { staffMemberId: staff.id, isWithinGeofence, deviationFlags },
+    });
+
+    return attendance;
   }
 
   async clockOut(
     organizationId: string,
     facilityId: string,
     dto: ClockOutDto,
+    options?: { isManager?: boolean; callerUserId?: string; ipAddress?: string },
   ) {
     const attendance = await this.prisma.vmsTimeAttendance.findFirst({
       where: { id: dto.attendanceId, organizationId, facilityId },
       include: { staffMember: true },
     });
     if (!attendance) throw new NotFoundException('Attendance record not found');
-    if (attendance.status !== VmsAttendanceStatus.clocked_in) {
-      throw new BadRequestException('Record is not in clocked_in status');
+    if (attendance.status !== VmsAttendanceStatus.clocked_in && attendance.status !== VmsAttendanceStatus.flagged_exception) {
+      throw new BadRequestException('Record is not in active clocked-in status');
+    }
+
+    // Worker credential check on self clock-out (B4):
+    if (!options?.isManager) {
+      const staff = attendance.staffMember;
+      if (staff?.pinHash && staff?.pinSalt) {
+        if (!dto.pin) throw new BadRequestException('Worker PIN required for clock-out.');
+        const hash = crypto.createHash('sha256').update(dto.pin + staff.pinSalt).digest('hex');
+        if (hash !== staff.pinHash) throw new BadRequestException('Invalid worker PIN.');
+      } else if (staff?.badgeNumber) {
+        if (!dto.badgeCode || dto.badgeCode.trim().toLowerCase() !== staff.badgeNumber.trim().toLowerCase()) {
+          throw new BadRequestException('Invalid worker badge code.');
+        }
+      }
     }
 
     const clockOutTime = new Date();
     const durationMs = clockOutTime.getTime() - new Date(attendance.clockIn).getTime();
     const rawHours = Math.max(0.1, Number((durationMs / (1000 * 3600)).toFixed(2)));
+
+    // Validate breakMinutes: cannot exceed raw duration (B4)
     const breakMinutes = dto.breakMinutes ?? 0;
+    if (breakMinutes > rawHours * 60) {
+      throw new BadRequestException('Break minutes cannot exceed total shift duration.');
+    }
+
     const billableHours = Math.max(0.1, Number((rawHours - breakMinutes / 60).toFixed(2)));
 
-    // Deviation & Exception flags
-    const deviationFlags: string[] = [];
-    if (billableHours >= 5.0 && breakMinutes < 30) {
-      deviationFlags.push('meal_break_penalty');
+    // Deviation & Exception flags: statutory meal penalty rule
+    const deviationFlags = [...(attendance.deviationFlags || [])];
+    if (rawHours >= 5.0 && breakMinutes < 30) {
+      if (!deviationFlags.includes('meal_break_penalty')) {
+        deviationFlags.push('meal_break_penalty');
+      }
     }
-    if (billableHours > 8.0) {
+    if (billableHours > 8.0 && !deviationFlags.includes('overtime')) {
       deviationFlags.push('overtime');
     }
-    if (billableHours > 12.0) {
+    if (billableHours > 12.0 && !deviationFlags.includes('double_time')) {
       deviationFlags.push('double_time');
     }
 
     const totalBilledCents = Math.round(billableHours * attendance.billedRateCents);
 
-    return this.prisma.vmsTimeAttendance.update({
+    const updated = await this.prisma.vmsTimeAttendance.update({
       where: { id: dto.attendanceId },
       data: {
         clockOut: clockOutTime,
@@ -623,6 +896,20 @@ export class VmsService {
       },
       include: { staffMember: true },
     });
+
+    await this.logAudit({
+      organizationId,
+      facilityId,
+      entityType: 'VmsTimeAttendance',
+      entityId: dto.attendanceId,
+      action: 'CLOCK_OUT',
+      userId: options?.callerUserId || attendance.staffMemberId,
+      ipAddress: options?.ipAddress,
+      before: { clockIn: attendance.clockIn, status: attendance.status },
+      changes: { hoursWorked: rawHours, billableHours, deviationFlags, totalBilledCents },
+    });
+
+    return updated;
   }
 
   async approveAttendance(
@@ -749,15 +1036,19 @@ export class VmsService {
       take: 10,
     });
 
-    // Provide real-time stock snapshot
-    const activeSync = await this.integrationsService.syncInventory({ organizationId, facilityId });
+    // Pure read query for the latest snapshot - no DB mutation on GET! (F12, B3)
+    const snapshot = await this.integrationsService.getLatestInventorySnapshot({ organizationId, facilityId });
+
+    // Distinct systems that have actually performed a sync in this facility
+    const distinctSystems = Array.from(new Set(logs.map((l) => l.system)));
 
     return {
-      lastSyncTime: logs[0]?.createdAt ?? new Date(),
-      totalSystemsConnected: 3, // Yellow Dog, MarginEdge, Toast
-      connectedSystems: ['Yellow Dog', 'MarginEdge', 'Toast POS'],
-      supplies: activeSync.supplies,
+      lastSyncTime: snapshot.lastSyncTime ?? (logs[0]?.createdAt ?? null),
+      totalSystemsConnected: distinctSystems.length,
+      connectedSystems: distinctSystems.length > 0 ? distinctSystems : ['yellow_dog (pending first sync)'],
+      supplies: snapshot.supplies,
       recentSyncLogs: logs,
+      status: snapshot.status,
     };
   }
 
@@ -785,8 +1076,13 @@ export class VmsService {
 
       const allAttendances = v.staffMembers.flatMap((s) => s.attendances);
       const totalPunches = allAttendances.length;
-      const onTimeDeliveries = allAttendances.filter((a) => !a.deviationFlags.includes('no_show')).length;
-      const onTimeRatePercent = totalPunches > 0 ? Math.round((onTimeDeliveries / totalPunches) * 100) : 98;
+      const onTimeDeliveries = allAttendances.filter(
+        (a) => !a.deviationFlags.includes('no_show') && !a.deviationFlags.includes('off_site_punch'),
+      ).length;
+
+      // Real on-time calculation without fabricated 98% fallback (F1)
+      const onTimeRatePercent = totalPunches > 0 ? Math.round((onTimeDeliveries / totalPunches) * 100) : null;
+      const fulfillmentRatePercent = totalOrdersAssigned > 0 ? Math.round((confirmedOrders / totalOrdersAssigned) * 100) : null;
       const totalBilledCents = allAttendances.reduce((sum, a) => sum + a.totalBilledCents, 0);
 
       return {
@@ -795,8 +1091,9 @@ export class VmsService {
         code: v.code,
         rating: v.rating,
         totalOrdersAssigned,
-        fulfillmentRatePercent: totalOrdersAssigned > 0 ? Math.round((confirmedOrders / totalOrdersAssigned) * 100) : 100,
+        fulfillmentRatePercent,
         onTimeRatePercent,
+        hasData: totalPunches > 0 || totalOrdersAssigned > 0,
         totalBilledCents,
         tierStatus: v.rating >= 4.5 ? 'Tier 1 Preferred' : 'Standard Approved',
       };
@@ -842,15 +1139,28 @@ export class VmsService {
   }
 
   async getDemandForecast(
-    _organizationId: string,
-    _facilityId: string,
+    organizationId: string,
+    facilityId: string,
     eventParams?: { name?: string; type?: string; expectedAttendance?: number; hours?: number },
   ) {
+    // Read historical orders to inform demand forecasting (F2)
+    const pastOrders = await this.prisma.vmsStaffingOrder.findMany({
+      where: { organizationId, facilityId },
+      select: {
+        roleRequired: true,
+        quantityRequested: true,
+        quantityFulfilled: true,
+        durationHours: true,
+      },
+      take: 50,
+    });
+
     return this.aiService.forecastStaffingDemand({
       name: eventParams?.name || 'Championship Matchday',
       type: eventParams?.type || 'stadium_sports',
       expectedAttendance: eventParams?.expectedAttendance || 42000,
       hours: eventParams?.hours || 4.5,
+      historicalOrders: pastOrders,
     });
   }
 
@@ -880,16 +1190,24 @@ export class VmsService {
   // AUDIT LOGGING
   // ---------------------------------------------------------------------------
 
-  private async logAudit(params: {
+  async logAudit(params: {
     organizationId: string;
     facilityId: string;
     entityType: string;
     entityId: string;
     action: string;
     userId: string;
-    changes: Record<string, unknown>;
+    changes?: Record<string, unknown>;
+    before?: Record<string, unknown>;
+    ipAddress?: string;
   }) {
     try {
+      const payload = {
+        ...(params.changes || {}),
+        before: params.before,
+        ipAddress: params.ipAddress,
+      };
+
       await this.prisma.vmsAuditLog.create({
         data: {
           organizationId: params.organizationId,
@@ -898,19 +1216,31 @@ export class VmsService {
           entityId: params.entityId,
           action: params.action,
           performedByUserId: params.userId,
-          changes: params.changes ? (params.changes as any) : undefined,
+          changes: payload as any,
         },
       });
     } catch (err) {
-      this.logger.warn(`Failed to record audit log: ${err instanceof Error ? err.message : String(err)}`);
+      this.logger.error(`Failed to record audit log: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
-  async getAuditLogs(organizationId: string, facilityId: string) {
+  async getAuditLogs(
+    organizationId: string,
+    facilityId: string,
+    filters?: { entityType?: string; page?: number; limit?: number },
+  ) {
+    const page = Math.max(1, filters?.page ?? 1);
+    const limit = Math.min(100, Math.max(1, filters?.limit ?? 50));
+    const skip = (page - 1) * limit;
+
+    const where: any = { organizationId, facilityId };
+    if (filters?.entityType) where.entityType = filters.entityType;
+
     return this.prisma.vmsAuditLog.findMany({
-      where: { organizationId, facilityId },
+      where,
+      skip,
+      take: limit,
       orderBy: { timestamp: 'desc' },
-      take: 50,
     });
   }
 }

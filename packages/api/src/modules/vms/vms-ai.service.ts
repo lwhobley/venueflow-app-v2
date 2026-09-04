@@ -251,26 +251,37 @@ Return JSON matching:
   }
 
   /**
-   * Demand Forecasting: Predicts staffing requirements for an event based on attendance and event type.
+   * Demand Forecasting: Predicts staffing requirements for an event based on attendance, event type, and historical orders.
    */
   async forecastStaffingDemand(event: {
     name: string;
     type: string;
     expectedAttendance: number;
     hours: number;
+    historicalOrders?: Array<{ roleRequired: string; quantityRequested: number; quantityFulfilled: number; durationHours: number }>;
   }): Promise<DemandForecastResult> {
     const attendance = event.expectedAttendance || 15000;
     const duration = event.hours || 4;
+    const sampleCount = event.historicalOrders?.length ?? 0;
+
+    // Derive confidence dynamically based on historical sample size
+    const dynamicConfidence =
+      sampleCount >= 20 ? 0.94 : sampleCount >= 5 ? 0.82 : sampleCount > 0 ? 0.65 : 0.48;
 
     const apiKey = resolveAiApiKey();
     if (apiKey) {
       try {
+        const historicalSummary = sampleCount > 0
+          ? `Historical data available: ${sampleCount} past orders. Sample roles: ${event.historicalOrders!.slice(0, 5).map(o => `${o.roleRequired} (qty ${o.quantityRequested})`).join(', ')}.`
+          : 'No historical venue orders recorded yet. Use industry benchmark staffing ratios.';
+
         const prompt = `You are a high-volume sports stadium and arena workforce planning AI.
 Forecast staffing requirements for:
 - Event: ${event.name}
 - Type: ${event.type}
 - Expected Attendance: ${attendance} attendees
 - Duration: ${duration} hours
+- Context: ${historicalSummary}
 
 Predict recommended roles, headcounts, hours, and estimated cost in cents (using industry standard $25-$45/hr).
 Return strictly formatted JSON:
@@ -288,7 +299,7 @@ Return strictly formatted JSON:
   ],
   "totalEstimatedHeadcount": number,
   "totalEstimatedCostCents": number,
-  "confidenceScore": number (0.0 to 1.0)
+  "confidenceScore": ${dynamicConfidence}
 }`;
 
         const model = resolveAiModel(process.env.GEMINI_VMS_MODEL, DEFAULT_MODEL);
@@ -301,7 +312,10 @@ Return strictly formatted JSON:
 
         const data = res.data as DemandForecastResult;
         if (Array.isArray(data?.recommendedRoles) && data.recommendedRoles.length > 0) {
-          return data;
+          return {
+            ...data,
+            confidenceScore: data.confidenceScore ?? dynamicConfidence,
+          };
         }
       } catch (err) {
         this.logger.warn(`AI forecasting failed, falling back: ${err instanceof Error ? err.message : String(err)}`);
@@ -362,7 +376,7 @@ Return strictly formatted JSON:
       recommendedRoles: roles,
       totalEstimatedHeadcount: totalHeadcount,
       totalEstimatedCostCents: totalCost,
-      confidenceScore: 0.92,
+      confidenceScore: dynamicConfidence,
     };
   }
 
