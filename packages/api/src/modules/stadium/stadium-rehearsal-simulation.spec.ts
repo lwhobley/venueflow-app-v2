@@ -22,7 +22,7 @@ describe('Stadium Event End-to-End Rehearsal Simulation', () => {
     const gateway = new SuiteHospitalityGateway();
     const emittedEvents: any[] = [];
 
-    gateway.on('facility:facility-nfl-stadium', (event) => {
+    gateway.on('org-nfl:facility-nfl-stadium', (event) => {
       emittedEvents.push(event);
     });
 
@@ -32,14 +32,14 @@ describe('Stadium Event End-to-End Rehearsal Simulation', () => {
       vipGuestName: 'Enterprise Client VIP',
       totalCents: 450000,
     };
-    await gateway.broadcastBeoUpdate('facility-nfl-stadium', 'zone-club-level', beoOrder);
+    await gateway.broadcastBeoUpdate('org-nfl', 'facility-nfl-stadium', 'zone-club-level', beoOrder);
 
     const replenishment = {
       standId: 'stand-section-104',
       itemSku: 'SKU-BEER-PREMIUM',
       quantityRequested: 200,
     };
-    await gateway.broadcastReplenishment('facility-nfl-stadium', 'zone-concourse-east', replenishment);
+    await gateway.broadcastReplenishment('org-nfl', 'facility-nfl-stadium', 'zone-concourse-east', replenishment);
 
     expect(emittedEvents.length).toBe(2);
     expect(emittedEvents[0].event).toBe('suite_beo_updated');

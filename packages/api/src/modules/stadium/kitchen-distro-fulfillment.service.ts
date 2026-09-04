@@ -313,8 +313,9 @@ export class KitchenDistroFulfillmentService {
 
         // Broadcast urgent overdue alert to service area and kitchen
         await this.gateway.broadcastDistroPickupUpdate(
+          ticket.organizationId,
           ticket.facilityId,
-          ticket.zoneId || '',
+          ticket.zoneId ?? null,
           {
             id: ticket.id,
             itemName: ticket.itemName,
@@ -324,6 +325,7 @@ export class KitchenDistroFulfillmentService {
             status: KitchenTicketStatus.overdue_pickup,
             wasOverdue: true,
             overdueAt: now.toISOString(),
+            operationalAreaType: ticket.operationalAreaType,
           },
           'distro_pickup_overdue',
         );
@@ -533,8 +535,9 @@ export class KitchenDistroFulfillmentService {
     });
 
     await this.gateway.broadcastDistroPickupUpdate(
+      ticket.organizationId,
       facilityId,
-      ticket.zoneId || '',
+      ticket.zoneId ?? null,
       ticket,
       'distro_pickup_updated',
     );
@@ -629,8 +632,9 @@ export class KitchenDistroFulfillmentService {
 
     for (const ticket of createdTickets) {
       await this.gateway.broadcastDistroPickupUpdate(
+        ticket.organizationId,
         facilityId,
-        ticket.zoneId || '',
+        ticket.zoneId ?? null,
         ticket,
         'distro_pickup_updated',
       );
@@ -698,8 +702,9 @@ export class KitchenDistroFulfillmentService {
     });
 
     await this.gateway.broadcastDistroPickupUpdate(
+      updated.organizationId,
       facilityId,
-      updated.zoneId || '',
+      updated.zoneId ?? null,
       updated,
       'distro_pickup_updated',
     );
@@ -776,8 +781,9 @@ export class KitchenDistroFulfillmentService {
 
     // Broadcast both ready event and generic updated event
     await this.gateway.broadcastDistroPickupUpdate(
+      updated.organizationId,
       facilityId,
-      updated.zoneId || '',
+      updated.zoneId ?? null,
       updated,
       'distro_pickup_ready',
     );
@@ -866,8 +872,9 @@ export class KitchenDistroFulfillmentService {
     });
 
     await this.gateway.broadcastDistroPickupUpdate(
+      updated.organizationId,
       facilityId,
-      updated.zoneId || '',
+      updated.zoneId ?? null,
       updated,
       'distro_pickup_updated',
     );
@@ -951,8 +958,9 @@ export class KitchenDistroFulfillmentService {
     });
 
     await this.gateway.broadcastDistroPickupUpdate(
+      updated.organizationId,
       facilityId,
-      updated.zoneId || '',
+      updated.zoneId ?? null,
       updated,
       'distro_pickup_updated',
     );
@@ -1033,8 +1041,9 @@ export class KitchenDistroFulfillmentService {
     });
 
     await this.gateway.broadcastDistroPickupUpdate(
+      updated.organizationId,
       facilityId,
-      updated.zoneId || '',
+      updated.zoneId ?? null,
       updated,
       'distro_pickup_updated',
     );
@@ -1119,8 +1128,9 @@ export class KitchenDistroFulfillmentService {
     });
 
     await this.gateway.broadcastDistroPickupUpdate(
+      updated.organizationId,
       facilityId,
-      updated.zoneId || '',
+      updated.zoneId ?? null,
       updated,
       'distro_pickup_updated',
     );

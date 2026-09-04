@@ -34,8 +34,8 @@ describe('StadiumRealtimeController SSE teardown and sequence numbering', () => 
       received.push(event);
     });
 
-    await gateway.broadcastBeoUpdate('facility-1', 'zone-1', { beoNumber: 'BEO-1001' });
-    await gateway.broadcastReplenishment('facility-1', 'zone-1', { itemId: 'item-1' });
+    await gateway.broadcastBeoUpdate('org-1', 'facility-1', 'zone-1', { beoNumber: 'BEO-1001' });
+    await gateway.broadcastReplenishment('org-1', 'facility-1', 'zone-1', { itemId: 'item-1' });
 
     expect(received.length).toBe(2);
     expect(received[0].id).toBe('1');
@@ -50,7 +50,7 @@ describe('StadiumRealtimeController SSE teardown and sequence numbering', () => 
     subscription.unsubscribe();
 
     // Broadcast another event after unsubscription
-    await gateway.broadcastBeoUpdate('facility-1', 'zone-1', { beoNumber: 'BEO-1002' });
+    await gateway.broadcastBeoUpdate('org-1', 'facility-1', 'zone-1', { beoNumber: 'BEO-1002' });
 
     // Should NOT receive event after teardown
     expect(received.length).toBe(2);
@@ -77,8 +77,8 @@ describe('StadiumRealtimeController SSE teardown and sequence numbering', () => 
     expect(ticket).toBeDefined();
 
     // 2. Broadcast events into the gateway buffer before connection
-    await gateway.broadcastBeoUpdate('facility-1', 'zone-1', { beoNumber: 'BEO-2001' });
-    await gateway.broadcastBeoUpdate('facility-1', 'zone-1', { beoNumber: 'BEO-2002' });
+    await gateway.broadcastBeoUpdate('org-1', 'facility-1', 'zone-1', { beoNumber: 'BEO-2001' });
+    await gateway.broadcastBeoUpdate('org-1', 'facility-1', 'zone-1', { beoNumber: 'BEO-2002' });
 
     // 3. Connect with ticket and lastEventId = "1" to request missed event #2
     const stream$ = await controller.streamFacilityEvents(null as any, 'facility-1', undefined, '1', ticket);
@@ -93,9 +93,56 @@ describe('StadiumRealtimeController SSE teardown and sequence numbering', () => 
     expect(received[0].data.beoNumber).toBe('BEO-2002');
 
     // 4. Now broadcast live event #3
-    await gateway.broadcastReplenishment('facility-1', 'zone-1', { itemId: 'item-live-3' });
+    await gateway.broadcastReplenishment('org-1', 'facility-1', 'zone-1', { itemId: 'item-live-3' });
     expect(received.length).toBe(2);
     expect(received[1].id).toBe('3');
+
+    subscription.unsubscribe();
+  });
+
+  it('isolates cross-tenant events and filters out unauthorized department events in streamFacilityEvents', async () => {
+    const gateway = new SuiteHospitalityGateway();
+    const controller = new StadiumRealtimeController(gateway, makePrismaStub());
+
+    const culinaryScope = {
+      userId: 'user-cook',
+      profileId: 'profile-cook',
+      fullName: 'Cook',
+      venueId: 'facility-1',
+      venueName: 'Facility 1',
+      role: 'staff',
+      department: 'culinary',
+      allAccess: false,
+      subscriptionStatus: 'active',
+      trialEndsAt: null,
+    };
+
+    const stream$ = await controller.streamFacilityEvents(culinaryScope, 'facility-1');
+    const received: any[] = [];
+    const subscription = stream$.subscribe((event) => {
+      received.push(event);
+    });
+
+    // 1. Broadcast from another tenant (org-2) to facility-1: must NEVER arrive
+    await gateway.broadcastDistroPickupUpdate('org-2', 'facility-1', null, {
+      id: 'ticket-org-2',
+      operationalAreaType: 'culinary',
+    });
+
+    // 2. Broadcast concession event from org-1 to facility-1: culinary subscriber must not see it
+    await gateway.broadcastDistroPickupUpdate('org-1', 'facility-1', null, {
+      id: 'ticket-concession',
+      operationalAreaType: 'concession',
+    });
+
+    // 3. Broadcast culinary event from org-1 to facility-1: culinary subscriber MUST receive it
+    await gateway.broadcastDistroPickupUpdate('org-1', 'facility-1', null, {
+      id: 'ticket-culinary-allowed',
+      operationalAreaType: 'culinary',
+    });
+
+    expect(received).toHaveLength(1);
+    expect(received[0].data.id).toBe('ticket-culinary-allowed');
 
     subscription.unsubscribe();
   });

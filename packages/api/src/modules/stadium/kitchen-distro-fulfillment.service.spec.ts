@@ -103,8 +103,9 @@ describe('KitchenDistroFulfillmentService', () => {
       }),
     );
     expect(wsGateway.broadcastDistroPickupUpdate).toHaveBeenCalledWith(
+      'org-1',
       'facility-1',
-      '',
+      null,
       mockTicket,
       'distro_pickup_updated',
     );
@@ -143,6 +144,7 @@ describe('KitchenDistroFulfillmentService', () => {
       }),
     );
     expect(wsGateway.broadcastDistroPickupUpdate).toHaveBeenCalledWith(
+      'org-1',
       'facility-1',
       'zone-east',
       updatedTicket,
@@ -206,6 +208,7 @@ describe('KitchenDistroFulfillmentService', () => {
     expect(result.status).toBe(KitchenTicketStatus.ready);
     expect(result.distroLocationName).toBe('Distro Station B');
     expect(wsGateway.broadcastDistroPickupUpdate).toHaveBeenCalledWith(
+      'org-1',
       'facility-1',
       'zone-suites',
       updatedTicket,
@@ -298,6 +301,7 @@ describe('KitchenDistroFulfillmentService', () => {
       }),
     );
     expect(wsGateway.broadcastDistroPickupUpdate).toHaveBeenCalledWith(
+      'org-1',
       'facility-1',
       'zone-concourse',
       expect.objectContaining({
@@ -409,6 +413,7 @@ describe('KitchenDistroFulfillmentService', () => {
         }),
       );
       expect(wsGateway.broadcastDistroPickupUpdate).toHaveBeenCalledWith(
+        'org-1',
         'facility-1',
         'zone-1',
         reopenedTicket,

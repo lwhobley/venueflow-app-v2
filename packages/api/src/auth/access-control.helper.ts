@@ -349,3 +349,96 @@ export async function assertCanManageDepartment(params: {
     throw new ForbiddenException('Manager authority is restricted to assigned department(s)');
   }
 }
+
+/**
+ * Resolves the set of operational area types a user is authorized to view/receive
+ * based on active venue profile, department memberships, baseline rules, and active overrides.
+ */
+export async function getAuthorizedOperationalAreas(params: {
+  userId?: string;
+  role?: string | null;
+  allAccess?: boolean;
+  venueId?: string;
+  departmentCode?: string;
+  prisma: PrismaService;
+}): Promise<Set<string> | null> {
+  const { userId, role, allAccess, venueId, departmentCode, prisma } = params;
+
+  if (allAccess || isAdminRole(role)) {
+    return null; // Full access across all operational areas
+  }
+
+  const allKnownAreas = new Set<string>();
+  for (const areas of Object.values(BASELINE_DEPARTMENT_AREAS)) {
+    for (const a of areas) {
+      allKnownAreas.add(a.toLowerCase());
+    }
+  }
+
+  const activeDepartmentCodes: string[] = [];
+
+  if (departmentCode) {
+    activeDepartmentCodes.push(departmentCode.toLowerCase());
+  }
+
+  if (userId && venueId) {
+    // 1. Fetch active department memberships
+    const memberships = await prisma.departmentMembership?.findMany({
+      where: {
+        facilityId: venueId,
+        userId,
+        isActive: true,
+        department: { active: true },
+      },
+      include: {
+        department: { select: { code: true } },
+      },
+    });
+
+    if (memberships) {
+      for (const m of memberships) {
+        if (m?.department?.code) {
+          activeDepartmentCodes.push(m.department.code.toLowerCase());
+        }
+      }
+    }
+  }
+
+  if (activeDepartmentCodes.includes('operations')) {
+    return allKnownAreas;
+  }
+
+  const allowedAreas = new Set<string>();
+
+  for (const dept of activeDepartmentCodes) {
+    const areas = BASELINE_DEPARTMENT_AREAS[dept];
+    if (areas) {
+      for (const area of areas) {
+        allowedAreas.add(area.toLowerCase());
+      }
+    }
+  }
+
+  // Check active user area overrides
+  const now = new Date();
+  const overrides = await prisma.userAreaOverride?.findMany({
+    where: {
+      facilityId: venueId,
+      userId,
+      active: true,
+      startsAt: { lte: now },
+      expiresAt: { gte: now },
+    },
+    select: { areaType: true },
+  });
+
+  if (overrides) {
+    for (const ov of overrides) {
+      if (ov.areaType) {
+        allowedAreas.add(String(ov.areaType).toLowerCase());
+      }
+    }
+  }
+
+  return allowedAreas;
+}
