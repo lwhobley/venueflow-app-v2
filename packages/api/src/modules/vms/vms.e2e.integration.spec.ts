@@ -22,9 +22,17 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
   let jwt: JwtService;
   let teardown: () => Promise<void> = async () => {};
 
-  let manager: { userId: string; sessionId: string; token: string };
-  let outsider: { userId: string; sessionId: string; token: string };
-  let staffMember: { userId: string; sessionId: string; token: string };
+  type Actor = {
+    userId: string;
+    sessionId: string;
+    profileId: string;
+    token: string;
+    venueId: string;
+  };
+
+  let manager: Actor;
+  let outsider: Actor;
+  let staffMember: Actor;
 
   let venueId = '';
   let otherVenueId = '';
@@ -32,6 +40,17 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
   const createdUserIds: string[] = [];
   const venueIds: string[] = [];
 
+  /**
+   * Creates the legacy Venue and the hierarchical Facility that VMS rows
+   * actually foreign-key to. The two deliberately share an id — the
+   * compatibility convention established by the hierarchy migration and
+   * documented in prisma/bootstrap-stadium-pilot.sql. Without the Facility row
+   * every VMS insert fails on its composite foreign key.
+   *
+   * The coordinates live on the Facility because that is where geofencing
+   * reads them from; a Facility with null coordinates flags every punch
+   * `geofence_unconfigured` instead of checking distance.
+   */
   async function makeVenue(label: string) {
     const suffix = randomUUID().replace(/-/g, '').slice(0, 8);
     const venue = await prisma.venue.create({
@@ -48,15 +67,34 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
       include: { organization: true },
     });
     venueIds.push(venue.id);
+
+    await prisma.facility.create({
+      data: {
+        id: venue.id,
+        organizationId: venue.organizationId,
+        code: `FAC-${suffix.toUpperCase()}`,
+        name: venue.name,
+        timezone: 'UTC',
+        latitude: 34.1614,
+        longitude: -118.1676,
+        active: true,
+      },
+    });
+
     return venue;
   }
 
+  /**
+   * VenueScopeInterceptor requires `venueId` and `profileId` claims on the JWT
+   * — without them it never binds request.venueScope and every scoped
+   * controller sees an undefined scope.
+   */
   async function makeUser(venue: string, role: string, jobTitle: string) {
     const suffix = randomUUID().replace(/-/g, '').slice(0, 8);
     const user = await prisma.user.create({ data: { email: `vms-${suffix}@test.local` } });
     createdUserIds.push(user.id);
 
-    await prisma.profile.create({
+    const profile = await prisma.profile.create({
       data: {
         userId: user.id,
         email: user.email!,
@@ -70,16 +108,26 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     const session = await prisma.session.create({
       data: { userId: user.id, expiresAt: new Date(Date.now() + 24 * 3600 * 1000) },
     });
-    const token = signTestToken(jwt, { sub: user.id, sid: session.id });
+    const token = signTestToken(jwt, {
+      sub: user.id,
+      sid: session.id,
+      venueId: venue,
+      profileId: profile.id,
+      role,
+    });
     await prisma.session.update({
       where: { id: session.id },
       data: { tokenHash: createHash('sha256').update(token).digest('hex') },
     });
 
-    return { userId: user.id, sessionId: session.id, token };
+    return { userId: user.id, sessionId: session.id, profileId: profile.id, token, venueId: venue };
   }
 
-  const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
+  /** Bearer token plus the venue header every scoped route expects. */
+  const auth = (actor: { token: string; venueId: string }) => ({
+    Authorization: `Bearer ${actor.token}`,
+    'x-venue-id': actor.venueId,
+  });
 
   beforeAll(async () => {
     const boot = await bootstrapE2eApp();
@@ -98,6 +146,29 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     manager = await makeUser(venueId, 'manager', 'Workforce Manager');
     staffMember = await makeUser(venueId, 'staff', 'Server');
     outsider = await makeUser(otherVenueId, 'manager', 'Workforce Manager');
+
+    // `prisma db push` syncs schema.prisma only and never runs the raw SQL in
+    // prisma/migrations, so the audit-log immutability trigger from
+    // 20260904170000 does not exist in a db-push test database. Recreate it
+    // here — the same approach setup-test-db.ts takes for the auth bootstrap
+    // functions. Keep in sync with that migration.
+    await prisma.$executeRawUnsafe('CREATE SCHEMA IF NOT EXISTS app_private');
+    await prisma.$executeRawUnsafe(`
+      CREATE OR REPLACE FUNCTION app_private.enforce_vms_audit_log_immutability()
+      RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $fn$
+      BEGIN
+        RAISE EXCEPTION 'VmsAuditLog records are immutable and cannot be updated or deleted.';
+      END;
+      $fn$;
+    `);
+    await prisma.$executeRawUnsafe(
+      'DROP TRIGGER IF EXISTS enforce_vms_audit_log_immutability ON "VmsAuditLog"',
+    );
+    await prisma.$executeRawUnsafe(`
+      CREATE TRIGGER enforce_vms_audit_log_immutability
+        BEFORE UPDATE OR DELETE ON "VmsAuditLog"
+        FOR EACH ROW EXECUTE FUNCTION app_private.enforce_vms_audit_log_immutability();
+    `);
   }, 60_000);
 
   afterAll(async () => {
@@ -108,6 +179,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
       await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
     }
     if (venueIds.length) {
+      await prisma.facility.deleteMany({ where: { id: { in: venueIds } } });
       await prisma.venue.deleteMany({ where: { id: { in: venueIds } } });
       await prisma.organization.deleteMany();
     }
@@ -129,14 +201,14 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     it('rejects a non-manager on a management endpoint', async () => {
       await request(app.getHttpServer())
         .get('/api/v1/vms/vendors')
-        .set(auth(staffMember.token))
+        .set(auth(staffMember))
         .expect(403);
     });
 
     it('allows a manager', async () => {
       await request(app.getHttpServer())
         .get('/api/v1/vms/vendors')
-        .set(auth(manager.token))
+        .set(auth(manager))
         .expect(200);
     });
   });
@@ -145,7 +217,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     it('creates a vendor', async () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/vms/vendors')
-        .set(auth(manager.token))
+        .set(auth(manager))
         .send({
           name: 'Apex Staffing',
           code: `APEX-${randomUUID().slice(0, 6)}`,
@@ -163,7 +235,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
       const vendor = await prisma.vmsVendor.findUniqueOrThrow({ where: { id: vendorId } });
       await request(app.getHttpServer())
         .post('/api/v1/vms/vendors')
-        .set(auth(manager.token))
+        .set(auth(manager))
         .send({ name: 'Copycat', code: vendor.code })
         .expect(400);
     });
@@ -171,7 +243,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     it('serves the CSV export rather than treating "export" as a vendor id', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/vms/vendors/export')
-        .set(auth(manager.token))
+        .set(auth(manager))
         .expect(200);
 
       expect(res.text).toContain('Name');
@@ -184,14 +256,14 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
 
       const first = await request(app.getHttpServer())
         .post('/api/v1/vms/vendors/import')
-        .set(auth(manager.token))
+        .set(auth(manager))
         .send({ csv })
         .expect(201);
       expect(first.body.imported).toBe(1);
 
       const second = await request(app.getHttpServer())
         .post('/api/v1/vms/vendors/import')
-        .set(auth(manager.token))
+        .set(auth(manager))
         .send({ csv })
         .expect(201);
       expect(second.body.imported).toBe(0);
@@ -203,14 +275,14 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     it('hides another venue\'s vendor', async () => {
       await request(app.getHttpServer())
         .get(`/api/v1/vms/vendors/${vendorId}`)
-        .set(auth(outsider.token))
+        .set(auth(outsider))
         .expect(404);
     });
 
     it('refuses a bid that references another venue\'s vendor', async () => {
       const order = await request(app.getHttpServer())
         .post('/api/v1/vms/orders')
-        .set(auth(outsider.token))
+        .set(auth(outsider))
         .send({
           title: 'Cross-tenant probe',
           roleRequired: 'Bartender',
@@ -223,7 +295,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
 
       await request(app.getHttpServer())
         .post(`/api/v1/vms/orders/${order.body.id}/bids`)
-        .set(auth(outsider.token))
+        .set(auth(outsider))
         .send({ vendorId, staffCountAssigned: 1, bidHourlyRateCents: 2500 })
         .expect(404);
     });
@@ -233,7 +305,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     it('creates a worker with a PIN and never returns the credential', async () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/vms/staff')
-        .set(auth(manager.token))
+        .set(auth(manager))
         .send({
           firstName: 'Rosa',
           lastName: 'Klein',
@@ -253,7 +325,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     it('does not leak credentials through the vendor detail endpoint', async () => {
       const res = await request(app.getHttpServer())
         .get(`/api/v1/vms/vendors/${vendorId}`)
-        .set(auth(manager.token))
+        .set(auth(manager))
         .expect(200);
 
       for (const member of res.body.staffMembers ?? []) {
@@ -265,7 +337,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     it('filters the roster by skill', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/vms/staff?role=Bartender')
-        .set(auth(manager.token))
+        .set(auth(manager))
         .expect(200);
 
       expect(res.body.some((m: any) => m.id === workerId)).toBe(true);
@@ -276,7 +348,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     it('creates an order', async () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/vms/orders')
-        .set(auth(manager.token))
+        .set(auth(manager))
         .send({
           title: 'Saturday bar service',
           roleRequired: 'Bartender',
@@ -295,7 +367,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     it('rejects an illegal status transition', async () => {
       await request(app.getHttpServer())
         .patch(`/api/v1/vms/orders/${orderId}/status`)
-        .set(auth(manager.token))
+        .set(auth(manager))
         .send({ status: 'draft' })
         .expect(400);
     });
@@ -303,7 +375,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     it('records a bid and confirms it', async () => {
       const bid = await request(app.getHttpServer())
         .post(`/api/v1/vms/orders/${orderId}/bids`)
-        .set(auth(manager.token))
+        .set(auth(manager))
         .send({ vendorId, staffCountAssigned: 1, bidHourlyRateCents: 3000 })
         .expect(201);
 
@@ -311,7 +383,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
 
       await request(app.getHttpServer())
         .post(`/api/v1/vms/orders/fulfillments/${fulfillmentId}/confirm`)
-        .set(auth(manager.token))
+        .set(auth(manager))
         .expect(201);
 
       const order = await prisma.vmsStaffingOrder.findUniqueOrThrow({ where: { id: orderId } });
@@ -324,7 +396,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     it('assigns the worker to the order', async () => {
       const res = await request(app.getHttpServer())
         .post(`/api/v1/vms/orders/${orderId}/assignments`)
-        .set(auth(manager.token))
+        .set(auth(manager))
         .send({ staffMemberId: workerId, fulfillmentId })
         .expect(201);
 
@@ -336,7 +408,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
 
       await request(app.getHttpServer())
         .post('/api/v1/vms/staff/availability')
-        .set(auth(manager.token))
+        .set(auth(manager))
         .send({
           staffMemberId: workerId,
           startDate: shiftDate,
@@ -348,7 +420,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
 
       const second = await request(app.getHttpServer())
         .post('/api/v1/vms/orders')
-        .set(auth(manager.token))
+        .set(auth(manager))
         .send({
           title: 'Colliding shift',
           roleRequired: 'Bartender',
@@ -361,14 +433,14 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
 
       await request(app.getHttpServer())
         .post(`/api/v1/vms/orders/${second.body.id}/assignments`)
-        .set(auth(manager.token))
+        .set(auth(manager))
         .send({ staffMemberId: workerId })
         .expect(400);
 
       // The same call succeeds once the conflict is explicitly overridden.
       await request(app.getHttpServer())
         .post(`/api/v1/vms/orders/${second.body.id}/assignments`)
-        .set(auth(manager.token))
+        .set(auth(manager))
         .send({ staffMemberId: workerId, force: true })
         .expect(201);
     });
@@ -377,7 +449,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
       const day = new Date().toISOString().split('T')[0];
       const res = await request(app.getHttpServer())
         .get(`/api/v1/vms/staff/calendar?from=${day}&to=${day}`)
-        .set(auth(manager.token))
+        .set(auth(manager))
         .expect(200);
 
       expect(res.body.conflicts.length).toBeGreaterThan(0);
@@ -389,7 +461,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     it('refuses a self-service punch with no credential presented', async () => {
       await request(app.getHttpServer())
         .post('/api/v1/vms/attendance/clock-in')
-        .set(auth(staffMember.token))
+        .set(auth(staffMember))
         .send({ staffMemberId: workerId })
         .expect(403);
     });
@@ -397,7 +469,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     it('refuses a self-service punch with the wrong PIN', async () => {
       await request(app.getHttpServer())
         .post('/api/v1/vms/attendance/clock-in')
-        .set(auth(staffMember.token))
+        .set(auth(staffMember))
         .send({ staffMemberId: workerId, pin: '0000' })
         .expect(400);
     });
@@ -405,7 +477,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     it('accepts the correct PIN and records the punch', async () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/vms/attendance/clock-in')
-        .set(auth(staffMember.token))
+        .set(auth(staffMember))
         .send({
           staffMemberId: workerId,
           pin: '4821',
@@ -423,7 +495,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     it('rejects a second concurrent punch for the same worker', async () => {
       await request(app.getHttpServer())
         .post('/api/v1/vms/attendance/clock-in')
-        .set(auth(manager.token))
+        .set(auth(manager))
         .send({ staffMemberId: workerId })
         .expect(400);
     });
@@ -431,7 +503,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     it('rejects a break longer than the shift', async () => {
       await request(app.getHttpServer())
         .post('/api/v1/vms/attendance/clock-out')
-        .set(auth(manager.token))
+        .set(auth(manager))
         .send({ attendanceId, breakMinutes: 600 })
         .expect(400);
     });
@@ -439,7 +511,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     it('clocks out and computes billable hours', async () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/vms/attendance/clock-out')
-        .set(auth(manager.token))
+        .set(auth(manager))
         .send({ attendanceId, breakMinutes: 0 })
         .expect(201);
 
@@ -451,7 +523,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     it('approves the record', async () => {
       const res = await request(app.getHttpServer())
         .post(`/api/v1/vms/attendance/${attendanceId}/approve`)
-        .set(auth(manager.token))
+        .set(auth(manager))
         .expect(201);
 
       expect(res.body.status).toBe('approved');
@@ -462,7 +534,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     it('exports ADP CSV containing the approved shift', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/vms/attendance/payroll/adp')
-        .set(auth(manager.token))
+        .set(auth(manager))
         .expect(200);
 
       expect(res.text).toContain('Co Code');
@@ -473,7 +545,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     it('exports Gusto JSON with reconcilable totals', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/vms/attendance/payroll/gusto')
-        .set(auth(manager.token))
+        .set(auth(manager))
         .expect(200);
 
       expect(res.body.records.length).toBeGreaterThan(0);
@@ -485,7 +557,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     it('records the journey with actor and before/after values', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/vms/audit-logs?limit=100')
-        .set(auth(manager.token))
+        .set(auth(manager))
         .expect(200);
 
       const actions = res.body.map((entry: any) => entry.action);
@@ -514,7 +586,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     it('exports the audit trail as CSV', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/vms/audit-logs/export?format=csv')
-        .set(auth(manager.token))
+        .set(auth(manager))
         .expect(200);
 
       expect(typeof res.text === 'string' ? res.text : JSON.stringify(res.body)).toContain(
@@ -527,7 +599,7 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     it('reports the vendor scorecard from real aggregates', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/vms/analytics/vendor-scorecard')
-        .set(auth(manager.token))
+        .set(auth(manager))
         .expect(200);
 
       const row = res.body.find((r: any) => r.vendorId === vendorId);
@@ -539,13 +611,13 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     it('reports null rather than an invented rate for a vendor with no history', async () => {
       const fresh = await request(app.getHttpServer())
         .post('/api/v1/vms/vendors')
-        .set(auth(manager.token))
+        .set(auth(manager))
         .send({ name: 'Untested Co', code: `NEW-${randomUUID().slice(0, 6)}` })
         .expect(201);
 
       const res = await request(app.getHttpServer())
         .get('/api/v1/vms/analytics/vendor-scorecard')
-        .set(auth(manager.token))
+        .set(auth(manager))
         .expect(200);
 
       const row = res.body.find((r: any) => r.vendorId === fresh.body.id);
@@ -558,14 +630,14 @@ describe('e2e: VMS vendor onboarding through payroll', () => {
     it('refuses to delete a vendor with confirmed fulfillments', async () => {
       await request(app.getHttpServer())
         .delete(`/api/v1/vms/vendors/${vendorId}`)
-        .set(auth(manager.token))
+        .set(auth(manager))
         .expect(400);
     });
 
     it('deactivates instead, without losing data', async () => {
       await request(app.getHttpServer())
         .patch(`/api/v1/vms/vendors/${vendorId}/deactivate`)
-        .set(auth(manager.token))
+        .set(auth(manager))
         .send({ reason: 'Contract paused' })
         .expect(200);
 

@@ -3635,7 +3635,9 @@ model VmsStaffAvailability {
   facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
   staffMember           VmsStaffMember        @relation(fields: [staffMemberId], references: [id], onDelete: Cascade)
 
-  @@index([organizationId, facilityId, startDate, endDate])
+  // Explicit name: the derived one exceeds Postgres' 63-character identifier
+  // limit and would be truncated, drifting from the migration.
+  @@index([organizationId, facilityId, startDate, endDate], map: "VmsStaffAvailability_org_facility_start_end_idx")
   @@index([staffMemberId, startDate])
 }
 
