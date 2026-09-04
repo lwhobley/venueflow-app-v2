@@ -14,6 +14,9 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { VmsService } from './vms.service';
+import { VmsWorkforceService } from './vms-workforce.service';
+import { VmsNotificationsService } from './vms-notifications.service';
+import { VmsSchedulerService } from './vms-scheduler.service';
 import {
   AiParseOrderDto,
   ApproveAttendanceDto,
@@ -23,6 +26,12 @@ import {
   CreateVendorDto,
   CreateVendorServiceDto,
   CreateVmsStaffMemberDto,
+  AssignStaffDto,
+  CreateOrderFromTemplateDto,
+  CreateOrderTemplateDto,
+  CsvImportDto,
+  SetAvailabilityDto,
+  SetNotificationPreferenceDto,
   SubmitOrderBidDto,
   TriggerInventorySyncDto,
   UpdateOrderStatusDto,
@@ -36,6 +45,8 @@ import { canManageVenue } from '../../auth/roles';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   VmsAttendanceStatus,
+  VmsNotificationEvent,
+  VmsNotificationStatus,
   VmsOrderStatus,
   VmsVendorStatus,
   VmsVendorType,
@@ -50,6 +61,9 @@ export class VmsController {
   constructor(
     private readonly service: VmsService,
     private readonly prisma: PrismaService,
+    private readonly workforce: VmsWorkforceService,
+    private readonly notifications: VmsNotificationsService,
+    private readonly scheduler: VmsSchedulerService,
   ) {}
 
   private assertManager(scope: Scope) {
@@ -90,6 +104,15 @@ export class VmsController {
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
     });
+  }
+
+  @Get('vendors/export')
+  @Header('Content-Type', 'text/csv')
+  @Header('Content-Disposition', 'attachment; filename="vendor-directory.csv"')
+  async exportVendors(@VenueScope() scope: Scope) {
+    this.assertManager(scope);
+    const orgId = await this.organizationIdFor(scope.venueId);
+    return this.workforce.exportVendorsCsv(orgId, scope.venueId);
   }
 
   @Get('vendors/:id')
@@ -473,5 +496,343 @@ export class VmsController {
       endDate,
       format,
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // STAFF ASSIGNMENTS  (checklist 1.3, 1.4)
+  // ---------------------------------------------------------------------------
+
+  @Get('orders/:id/assignments')
+  async listOrderAssignments(@VenueScope() scope: Scope, @Param('id') id: string) {
+    this.assertManager(scope);
+    const orgId = await this.organizationIdFor(scope.venueId);
+    return this.workforce.listAssignments({
+      organizationId: orgId,
+      facilityId: scope.venueId,
+      orderId: id,
+    });
+  }
+
+  @Post('orders/:id/assignments')
+  async assignStaffToOrder(
+    @VenueScope() scope: Scope,
+    @Param('id') id: string,
+    @Body() body: AssignStaffDto,
+  ) {
+    this.assertManager(scope);
+    const orgId = await this.organizationIdFor(scope.venueId);
+    const assignment = await this.workforce.assignStaffToOrder({
+      organizationId: orgId,
+      facilityId: scope.venueId,
+      orderId: id,
+      staffMemberId: body.staffMemberId,
+      fulfillmentId: body.fulfillmentId,
+      notes: body.notes,
+      force: body.force,
+    });
+
+    await this.service.logAudit({
+      organizationId: orgId,
+      facilityId: scope.venueId,
+      entityType: 'VmsStaffAssignment',
+      entityId: assignment.id,
+      action: 'ASSIGN_STAFF',
+      userId: scope.userId,
+      changes: { orderId: id, staffMemberId: body.staffMemberId, forced: Boolean(body.force) },
+    });
+
+    return assignment;
+  }
+
+  @Delete('assignments/:assignmentId')
+  async releaseAssignment(
+    @VenueScope() scope: Scope,
+    @Param('assignmentId') assignmentId: string,
+  ) {
+    this.assertManager(scope);
+    const orgId = await this.organizationIdFor(scope.venueId);
+    const released = await this.workforce.releaseAssignment({
+      organizationId: orgId,
+      facilityId: scope.venueId,
+      assignmentId,
+    });
+
+    await this.service.logAudit({
+      organizationId: orgId,
+      facilityId: scope.venueId,
+      entityType: 'VmsStaffAssignment',
+      entityId: assignmentId,
+      action: 'RELEASE_STAFF',
+      userId: scope.userId,
+      changes: { orderId: released.orderId, staffMemberId: released.staffMemberId },
+    });
+
+    return released;
+  }
+
+  // ---------------------------------------------------------------------------
+  // AVAILABILITY & CERTIFICATIONS  (checklist 1.2)
+  // ---------------------------------------------------------------------------
+
+  @Get('staff/availability')
+  async listAvailability(
+    @VenueScope() scope: Scope,
+    @Query('staffMemberId') staffMemberId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    this.assertManager(scope);
+    const orgId = await this.organizationIdFor(scope.venueId);
+    return this.workforce.listAvailability({
+      organizationId: orgId,
+      facilityId: scope.venueId,
+      staffMemberId,
+      from,
+      to,
+    });
+  }
+
+  @Post('staff/availability')
+  async setAvailability(@VenueScope() scope: Scope, @Body() body: SetAvailabilityDto) {
+    this.assertManager(scope);
+    const orgId = await this.organizationIdFor(scope.venueId);
+    return this.workforce.setAvailability({
+      organizationId: orgId,
+      facilityId: scope.venueId,
+      staffMemberId: body.staffMemberId,
+      startDate: body.startDate,
+      endDate: body.endDate,
+      available: body.available,
+      reason: body.reason,
+    });
+  }
+
+  @Get('staff/calendar')
+  async getAvailabilityCalendar(
+    @VenueScope() scope: Scope,
+    @Query('from') from: string,
+    @Query('to') to: string,
+  ) {
+    this.assertManager(scope);
+    const orgId = await this.organizationIdFor(scope.venueId);
+    return this.workforce.getAvailabilityCalendar({
+      organizationId: orgId,
+      facilityId: scope.venueId,
+      from: from ?? new Date().toISOString().split('T')[0],
+      to: to ?? new Date(Date.now() + 14 * 86400 * 1000).toISOString().split('T')[0],
+    });
+  }
+
+  @Get('staff/certifications/expiring')
+  async listExpiringCertifications(
+    @VenueScope() scope: Scope,
+    @Query('withinDays') withinDays?: string,
+  ) {
+    this.assertManager(scope);
+    const orgId = await this.organizationIdFor(scope.venueId);
+    return this.service.listExpiringCertifications(
+      orgId,
+      scope.venueId,
+      withinDays ? parseInt(withinDays, 10) : 30,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // ORDER TEMPLATES  (checklist 1.3)
+  // ---------------------------------------------------------------------------
+
+  @Get('order-templates')
+  async listTemplates(@VenueScope() scope: Scope) {
+    this.assertManager(scope);
+    const orgId = await this.organizationIdFor(scope.venueId);
+    return this.workforce.listTemplates(orgId, scope.venueId);
+  }
+
+  @Post('order-templates')
+  async createTemplate(@VenueScope() scope: Scope, @Body() body: CreateOrderTemplateDto) {
+    this.assertManager(scope);
+    const orgId = await this.organizationIdFor(scope.venueId);
+    return this.workforce.createTemplate({
+      organizationId: orgId,
+      facilityId: scope.venueId,
+      createdById: scope.userId,
+      ...body,
+    });
+  }
+
+  @Delete('order-templates/:id')
+  async deleteTemplate(@VenueScope() scope: Scope, @Param('id') id: string) {
+    this.assertManager(scope);
+    const orgId = await this.organizationIdFor(scope.venueId);
+    return this.workforce.deleteTemplate(orgId, scope.venueId, id);
+  }
+
+  @Post('orders/from-template')
+  async createOrderFromTemplate(
+    @VenueScope() scope: Scope,
+    @Body() body: CreateOrderFromTemplateDto,
+  ) {
+    this.assertManager(scope);
+    const orgId = await this.organizationIdFor(scope.venueId);
+    const template = await this.workforce.getTemplate(orgId, scope.venueId, body.templateId);
+
+    return this.service.createOrder(
+      orgId,
+      scope.venueId,
+      {
+        title: body.title ?? `${template.name} — ${body.shiftDate}`,
+        roleRequired: template.roleRequired,
+        quantityRequested: template.quantityRequested,
+        shiftDate: body.shiftDate,
+        startTime: template.startTime,
+        endTime: template.endTime,
+        durationHours: template.durationHours,
+        budgetCents: template.budgetCents || undefined,
+        specialRequirements: template.specialRequirements ?? undefined,
+        templateName: template.name,
+        eventId: body.eventId,
+      },
+      scope.userId,
+    );
+  }
+
+  @Post('orders/:id/clone')
+  async cloneOrder(
+    @VenueScope() scope: Scope,
+    @Param('id') id: string,
+    @Body() body: { shiftDate?: string },
+  ) {
+    this.assertManager(scope);
+    const orgId = await this.organizationIdFor(scope.venueId);
+    const source = await this.service.getOrder(id, orgId, scope.venueId);
+
+    return this.service.createOrder(
+      orgId,
+      scope.venueId,
+      {
+        title: `${source.title} (copy)`,
+        roleRequired: source.roleRequired,
+        quantityRequested: source.quantityRequested,
+        shiftDate: body?.shiftDate ?? source.shiftDate,
+        startTime: source.startTime,
+        endTime: source.endTime,
+        durationHours: source.durationHours,
+        budgetCents: source.budgetCents || undefined,
+        specialRequirements: source.specialRequirements ?? undefined,
+        templateName: source.templateName ?? undefined,
+      },
+      scope.userId,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // BULK IMPORT / EXPORT  (checklist 1.1, 1.2)
+  // ---------------------------------------------------------------------------
+
+  @Post('vendors/import')
+  async importVendors(@VenueScope() scope: Scope, @Body() body: CsvImportDto) {
+    this.assertManager(scope);
+    const orgId = await this.organizationIdFor(scope.venueId);
+    const result = await this.workforce.importVendorsCsv(orgId, scope.venueId, body.csv);
+
+    await this.service.logAudit({
+      organizationId: orgId,
+      facilityId: scope.venueId,
+      entityType: 'VmsVendor',
+      entityId: 'bulk-import',
+      action: 'BULK_IMPORT',
+      userId: scope.userId,
+      changes: { imported: result.imported, skipped: result.skipped, parsed: result.parsed },
+    });
+
+    return result;
+  }
+
+  @Post('staff/import')
+  async importStaff(@VenueScope() scope: Scope, @Body() body: CsvImportDto) {
+    this.assertManager(scope);
+    const orgId = await this.organizationIdFor(scope.venueId);
+    const result = await this.workforce.importStaffCsv(orgId, scope.venueId, body.csv);
+
+    await this.service.logAudit({
+      organizationId: orgId,
+      facilityId: scope.venueId,
+      entityType: 'VmsStaffMember',
+      entityId: 'bulk-import',
+      action: 'BULK_IMPORT',
+      userId: scope.userId,
+      changes: { imported: result.imported, skipped: result.skipped, parsed: result.parsed },
+    });
+
+    return result;
+  }
+
+  @Get('staff/export')
+  @Header('Content-Type', 'text/csv')
+  @Header('Content-Disposition', 'attachment; filename="staff-roster.csv"')
+  async exportStaff(@VenueScope() scope: Scope) {
+    this.assertManager(scope);
+    const orgId = await this.organizationIdFor(scope.venueId);
+    return this.workforce.exportStaffCsv(orgId, scope.venueId);
+  }
+
+  // ---------------------------------------------------------------------------
+  // NOTIFICATIONS  (checklist 4.3)
+  // ---------------------------------------------------------------------------
+
+  @Get('notifications/log')
+  async listNotificationLog(
+    @VenueScope() scope: Scope,
+    @Query('eventType') eventType?: VmsNotificationEvent,
+    @Query('status') status?: VmsNotificationStatus,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    this.assertManager(scope);
+    const orgId = await this.organizationIdFor(scope.venueId);
+    return this.notifications.listDeliveryLog(orgId, scope.venueId, {
+      eventType,
+      status,
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+    });
+  }
+
+  @Get('notifications/preferences')
+  async listNotificationPreferences(@VenueScope() scope: Scope) {
+    const orgId = await this.organizationIdFor(scope.venueId);
+    return this.notifications.listPreferences(orgId, scope.venueId, scope.userId);
+  }
+
+  @Put('notifications/preferences')
+  async setNotificationPreference(
+    @VenueScope() scope: Scope,
+    @Body() body: SetNotificationPreferenceDto,
+  ) {
+    const orgId = await this.organizationIdFor(scope.venueId);
+    return this.notifications.setPreference({
+      organizationId: orgId,
+      facilityId: scope.venueId,
+      userId: scope.userId,
+      eventType: body.eventType,
+      emailEnabled: body.emailEnabled,
+      smsEnabled: body.smsEnabled,
+    });
+  }
+
+  /**
+   * Manual trigger for the scheduled sweeps. The crons run these on their own
+   * timers; this exists so an operator can force a run and so the behaviour is
+   * testable without waiting on the scheduler.
+   */
+  @Post('maintenance/run-sweeps')
+  async runSweeps(@VenueScope() scope: Scope) {
+    this.assertManager(scope);
+    const [noShows, escalations, certifications] = await Promise.all([
+      this.scheduler.runNoShowSweep(),
+      this.scheduler.runFulfillmentEscalation(),
+      this.scheduler.runCertificationExpiryCheck(),
+    ]);
+    return { noShows, escalations, certifications };
   }
 }

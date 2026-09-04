@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  InternalServerErrorException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -8,6 +9,8 @@ import {
 import * as crypto from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
+  Prisma,
+  VmsAssignmentStatus,
   VmsAttendanceStatus,
   VmsFulfillmentStatus,
   VmsOrderStatus,
@@ -28,6 +31,13 @@ import {
 } from './vms.dto';
 import { VmsAiService } from './vms-ai.service';
 import { VmsIntegrationsService } from './vms-integrations.service';
+import { VmsWorkforceService } from './vms-workforce.service';
+import { VmsNotificationsService } from './vms-notifications.service';
+import { VmsNotificationEvent } from '@prisma/client';
+
+/** Failed punch attempts before a worker is locked out, and for how long. */
+export const MAX_PUNCH_ATTEMPTS = 5;
+export const PUNCH_LOCKOUT_MINUTES = 15;
 
 /**
  * Scrypt-based Key Derivation for Worker PINs (N3)
@@ -59,27 +69,70 @@ export function sanitizeStaffMember<T extends Record<string, any>>(staff: T): Om
 @Injectable()
 export class VmsService {
   private readonly logger = new Logger(VmsService.name);
-  private failedPunchAttempts = new Map<string, { count: number; lockedUntil: number }>();
-
-  private checkPunchLockout(staffId: string) {
-    const record = this.failedPunchAttempts.get(staffId);
-    if (record && record.lockedUntil > Date.now()) {
-      const minutesRemaining = Math.ceil((record.lockedUntil - Date.now()) / 60000);
-      throw new ForbiddenException(`Too many failed punch attempts. Worker locked out for ${minutesRemaining} more minute(s).`);
+  /**
+   * Failed-punch throttling is persisted rather than held in process memory:
+   * an in-process Map reset on every deploy and, across replicas, gave an
+   * attacker MAX_PUNCH_ATTEMPTS tries per instance instead of in total
+   * (review finding P5).
+   */
+  private async checkPunchLockout(organizationId: string, facilityId: string, staffId: string) {
+    const record = await this.prisma.vmsPunchLockout.findUnique({
+      where: { staffMemberId: staffId },
+      select: { lockedUntil: true, facilityId: true },
+    });
+    if (!record || record.facilityId !== facilityId) return;
+    if (record.lockedUntil && record.lockedUntil.getTime() > Date.now()) {
+      const minutesRemaining = Math.ceil((record.lockedUntil.getTime() - Date.now()) / 60000);
+      throw new ForbiddenException(
+        `Too many failed punch attempts. Worker locked out for ${minutesRemaining} more minute(s).`,
+      );
     }
   }
 
-  private recordFailedPunchAttempt(staffId: string) {
-    const record = this.failedPunchAttempts.get(staffId) || { count: 0, lockedUntil: 0 };
-    record.count += 1;
-    if (record.count >= 5) {
-      record.lockedUntil = Date.now() + 15 * 60 * 1000; // 15 min lockout
+  private async recordFailedPunchAttempt(
+    organizationId: string,
+    facilityId: string,
+    staffId: string,
+  ) {
+    try {
+      const existing = await this.prisma.vmsPunchLockout.findUnique({
+        where: { staffMemberId: staffId },
+        select: { failedCount: true, lockedUntil: true },
+      });
+
+      // A lapsed lockout starts a fresh count rather than resuming the old one.
+      const lapsed = existing?.lockedUntil ? existing.lockedUntil.getTime() <= Date.now() : false;
+      const nextCount = existing && !lapsed ? existing.failedCount + 1 : 1;
+      const lockedUntil =
+        nextCount >= MAX_PUNCH_ATTEMPTS ? new Date(Date.now() + PUNCH_LOCKOUT_MINUTES * 60 * 1000) : null;
+
+      await this.prisma.vmsPunchLockout.upsert({
+        where: { staffMemberId: staffId },
+        create: {
+          organizationId,
+          facilityId,
+          staffMemberId: staffId,
+          failedCount: nextCount,
+          lockedUntil,
+          lastAttemptAt: new Date(),
+        },
+        update: { failedCount: nextCount, lockedUntil, lastAttemptAt: new Date() },
+      });
+    } catch (err) {
+      this.logger.error(
+        `Failed to persist punch lockout for ${staffId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
-    this.failedPunchAttempts.set(staffId, record);
   }
 
-  private resetFailedPunchAttempts(staffId: string) {
-    this.failedPunchAttempts.delete(staffId);
+  private async resetFailedPunchAttempts(staffId: string) {
+    try {
+      await this.prisma.vmsPunchLockout.deleteMany({ where: { staffMemberId: staffId } });
+    } catch (err) {
+      this.logger.warn(
+        `Failed to clear punch lockout for ${staffId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   private timingSafeCompare(a: string, b: string): boolean {
@@ -93,7 +146,17 @@ export class VmsService {
     private readonly prisma: PrismaService,
     private readonly aiService: VmsAiService,
     private readonly integrationsService: VmsIntegrationsService,
+    private readonly workforceService: VmsWorkforceService,
+    private readonly notifications: VmsNotificationsService,
   ) {}
+
+  /**
+   * Certifications lapsing inside the window (checklist 1.2). Delegated so the
+   * scheduler has a single entry point alongside the other sweeps.
+   */
+  async listExpiringCertifications(organizationId: string, facilityId: string, withinDays = 30) {
+    return this.workforceService.listExpiringCertifications(organizationId, facilityId, withinDays);
+  }
 
   // ---------------------------------------------------------------------------
   // VENDORS
@@ -530,6 +593,22 @@ export class VmsService {
       changes: { orderNumber: order.orderNumber, role: order.roleRequired },
     });
 
+    await this.notifications.notify({
+      organizationId,
+      facilityId,
+      eventType: VmsNotificationEvent.order_submitted,
+      subject: `Staffing order ${order.orderNumber} submitted`,
+      body:
+        `A new staffing order has been raised.\n\n` +
+        `Order: ${order.orderNumber}\n` +
+        `Role: ${order.roleRequired}\n` +
+        `Headcount: ${order.quantityRequested}\n` +
+        `Shift: ${order.shiftDate} ${order.startTime}–${order.endTime}\n` +
+        `Budget: $${(order.budgetCents / 100).toFixed(2)}`,
+      entityType: 'VmsStaffingOrder',
+      entityId: order.id,
+    });
+
     return order;
   }
 
@@ -656,6 +735,21 @@ export class VmsService {
       },
     });
 
+    await this.notifications.notify({
+      organizationId,
+      facilityId,
+      eventType: VmsNotificationEvent.bid_received,
+      subject: `Bid received for ${order.orderNumber}`,
+      body:
+        `${vendor.name} has bid on staffing order ${order.orderNumber}.\n\n` +
+        `Role: ${order.roleRequired}\n` +
+        `Staff offered: ${dto.staffCountAssigned} of ${order.quantityRequested}\n` +
+        `Rate: $${(dto.bidHourlyRateCents / 100).toFixed(2)}/hr\n` +
+        `Bid total: $${(totalBidCents / 100).toFixed(2)}`,
+      entityType: 'VmsOrderFulfillment',
+      entityId: fulfillment.id,
+    });
+
     return fulfillment;
   }
 
@@ -711,6 +805,20 @@ export class VmsService {
       action: 'CONFIRM_BID',
       userId,
       changes: { vendorId: fulfillment.vendorId, staffCount: fulfillment.staffCountAssigned },
+    });
+
+    await this.notifications.notify({
+      organizationId,
+      facilityId,
+      eventType: VmsNotificationEvent.order_confirmed,
+      subject: `Order ${fulfillment.order.orderNumber} staffing confirmed`,
+      body:
+        `A vendor bid has been accepted for order ${fulfillment.order.orderNumber}.\n\n` +
+        `Role: ${fulfillment.order.roleRequired}\n` +
+        `Staff confirmed: ${fulfillment.staffCountAssigned}\n` +
+        `Assign named workers so shift reminders and no-show detection can run.`,
+      entityType: 'VmsOrderFulfillment',
+      entityId: fulfillmentId,
     });
 
     return updated;
@@ -805,7 +913,7 @@ export class VmsService {
     if (!staff) throw new NotFoundException('Staff member not found');
 
     // Check lockout
-    this.checkPunchLockout(staff.id);
+    await this.checkPunchLockout(organizationId, facilityId, staff.id);
 
     // Worker credential check (B4, N3, N5):
     if (!options?.isManager) {
@@ -819,7 +927,7 @@ export class VmsService {
           throw new BadRequestException('Worker PIN required for clock-in.');
         }
         if (!verifyPin(dto.pin, staff.pinSalt, staff.pinHash)) {
-          this.recordFailedPunchAttempt(staff.id);
+          await this.recordFailedPunchAttempt(organizationId, facilityId, staff.id);
           throw new BadRequestException('Invalid worker PIN.');
         }
       } else if (staff.badgeNumber) {
@@ -830,11 +938,11 @@ export class VmsService {
             staff.badgeNumber.trim().toLowerCase(),
           )
         ) {
-          this.recordFailedPunchAttempt(staff.id);
+          await this.recordFailedPunchAttempt(organizationId, facilityId, staff.id);
           throw new BadRequestException('Invalid worker badge code.');
         }
       }
-      this.resetFailedPunchAttempts(staff.id);
+      await this.resetFailedPunchAttempts(staff.id);
     }
 
     // Active punch check: Key on clockOut: null to prevent open punch accumulation (N4)
@@ -935,7 +1043,9 @@ export class VmsService {
 
     // Check lockout
     if (attendance.staffMemberId) {
-      this.checkPunchLockout(attendance.staffMemberId);
+      if (attendance.staffMemberId) {
+        await this.checkPunchLockout(organizationId, facilityId, attendance.staffMemberId);
+      }
     }
 
     // Worker credential check on self clock-out (B4, N3, N5):
@@ -949,7 +1059,7 @@ export class VmsService {
       if (staff?.pinHash && staff?.pinSalt) {
         if (!dto.pin) throw new BadRequestException('Worker PIN required for clock-out.');
         if (!verifyPin(dto.pin, staff.pinSalt, staff.pinHash)) {
-          if (staff.id) this.recordFailedPunchAttempt(staff.id);
+          if (staff.id) await this.recordFailedPunchAttempt(organizationId, facilityId, staff.id);
           throw new BadRequestException('Invalid worker PIN.');
         }
       } else if (staff?.badgeNumber) {
@@ -960,11 +1070,11 @@ export class VmsService {
             staff.badgeNumber.trim().toLowerCase(),
           )
         ) {
-          if (staff.id) this.recordFailedPunchAttempt(staff.id);
+          if (staff.id) await this.recordFailedPunchAttempt(organizationId, facilityId, staff.id);
           throw new BadRequestException('Invalid worker badge code.');
         }
       }
-      if (staff?.id) this.resetFailedPunchAttempts(staff.id);
+      if (staff?.id) await this.resetFailedPunchAttempts(staff.id);
     }
 
     const clockOutTime = new Date();
@@ -1023,6 +1133,24 @@ export class VmsService {
 
     if (updated.staffMember) {
       updated.staffMember = sanitizeStaffMember(updated.staffMember) as any;
+    }
+
+    if (deviationFlags.length > 0 && updated.staffMember) {
+      await this.notifications.notify({
+        organizationId,
+        facilityId,
+        eventType: VmsNotificationEvent.time_deviation,
+        subject: `Time deviation flagged for ${updated.staffMember.firstName} ${updated.staffMember.lastName}`,
+        body:
+          `A shift closed with exceptions that need manager review.\n\n` +
+          `Worker: ${updated.staffMember.firstName} ${updated.staffMember.lastName}\n` +
+          `Hours worked: ${rawHours.toFixed(2)} (billable ${billableHours.toFixed(2)})\n` +
+          `Break: ${breakMinutes} minutes\n` +
+          `Flags: ${deviationFlags.join(', ')}\n\n` +
+          `Approve or adjust the entry before it reaches payroll.`,
+        entityType: 'VmsTimeAttendance',
+        entityId: dto.attendanceId,
+      });
     }
 
     return updated;
@@ -1098,9 +1226,15 @@ export class VmsService {
   }
 
   /**
-   * No-Show Detection (F1b):
-   * Identifies confirmed orders whose scheduled start time (+ grace period) has passed
-   * without a clock-in from assigned staff members, and flags deviation with 'no_show'.
+   * No-Show Detection (checklist 1.5, 2.3).
+   *
+   * Attribution comes from VmsStaffAssignment: only a worker who was actually
+   * rostered onto the order can be recorded as a no-show. The earlier version
+   * picked an arbitrary unpunched member of the vendor's roster, which wrote a
+   * fabricated absence against someone who was never scheduled (review finding
+   * Q1). Where an order is simply under-filled and nobody was assigned to the
+   * missing slot, the gap is recorded against the fulfilling vendor with a null
+   * staff member rather than pinned on a person.
    */
   async detectNoShows(organizationId: string, facilityId: string, gracePeriodMinutes = 30) {
     const now = new Date();
@@ -1116,89 +1250,166 @@ export class VmsService {
       include: {
         fulfillments: {
           where: { status: { in: [VmsFulfillmentStatus.confirmed, VmsFulfillmentStatus.completed] } },
-          include: {
-            vendor: {
-              include: {
-                staffMembers: true,
-              },
-            },
-          },
+          select: { id: true, vendorId: true },
         },
-        attendances: true,
+        assignments: {
+          where: { status: { in: [VmsAssignmentStatus.assigned, VmsAssignmentStatus.confirmed] } },
+          include: { staffMember: { select: { id: true, firstName: true, lastName: true, vendorId: true } } },
+        },
+        attendances: {
+          select: { id: true, staffMemberId: true, deviationFlags: true },
+        },
       },
     });
 
-    const flaggedNoShows: Array<{ orderId: string; vendorId: string; role: string; reason: string }> = [];
+    const flaggedNoShows: Array<{
+      orderId: string;
+      orderNumber: string;
+      vendorId: string | null;
+      staffMemberId: string | null;
+      staffName: string | null;
+      role: string;
+      reason: string;
+    }> = [];
 
     for (const order of orders) {
       const [startH, startM] = (order.startTime || '09:00').split(':').map(Number);
-      const scheduledStart = new Date(`${order.shiftDate}T00:00:00Z`);
+      const scheduledStart = new Date(order.shiftDate + 'T00:00:00Z');
       scheduledStart.setUTCHours(startH || 9, startM || 0, 0, 0);
 
       const threshold = new Date(scheduledStart.getTime() + gracePeriodMinutes * 60 * 1000);
-      if (now > threshold) {
-        // Idempotency: count both actual punches and already recorded no-shows (P3)
-        const actualClockIns = order.attendances.filter(
-          (a) => !a.deviationFlags.includes('no_show'),
-        ).length;
-        const existingNoShows = order.attendances.filter(
-          (a) => a.deviationFlags.includes('no_show'),
-        ).length;
-        const missingCount = Math.max(0, order.quantityFulfilled - actualClockIns - existingNoShows);
+      if (now <= threshold) continue;
 
-        if (missingCount > 0) {
-          const punchedStaffIds = new Set(
-            order.attendances.map((a) => a.staffMemberId).filter(Boolean),
-          );
+      const punchedStaffIds = new Set(
+        order.attendances
+          .filter((a) => !a.deviationFlags.includes('no_show'))
+          .map((a) => a.staffMemberId)
+          .filter((id): id is string => Boolean(id)),
+      );
+      const alreadyFlagged = new Set(
+        order.attendances
+          .filter((a) => a.deviationFlags.includes('no_show'))
+          .map((a) => a.staffMemberId),
+      );
 
-          for (let i = 0; i < missingCount; i++) {
-            const fulfillment = order.fulfillments[i % (order.fulfillments.length || 1)];
-            const vendor = fulfillment?.vendor;
-            const vendorId = vendor?.id;
+      const defaultVendorId = order.fulfillments[0]?.vendorId ?? null;
 
-            // Find an unpunched staff member from vendor roster if available (P1)
-            const candidateStaff = vendor?.staffMembers?.find((s) => !punchedStaffIds.has(s.id));
-            const staffMemberId = candidateStaff ? candidateStaff.id : null;
-            if (candidateStaff) {
-              punchedStaffIds.add(candidateStaff.id);
-            }
+      // 1. Workers who were assigned to this shift and never punched in.
+      const absentees = order.assignments.filter(
+        (a) => !punchedStaffIds.has(a.staffMemberId) && !alreadyFlagged.has(a.staffMemberId),
+      );
 
-            const noShowRecord = await this.prisma.vmsTimeAttendance.create({
-              data: {
-                organizationId,
-                facilityId,
-                staffMemberId,
-                orderId: order.id,
-                clockIn: scheduledStart,
-                clockOut: scheduledStart,
-                billableHours: 0,
-                billedRateCents: 0,
-                totalBilledCents: 0,
-                status: VmsAttendanceStatus.flagged_exception,
-                isWithinGeofence: false,
-                deviationFlags: ['no_show', 'unfilled_shift'],
-              },
-            });
+      for (const absentee of absentees) {
+        const vendorId = absentee.staffMember.vendorId ?? defaultVendorId;
+        const record = await this.prisma.vmsTimeAttendance.create({
+          data: {
+            organizationId,
+            facilityId,
+            staffMemberId: absentee.staffMemberId,
+            orderId: order.id,
+            clockIn: scheduledStart,
+            clockOut: scheduledStart,
+            billableHours: 0,
+            billedRateCents: 0,
+            totalBilledCents: 0,
+            status: VmsAttendanceStatus.flagged_exception,
+            isWithinGeofence: false,
+            deviationFlags: ['no_show'],
+          },
+        });
 
-            await this.logAudit({
-              organizationId,
-              facilityId,
-              entityType: 'VmsTimeAttendance',
-              entityId: noShowRecord.id,
-              action: 'EXCEPTION_FLAGGED',
-              userId: 'system_scheduler',
-              changes: { orderId: order.id, vendorId, staffMemberId, reason: 'Staff member failed to report to scheduled shift on time' },
-            });
+        await this.prisma.vmsStaffAssignment.update({
+          where: { id: absentee.id },
+          data: { status: VmsAssignmentStatus.no_show },
+        });
 
-            this.logger.warn(`No-show detected for order ${order.orderNumber} (role: ${order.roleRequired})`);
-            flaggedNoShows.push({
-              orderId: order.id,
-              vendorId: vendorId || 'unknown',
-              role: order.roleRequired,
-              reason: 'Shift start + 30m grace period elapsed without clock-in',
-            });
-          }
-        }
+        await this.logAudit({
+          organizationId,
+          facilityId,
+          entityType: 'VmsTimeAttendance',
+          entityId: record.id,
+          action: 'EXCEPTION_FLAGGED',
+          userId: 'system_scheduler',
+          changes: {
+            orderId: order.id,
+            vendorId,
+            staffMemberId: absentee.staffMemberId,
+            reason: 'Assigned worker did not report before the grace period elapsed',
+          },
+        });
+
+        flaggedNoShows.push({
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          vendorId,
+          staffMemberId: absentee.staffMemberId,
+          staffName: absentee.staffMember.firstName + ' ' + absentee.staffMember.lastName,
+          role: order.roleRequired,
+          reason: 'Assigned but no clock-in ' + gracePeriodMinutes + 'm after shift start',
+        });
+      }
+
+      // 2. Headcount the vendor confirmed but never staffed at all. Recorded
+      //    against the vendor with no staff member, because no individual was
+      //    ever named for the slot.
+      const unfilledSlots = Math.max(
+        0,
+        order.quantityFulfilled -
+          order.assignments.length -
+          order.attendances.filter((a) => a.deviationFlags.includes('unfilled_shift')).length,
+      );
+
+      for (let i = 0; i < unfilledSlots; i++) {
+        const fulfillment = order.fulfillments[i % (order.fulfillments.length || 1)];
+        const vendorId = fulfillment?.vendorId ?? null;
+
+        const record = await this.prisma.vmsTimeAttendance.create({
+          data: {
+            organizationId,
+            facilityId,
+            staffMemberId: null,
+            orderId: order.id,
+            clockIn: scheduledStart,
+            clockOut: scheduledStart,
+            billableHours: 0,
+            billedRateCents: 0,
+            totalBilledCents: 0,
+            status: VmsAttendanceStatus.flagged_exception,
+            isWithinGeofence: false,
+            deviationFlags: ['no_show', 'unfilled_shift'],
+          },
+        });
+
+        await this.logAudit({
+          organizationId,
+          facilityId,
+          entityType: 'VmsTimeAttendance',
+          entityId: record.id,
+          action: 'EXCEPTION_FLAGGED',
+          userId: 'system_scheduler',
+          changes: {
+            orderId: order.id,
+            vendorId,
+            staffMemberId: null,
+            reason: 'Vendor confirmed headcount was never assigned to a worker',
+          },
+        });
+
+        flaggedNoShows.push({
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          vendorId,
+          staffMemberId: null,
+          staffName: null,
+          role: order.roleRequired,
+          reason: 'Confirmed headcount never assigned to a named worker',
+        });
+      }
+
+      if (absentees.length > 0 || unfilledSlots > 0) {
+        this.logger.warn(
+          'No-show sweep flagged ' + (absentees.length + unfilledSlots) + ' slot(s) on order ' + order.orderNumber,
+        );
       }
     }
 
@@ -1298,64 +1509,125 @@ export class VmsService {
   // ANALYTICS & SCORECARDS
   // ---------------------------------------------------------------------------
 
+  /**
+   * Vendor scorecard (checklist 1.1).
+   *
+   * Aggregated in the database rather than by loading every vendor's staff and
+   * every one of their attendance rows into memory (review finding F9).
+   *
+   * Attendance is attributed to a vendor two ways, unioned: through the staff
+   * member's vendor for a normal punch, and through the order's confirmed
+   * fulfillment for an unattributed no-show, which has no staff member at all.
+   * Without the second arm the scorecard stayed blind to exactly the worst
+   * case — a vendor that supplied nobody (review finding Q2).
+   */
   async getVendorScorecard(organizationId: string, facilityId: string) {
     const vendors = await this.prisma.vmsVendor.findMany({
       where: { organizationId, facilityId },
-      select: {
-        id: true,
-        name: true,
-        code: true,
-        rating: true,
-        orderFulfillments: {
-          select: {
-            id: true,
-            status: true,
-          },
-        },
-        staffMembers: {
-          select: {
-            id: true,
-            attendances: {
-              select: {
-                id: true,
-                status: true,
-                deviationFlags: true,
-                totalBilledCents: true,
-              },
-            },
-          },
-        },
-      },
+      select: { id: true, name: true, code: true, rating: true },
+      orderBy: { name: 'asc' },
+    });
+    if (vendors.length === 0) return [];
+
+    const fulfillmentGroups = await this.prisma.vmsOrderFulfillment.groupBy({
+      by: ['vendorId', 'status'],
+      where: { order: { organizationId, facilityId } },
+      _count: { _all: true },
     });
 
+    const attendanceRows = await this.prisma.$queryRaw<
+      Array<{
+        vendorId: string;
+        totalPunches: bigint;
+        offTargetPunches: bigint;
+        totalBilledCents: bigint;
+      }>
+    >(Prisma.sql`
+      SELECT
+        v."vendorId"                                        AS "vendorId",
+        COUNT(*)                                            AS "totalPunches",
+        COUNT(*) FILTER (
+          WHERE 'no_show' = ANY(v."deviationFlags")
+             OR 'off_site_punch' = ANY(v."deviationFlags")
+        )                                                   AS "offTargetPunches",
+        COALESCE(SUM(v."totalBilledCents"), 0)              AS "totalBilledCents"
+      FROM (
+        -- Punches attributed through the worker's own vendor.
+        SELECT sm."vendorId", a."deviationFlags", a."totalBilledCents"
+        FROM "VmsTimeAttendance" a
+        JOIN "VmsStaffMember" sm ON sm."id" = a."staffMemberId"
+        WHERE a."organizationId" = ${organizationId}
+          AND a."facilityId" = ${facilityId}
+          AND sm."vendorId" IS NOT NULL
+
+        UNION ALL
+
+        -- Unattributed no-shows, attributed through the confirmed fulfillment.
+        SELECT f."vendorId", a."deviationFlags", a."totalBilledCents"
+        FROM "VmsTimeAttendance" a
+        JOIN "VmsOrderFulfillment" f ON f."orderId" = a."orderId"
+        WHERE a."organizationId" = ${organizationId}
+          AND a."facilityId" = ${facilityId}
+          AND a."staffMemberId" IS NULL
+          AND f."status" IN ('confirmed', 'completed')
+      ) v
+      WHERE v."vendorId" IS NOT NULL
+      GROUP BY v."vendorId"
+    `);
+
+    const fulfillmentByVendor = new Map<string, { total: number; confirmed: number }>();
+    for (const group of fulfillmentGroups) {
+      const entry = fulfillmentByVendor.get(group.vendorId) ?? { total: 0, confirmed: 0 };
+      const count = group._count._all;
+      entry.total += count;
+      if (
+        group.status === VmsFulfillmentStatus.confirmed ||
+        group.status === VmsFulfillmentStatus.completed
+      ) {
+        entry.confirmed += count;
+      }
+      fulfillmentByVendor.set(group.vendorId, entry);
+    }
+
+    const attendanceByVendor = new Map<
+      string,
+      { totalPunches: number; offTarget: number; billedCents: number }
+    >();
+    for (const row of attendanceRows) {
+      attendanceByVendor.set(row.vendorId, {
+        totalPunches: Number(row.totalPunches),
+        offTarget: Number(row.offTargetPunches),
+        billedCents: Number(row.totalBilledCents),
+      });
+    }
+
     return vendors.map((v) => {
-      const allFulfillments = v.orderFulfillments;
-      const totalOrdersAssigned = allFulfillments.length;
-      const confirmedOrders = allFulfillments.filter(
-        (f) => f.status === VmsFulfillmentStatus.confirmed || f.status === VmsFulfillmentStatus.completed,
-      ).length;
+      const fulfillment = fulfillmentByVendor.get(v.id) ?? { total: 0, confirmed: 0 };
+      const attendance = attendanceByVendor.get(v.id) ?? {
+        totalPunches: 0,
+        offTarget: 0,
+        billedCents: 0,
+      };
 
-      const allAttendances = v.staffMembers.flatMap((s) => s.attendances);
-      const totalPunches = allAttendances.length;
-      const onTimeDeliveries = allAttendances.filter(
-        (a) => !a.deviationFlags.includes('no_show') && !a.deviationFlags.includes('off_site_punch'),
-      ).length;
-
-      // Real on-time calculation without fabricated 98% fallback (F1)
-      const onTimeRatePercent = totalPunches > 0 ? Math.round((onTimeDeliveries / totalPunches) * 100) : null;
-      const fulfillmentRatePercent = totalOrdersAssigned > 0 ? Math.round((confirmedOrders / totalOrdersAssigned) * 100) : null;
-      const totalBilledCents = allAttendances.reduce((sum, a) => sum + a.totalBilledCents, 0);
+      // Null rather than an invented figure when there is nothing to measure.
+      const onTimeRatePercent =
+        attendance.totalPunches > 0
+          ? Math.round(((attendance.totalPunches - attendance.offTarget) / attendance.totalPunches) * 100)
+          : null;
+      const fulfillmentRatePercent =
+        fulfillment.total > 0 ? Math.round((fulfillment.confirmed / fulfillment.total) * 100) : null;
 
       return {
         vendorId: v.id,
         vendorName: v.name,
         code: v.code,
         rating: v.rating,
-        totalOrdersAssigned,
+        totalOrdersAssigned: fulfillment.total,
         fulfillmentRatePercent,
         onTimeRatePercent,
-        hasData: totalPunches > 0 || totalOrdersAssigned > 0,
-        totalBilledCents,
+        noShowCount: attendance.offTarget,
+        hasData: attendance.totalPunches > 0 || fulfillment.total > 0,
+        totalBilledCents: attendance.billedCents,
         tierStatus: v.rating >= 4.5 ? 'Tier 1 Preferred' : 'Standard Approved',
       };
     });
@@ -1481,7 +1753,15 @@ export class VmsService {
         },
       });
     } catch (err) {
-      this.logger.error(`Failed to record audit log: ${err instanceof Error ? err.message : String(err)}`);
+      // Section 5.3 requires a complete audit trail, so a failed audit write
+      // fails the operation it was recording rather than being swallowed —
+      // otherwise the log can silently miss events it is supposed to prove.
+      this.logger.error(
+        `Failed to record audit log: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      throw new InternalServerErrorException(
+        'Unable to record the audit entry for this action; the operation was rolled back.',
+      );
     }
   }
 

@@ -17,6 +17,7 @@ import {
   VmsAttendanceStatus,
   VmsFulfillmentStatus,
   VmsOrderStatus,
+  VmsNotificationEvent,
   VmsSyncSystem,
   VmsVendorStatus,
   VmsVendorType,
@@ -342,4 +343,107 @@ export class TriggerInventorySyncDto {
 
   @IsOptional()
   items?: Array<{ sku: string; name: string; quantity: number }>;
+}
+
+export class AssignStaffDto {
+  @IsString()
+  staffMemberId!: string;
+
+  @IsString()
+  @IsOptional()
+  fulfillmentId?: string;
+
+  @IsString()
+  @IsOptional()
+  notes?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  force?: boolean;
+}
+
+export class SetAvailabilityDto {
+  @IsString()
+  staffMemberId!: string;
+
+  @IsDateString()
+  startDate!: string;
+
+  @IsDateString()
+  endDate!: string;
+
+  @IsBoolean()
+  available!: boolean;
+
+  @IsString()
+  @IsOptional()
+  reason?: string;
+}
+
+export class CreateOrderTemplateDto {
+  @IsString()
+  name!: string;
+
+  @IsString()
+  roleRequired!: string;
+
+  @IsInt()
+  @Min(1)
+  quantityRequested!: number;
+
+  @IsString()
+  @IsOptional()
+  startTime?: string;
+
+  @IsString()
+  @IsOptional()
+  endTime?: string;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(0.5)
+  durationHours?: number;
+
+  @IsInt()
+  @IsOptional()
+  @Min(0)
+  budgetCents?: number;
+
+  @IsString()
+  @IsOptional()
+  specialRequirements?: string;
+}
+
+export class CreateOrderFromTemplateDto {
+  @IsString()
+  templateId!: string;
+
+  @IsString()
+  shiftDate!: string;
+
+  @IsString()
+  @IsOptional()
+  title?: string;
+
+  @IsString()
+  @IsOptional()
+  eventId?: string;
+}
+
+export class CsvImportDto {
+  @IsString()
+  csv!: string;
+}
+
+export class SetNotificationPreferenceDto {
+  @IsEnum(VmsNotificationEvent)
+  eventType!: VmsNotificationEvent;
+
+  @IsBoolean()
+  @IsOptional()
+  emailEnabled?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  smsEnabled?: boolean;
 }
