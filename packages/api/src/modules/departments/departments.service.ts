@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { assertCanManageDepartment } from '../../auth/access-control.helper';
 import { canManageVenue, isAdminRole } from '../../auth/roles';
@@ -29,6 +29,8 @@ export interface WorkspaceResolution {
 
 @Injectable()
 export class DepartmentsService {
+  private readonly logger = new Logger(DepartmentsService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   /**
@@ -276,7 +278,7 @@ export class DepartmentsService {
         action: 'ASSIGN_DEPARTMENT',
         summary: `Assigned target to department ${departmentId}`,
       },
-    }).catch(() => undefined);
+    }).catch((err) => this.logger.warn(`Failed to record audit log for ASSIGN_DEPARTMENT: ${err instanceof Error ? err.message : String(err)}`));
 
     return created;
   }
@@ -332,7 +334,7 @@ export class DepartmentsService {
         action: 'REMOVE_DEPARTMENT',
         summary: `Deactivated department membership for user ${targetUserId}`,
       },
-    }).catch(() => undefined);
+    }).catch((err) => this.logger.warn(`Failed to record audit log for REMOVE_DEPARTMENT: ${err instanceof Error ? err.message : String(err)}`));
   }
 
   /**
@@ -365,9 +367,36 @@ export class DepartmentsService {
       throw new NotFoundException('Target profile not found at this venue');
     }
 
+    const now = new Date();
     const expiresAt = new Date(dto.expiresAt);
-    if (isNaN(expiresAt.getTime()) || expiresAt <= new Date()) {
+    if (isNaN(expiresAt.getTime()) || expiresAt <= now) {
       throw new BadRequestException('Expiration must be a valid future timestamp');
+    }
+
+    // F-12: Cap duration to 30 days unless platform_admin or owner
+    const maxDurationMs = 30 * 24 * 60 * 60 * 1000;
+    if (expiresAt.getTime() - now.getTime() > maxDurationMs && !actorAllAccess && actorRole !== 'platform_admin' && actorRole !== 'owner') {
+      throw new BadRequestException('Temporary override duration cannot exceed 30 days');
+    }
+
+    // F-12: Validate target operational area IDs if provided
+    if (dto.zoneId) {
+      const zone = await this.prisma.facilityZone.findFirst({
+        where: { id: dto.zoneId, facilityId },
+      });
+      if (!zone) throw new NotFoundException('Specified facility zone does not exist at this venue');
+    }
+    if (dto.outletId) {
+      const outlet = await this.prisma.outlet.findFirst({
+        where: { id: dto.outletId, facilityId },
+      });
+      if (!outlet) throw new NotFoundException('Specified outlet does not exist at this venue');
+    }
+    if (dto.subVenueId) {
+      const subVenue = await this.prisma.subVenue.findFirst({
+        where: { id: dto.subVenueId, facilityId },
+      });
+      if (!subVenue) throw new NotFoundException('Specified sub-venue does not exist at this venue');
     }
 
     const override = await this.prisma.userAreaOverride.create({
@@ -402,7 +431,7 @@ export class DepartmentsService {
         action: 'GRANT_AREA_OVERRIDE',
         summary: `Granted ${dto.areaType} override to user ${dto.userId}: ${dto.reason}`,
       },
-    }).catch(() => undefined);
+    }).catch((err) => this.logger.warn(`Failed to record audit log for GRANT_AREA_OVERRIDE: ${err instanceof Error ? err.message : String(err)}`));
 
     return override;
   }

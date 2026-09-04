@@ -82,6 +82,7 @@ export class DailyRosterController {
   ) {
     return this.service.getRoster({
       facilityId: scope.venueId,
+      actorUserId: scope.userId,
       rosterId,
       actorRole: scope.role,
       actorAllAccess: scope.allAccess,
@@ -129,7 +130,13 @@ export class DailyRosterController {
     @VenueScope() scope: Scope,
     @Param('id') rosterId: string,
   ) {
-    return this.service.submitRoster(scope.venueId, scope.userId, rosterId);
+    return this.service.submitRoster({
+      facilityId: scope.venueId,
+      actorUserId: scope.userId,
+      actorRole: scope.role,
+      actorAllAccess: scope.allAccess,
+      rosterId,
+    });
   }
 
   @Post(':id/approve')
@@ -187,6 +194,7 @@ export class DailyRosterController {
   ) {
     return this.service.exportRosterCsv({
       facilityId: scope.venueId,
+      actorUserId: scope.userId,
       rosterId,
       actorRole: scope.role,
       actorAllAccess: scope.allAccess,

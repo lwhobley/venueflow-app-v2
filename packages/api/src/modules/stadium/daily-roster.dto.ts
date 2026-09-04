@@ -1,15 +1,30 @@
 import {
+  IsArray,
   IsDateString,
   IsEnum,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
   Matches,
+  MaxLength,
   Min,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { DailyRosterType } from '@prisma/client';
+
+export const VALID_ATTENDANCE_STATUSES = [
+  'scheduled',
+  'checked_in',
+  'checked_out',
+  'no_show',
+  'excused',
+] as const;
+
+export type AttendanceStatus = typeof VALID_ATTENDANCE_STATUSES[number];
 
 export class CreateDailyRosterDto {
   @IsString()
@@ -76,6 +91,10 @@ export class AssignRosterWorkerDto {
   hourlyRateCents?: number;
 
   @IsOptional()
+  @IsIn(VALID_ATTENDANCE_STATUSES)
+  attendanceStatus?: string;
+
+  @IsOptional()
   @IsString()
   notes?: string;
 }
@@ -100,11 +119,36 @@ export class UpdateRosterWorkerDto {
   breakMinutes?: number;
 
   @IsOptional()
-  @IsString()
+  @IsIn(VALID_ATTENDANCE_STATUSES)
   attendanceStatus?: string;
 
   @IsOptional()
   @IsString()
+  notes?: string;
+}
+
+export class WorkerAdjustmentDto {
+  @IsString()
+  @IsNotEmpty()
+  workerId!: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  hoursWorked?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  breakMinutes?: number;
+
+  @IsOptional()
+  @IsIn(VALID_ATTENDANCE_STATUSES)
+  attendanceStatus?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
   notes?: string;
 }
 
@@ -114,11 +158,8 @@ export class AdjustRosterDto {
   reason!: string;
 
   @IsOptional()
-  workerUpdates?: Array<{
-    workerId: string;
-    hoursWorked?: number;
-    breakMinutes?: number;
-    attendanceStatus?: string;
-    notes?: string;
-  }>;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => WorkerAdjustmentDto)
+  workerUpdates?: WorkerAdjustmentDto[];
 }

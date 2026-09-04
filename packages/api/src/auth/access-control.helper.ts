@@ -2,6 +2,7 @@ import { ForbiddenException } from '@nestjs/common';
 import type { PrismaService } from '../prisma/prisma.service';
 import { canManageVenue, isAdminRole, ROLE_RANK, canManageRole } from './roles';
 import type { OperationalAreaType } from '@prisma/client';
+export type { OperationalAreaType };
 
 export type ResourceAction =
   | 'view'
@@ -11,7 +12,15 @@ export type ResourceAction =
   | 'approve'
   | 'assign'
   | 'export'
-  | 'close';
+  | 'close'
+  | 'acknowledge'
+  | 'start'
+  | 'hold'
+  | 'fire'
+  | 'ready'
+  | 'pickup'
+  | 'cancel'
+  | 'reopen';
 
 export type SensitiveResourceCategory =
   | 'payroll'
@@ -155,16 +164,26 @@ export function evaluateAccessRules(params: {
     if (!allAccess && rank < 2) {
       return { allowed: false, reason: 'Manager or administrator role required for deletion' };
     }
-  } else if (action === 'approve' || action === 'close') {
-    if (!allAccess && rank < 2) {
-      return { allowed: false, reason: 'Approval and closeout actions require operational manager authority' };
+  } else if (action === 'approve' || action === 'close' || action === 'cancel' || action === 'reopen') {
+    const isManager = allAccess || (rank >= 2 && role !== 'concourse_supervisor');
+    if (!isManager) {
+      return { allowed: false, reason: `Action '${action}' requires operational manager authority` };
     }
   } else if (action === 'export') {
     // Auditors, finance viewers, and managers may export non-sensitive operational data
     if (!allAccess && rank < 1 && role !== 'auditor' && role !== 'finance_viewer') {
       return { allowed: false, reason: 'Export permission required' };
     }
-  } else if (action === 'create' || action === 'update') {
+  } else if (
+    action === 'create' ||
+    action === 'update' ||
+    action === 'fire' ||
+    action === 'ready' ||
+    action === 'pickup' ||
+    action === 'start' ||
+    action === 'hold' ||
+    action === 'acknowledge'
+  ) {
     // Read-only roles cannot mutate
     if (role === 'finance_viewer' || role === 'auditor') {
       return { allowed: false, reason: 'Auditor and finance roles have read-only access' };

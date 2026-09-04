@@ -202,6 +202,39 @@ describe('access-control.helper (Unit)', () => {
         });
         expect(res.allowed).toBe(false);
       });
+
+      it('allows operational staff to fire, ready, and pickup tickets within authorized areas', () => {
+        for (const action of ['fire', 'ready', 'pickup'] as const) {
+          const res = evaluateAccessRules({
+            role: 'staff',
+            activeDepartmentCodes: ['culinary'],
+            operationalAreaType: 'kitchen',
+            action,
+          });
+          expect(res.allowed).toBe(true);
+        }
+      });
+
+      it('requires manager role for ticket cancellation and reopening', () => {
+        for (const action of ['cancel', 'reopen'] as const) {
+          const staffRes = evaluateAccessRules({
+            role: 'staff',
+            activeDepartmentCodes: ['culinary'],
+            operationalAreaType: 'kitchen',
+            action,
+          });
+          expect(staffRes.allowed).toBe(false);
+          expect(staffRes.reason).toContain('operational manager authority');
+
+          const mgrRes = evaluateAccessRules({
+            role: 'manager',
+            activeDepartmentCodes: ['culinary'],
+            operationalAreaType: 'kitchen',
+            action,
+          });
+          expect(mgrRes.allowed).toBe(true);
+        }
+      });
     });
   });
 

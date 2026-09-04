@@ -1,10 +1,11 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { KitchenTicketPriority, KitchenTicketStatus } from '@prisma/client';
+import { KitchenTicketPriority, KitchenTicketStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { applyTenantSessionSettings } from '../../prisma/tenant-transaction';
 import { SuiteHospitalityGateway } from './suite-hospitality.gateway';
 import { NotificationsService } from '../../notifications/notifications.service';
+import type { OperationalAreaType } from '../../auth/access-control.helper';
 
 export const DISTRO_OVERDUE_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -14,9 +15,42 @@ export interface DistroActor {
   role?: string;
 }
 
+/**
+ * Derives operational area type from ticket service area name, notes, and BEO association.
+ */
+export function deriveTicketOperationalArea(ticket: {
+  serviceAreaName?: string | null;
+  notes?: string | null;
+  beoId?: string | null;
+}): OperationalAreaType {
+  const name = (ticket.serviceAreaName || '').toLowerCase();
+  const notes = (ticket.notes || '').toLowerCase();
+
+  if (ticket.beoId || name.includes('catering') || name.includes('banquet') || notes.includes('catering')) {
+    return 'catering';
+  }
+  if (
+    name.includes('concession') ||
+    name.includes('stand') ||
+    name.includes('hawker') ||
+    name.includes('cart') ||
+    notes.includes('concession')
+  ) {
+    return 'concession';
+  }
+  if (name.includes('suite') || notes.includes('suite')) {
+    return 'suite';
+  }
+  if (name.includes('club') || name.includes('lounge') || notes.includes('club')) {
+    return 'club';
+  }
+  if (name.includes('kitchen') || name.includes('culinary')) {
+    return 'culinary';
+  }
+  return 'distro';
+}
+
 export interface CreateKitchenTicketDto {
-  organizationId?: string;
-  facilityId?: string;
   eventId?: string;
   beoId?: string;
   zoneId?: string;
@@ -60,6 +94,11 @@ export interface MarkPickedUpDto {
 }
 
 export interface CancelTicketDto {
+  reason: string;
+  notes?: string;
+}
+
+export interface ReopenTicketDto {
   reason: string;
   notes?: string;
 }
@@ -198,7 +237,7 @@ export class KitchenDistroFulfillmentService {
     // Reconcile any in-flight ready tickets > 10m for this facility first
     await this.reconcileOverdueTickets(facilityId);
 
-    const whereClause: any = { facilityId };
+    const whereClause: Prisma.KitchenFulfillmentTicketWhereInput = { facilityId };
     if (query.kitchenId) whereClause.kitchenId = query.kitchenId;
     if (query.serviceAreaId) whereClause.serviceAreaId = query.serviceAreaId;
     if (query.zoneId) whereClause.zoneId = query.zoneId;
@@ -259,16 +298,21 @@ export class KitchenDistroFulfillmentService {
   }
 
   /**
-   * Fetch single ticket by ID
+   * Fetches ticket details with full history by ID.
    */
   async getTicketById(facilityId: string, ticketId: string) {
     const ticket = await this.prisma.kitchenFulfillmentTicket.findFirst({
-      where: { id: ticketId, facilityId },
+      where: { facilityId, id: ticketId },
       include: {
-        history: { orderBy: { timestamp: 'asc' } },
+        history: {
+          orderBy: { timestamp: 'asc' },
+        },
       },
     });
-    if (!ticket) throw new NotFoundException('Fulfillment ticket not found.');
+
+    if (!ticket) {
+      throw new NotFoundException('Fulfillment ticket not found.');
+    }
 
     const now = Date.now();
     let elapsedReadySeconds = 0;
@@ -298,7 +342,8 @@ export class KitchenDistroFulfillmentService {
    * Create a single fulfillment ticket.
    */
   async createTicket(facilityId: string, dto: CreateKitchenTicketDto, actor: DistroActor = {}) {
-    const organizationId = dto.organizationId ?? (await this.organizationIdFor(facilityId));
+    // F-16: Always derive organizationId securely from venue scope, never from caller-supplied DTO
+    const organizationId = await this.organizationIdFor(facilityId);
 
     const ticket = await this.prisma.$transaction(async (tx) => {
       await applyTenantSessionSettings(tx, { organizationId, facilityId, venueId: facilityId });
@@ -443,7 +488,7 @@ export class KitchenDistroFulfillmentService {
   }
 
   /**
-   * Kitchen action: transition waiting -> firing
+   * Kitchen action: transition waiting -> firing with CAS optimistic lock (F-07).
    */
   async fireTicket(facilityId: string, ticketId: string, actor: DistroActor = {}) {
     const ticket = await this.prisma.kitchenFulfillmentTicket.findFirst({
@@ -466,12 +511,21 @@ export class KitchenDistroFulfillmentService {
         venueId: facilityId,
       });
 
-      const res = await tx.kitchenFulfillmentTicket.update({
-        where: { id: ticket.id },
+      // F-07: CAS update on status
+      const updateResult = await tx.kitchenFulfillmentTicket.updateMany({
+        where: { id: ticket.id, status: ticket.status },
         data: {
           status: KitchenTicketStatus.firing,
           firedAt: now,
         },
+      });
+
+      if (updateResult.count === 0) {
+        throw new ConflictException('Concurrent status update detected; please retry.');
+      }
+
+      const res = await tx.kitchenFulfillmentTicket.findUniqueOrThrow({
+        where: { id: ticket.id },
       });
 
       await tx.kitchenFulfillmentStatusHistory.create({
@@ -502,7 +556,7 @@ export class KitchenDistroFulfillmentService {
   }
 
   /**
-   * Kitchen action: transition firing/waiting -> ready at Distro
+   * Kitchen action: transition firing/waiting -> ready at Distro with CAS optimistic lock (F-07).
    */
   async markReady(
     facilityId: string,
@@ -514,6 +568,10 @@ export class KitchenDistroFulfillmentService {
       where: { id: ticketId, facilityId },
     });
     if (!ticket) throw new NotFoundException('Fulfillment ticket not found.');
+
+    if (ticket.status === KitchenTicketStatus.ready) {
+      return ticket; // Idempotent
+    }
 
     if (ticket.status === KitchenTicketStatus.picked_up || ticket.status === KitchenTicketStatus.cancelled) {
       throw new BadRequestException(`Cannot mark ready a ticket that is already ${ticket.status}.`);
@@ -527,14 +585,23 @@ export class KitchenDistroFulfillmentService {
         venueId: facilityId,
       });
 
-      const res = await tx.kitchenFulfillmentTicket.update({
-        where: { id: ticket.id },
+      // F-07: CAS update on status
+      const updateResult = await tx.kitchenFulfillmentTicket.updateMany({
+        where: { id: ticket.id, status: ticket.status },
         data: {
           status: KitchenTicketStatus.ready,
           readyAt: now,
           distroLocationId: dto.distroLocationId ?? ticket.distroLocationId,
           distroLocationName: dto.distroLocationName ?? ticket.distroLocationName,
         },
+      });
+
+      if (updateResult.count === 0) {
+        throw new ConflictException('Concurrent status update detected; please retry.');
+      }
+
+      const res = await tx.kitchenFulfillmentTicket.findUniqueOrThrow({
+        where: { id: ticket.id },
       });
 
       await tx.kitchenFulfillmentStatusHistory.create({
@@ -580,6 +647,7 @@ export class KitchenDistroFulfillmentService {
 
   /**
    * Kitchen action: rewind from ready/overdue back to firing if culinary correction is required.
+   * Enforces CAS optimistic lock (F-07).
    */
   async rewindToFiring(
     facilityId: string,
@@ -608,14 +676,23 @@ export class KitchenDistroFulfillmentService {
         venueId: facilityId,
       });
 
-      const res = await tx.kitchenFulfillmentTicket.update({
-        where: { id: ticket.id },
+      // F-07: CAS update on status
+      const updateResult = await tx.kitchenFulfillmentTicket.updateMany({
+        where: { id: ticket.id, status: ticket.status },
         data: {
           status: KitchenTicketStatus.firing,
           readyAt: null,
           overdueAt: null,
           firedAt: now,
         },
+      });
+
+      if (updateResult.count === 0) {
+        throw new ConflictException('Concurrent status update detected; please retry.');
+      }
+
+      const res = await tx.kitchenFulfillmentTicket.findUniqueOrThrow({
+        where: { id: ticket.id },
       });
 
       await tx.kitchenFulfillmentStatusHistory.create({
@@ -648,7 +725,7 @@ export class KitchenDistroFulfillmentService {
 
   /**
    * Distro / Runner action: mark picked up at Distro.
-   * Accurately checks and preserves if the item was overdue.
+   * Accurately checks and preserves if the item was overdue, with CAS optimistic lock (F-07).
    */
   async markPickedUp(
     facilityId: string,
@@ -681,8 +758,9 @@ export class KitchenDistroFulfillmentService {
         venueId: facilityId,
       });
 
-      const res = await tx.kitchenFulfillmentTicket.update({
-        where: { id: ticket.id },
+      // F-07: CAS update on status
+      const updateResult = await tx.kitchenFulfillmentTicket.updateMany({
+        where: { id: ticket.id, status: ticket.status },
         data: {
           status: KitchenTicketStatus.picked_up,
           pickedUpAt: now,
@@ -690,6 +768,14 @@ export class KitchenDistroFulfillmentService {
           pickedUpByName: dto.runnerName || actor.userName || 'Service Area Runner',
           wasOverdue,
         },
+      });
+
+      if (updateResult.count === 0) {
+        throw new ConflictException('Concurrent status update detected; please retry.');
+      }
+
+      const res = await tx.kitchenFulfillmentTicket.findUniqueOrThrow({
+        where: { id: ticket.id },
       });
 
       await tx.kitchenFulfillmentStatusHistory.create({
@@ -724,6 +810,7 @@ export class KitchenDistroFulfillmentService {
 
   /**
    * Cancel ticket before pickup.
+   * Idempotent if already cancelled (F-17), CAS-guarded against races (F-07).
    */
   async cancelTicket(
     facilityId: string,
@@ -740,6 +827,11 @@ export class KitchenDistroFulfillmentService {
     });
     if (!ticket) throw new NotFoundException('Fulfillment ticket not found.');
 
+    // F-17: Idempotent cancellation
+    if (ticket.status === KitchenTicketStatus.cancelled) {
+      return ticket;
+    }
+
     if (ticket.status === KitchenTicketStatus.picked_up) {
       throw new BadRequestException('Cannot cancel a ticket that has already been picked up.');
     }
@@ -752,13 +844,22 @@ export class KitchenDistroFulfillmentService {
         venueId: facilityId,
       });
 
-      const res = await tx.kitchenFulfillmentTicket.update({
-        where: { id: ticket.id },
+      // F-07: CAS update on status
+      const updateResult = await tx.kitchenFulfillmentTicket.updateMany({
+        where: { id: ticket.id, status: ticket.status },
         data: {
           status: KitchenTicketStatus.cancelled,
           cancelledAt: now,
           cancelReason: dto.reason,
         },
+      });
+
+      if (updateResult.count === 0) {
+        throw new ConflictException('Concurrent status update detected; please retry.');
+      }
+
+      const res = await tx.kitchenFulfillmentTicket.findUniqueOrThrow({
+        where: { id: ticket.id },
       });
 
       await tx.kitchenFulfillmentStatusHistory.create({
@@ -771,6 +872,92 @@ export class KitchenDistroFulfillmentService {
           actorId: actor.userId ?? null,
           actorName: actor.userName ?? null,
           reason: `Cancelled: ${dto.reason}`,
+          notes: dto.notes ?? null,
+          timestamp: now,
+        },
+      });
+
+      return res;
+    });
+
+    await this.gateway.broadcastDistroPickupUpdate(
+      facilityId,
+      updated.zoneId || '',
+      updated,
+      'distro_pickup_updated',
+    );
+
+    return updated;
+  }
+
+  /**
+   * Manager action: reopen a cancelled or picked_up ticket (F-09).
+   * Restores ticket to waiting (or ready), recording the reason and full audit trail.
+   */
+  async reopenTicket(
+    facilityId: string,
+    ticketId: string,
+    dto: ReopenTicketDto,
+    actor: DistroActor = {},
+  ) {
+    if (!dto.reason || dto.reason.trim().length === 0) {
+      throw new BadRequestException('A reason must be provided when reopening a fulfillment ticket.');
+    }
+
+    const ticket = await this.prisma.kitchenFulfillmentTicket.findFirst({
+      where: { id: ticketId, facilityId },
+    });
+    if (!ticket) throw new NotFoundException('Fulfillment ticket not found.');
+
+    if (ticket.status !== KitchenTicketStatus.cancelled && ticket.status !== KitchenTicketStatus.picked_up) {
+      throw new BadRequestException(
+        `Only cancelled or picked up tickets can be reopened (current status: ${ticket.status}).`,
+      );
+    }
+
+    const targetStatus = ticket.status === KitchenTicketStatus.picked_up
+      ? KitchenTicketStatus.ready
+      : KitchenTicketStatus.waiting;
+
+    const now = new Date();
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await applyTenantSessionSettings(tx, {
+        organizationId: ticket.organizationId,
+        facilityId,
+        venueId: facilityId,
+      });
+
+      // F-07: CAS update
+      const updateResult = await tx.kitchenFulfillmentTicket.updateMany({
+        where: { id: ticket.id, status: ticket.status },
+        data: {
+          status: targetStatus,
+          cancelledAt: null,
+          cancelReason: null,
+          ...(targetStatus === KitchenTicketStatus.ready
+            ? { pickedUpAt: null, pickedUpByUserId: null, pickedUpByName: null }
+            : { readyAt: null, pickedUpAt: null, pickedUpByUserId: null, pickedUpByName: null }),
+        },
+      });
+
+      if (updateResult.count === 0) {
+        throw new ConflictException('Concurrent status update detected; please retry.');
+      }
+
+      const res = await tx.kitchenFulfillmentTicket.findUniqueOrThrow({
+        where: { id: ticket.id },
+      });
+
+      await tx.kitchenFulfillmentStatusHistory.create({
+        data: {
+          organizationId: ticket.organizationId,
+          facilityId,
+          ticketId: ticket.id,
+          fromStatus: ticket.status,
+          toStatus: targetStatus,
+          actorId: actor.userId ?? null,
+          actorName: actor.userName ?? null,
+          reason: `Reopened ticket: ${dto.reason.trim()}`,
           notes: dto.notes ?? null,
           timestamp: now,
         },

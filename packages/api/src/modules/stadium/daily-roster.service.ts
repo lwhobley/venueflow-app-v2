@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -15,8 +16,19 @@ import type {
   UpdateRosterWorkerDto,
 } from './daily-roster.dto';
 
+function sanitizeCsvCell(val: unknown): string {
+  if (val === null || val === undefined) return '';
+  let str = String(val);
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = `'${str}`;
+  }
+  return `"${str.replace(/"/g, '""')}"`;
+}
+
 @Injectable()
 export class DailyRosterService {
+  private readonly logger = new Logger(DailyRosterService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   /**
@@ -24,6 +36,35 @@ export class DailyRosterService {
    */
   private canViewPayrollRates(role?: string | null, allAccess = false): boolean {
     return allAccess || isOwnerOrAdminRole(role) || role === 'finance_viewer';
+  }
+
+  /**
+   * Asserts actor has permission to access the department's roster.
+   */
+  private async assertCanAccessDepartmentRoster(params: {
+    facilityId: string;
+    actorUserId: string;
+    actorRole?: string | null;
+    actorAllAccess?: boolean;
+    departmentId: string;
+  }) {
+    const { facilityId, actorUserId, actorRole, actorAllAccess = false, departmentId } = params;
+    if (actorAllAccess || isAdminRole(actorRole)) {
+      return;
+    }
+
+    const membership = await this.prisma.departmentMembership.findFirst({
+      where: {
+        facilityId,
+        userId: actorUserId,
+        departmentId,
+        isActive: true,
+      },
+    });
+
+    if (!membership) {
+      throw new ForbiddenException('Access to requested department roster is unauthorized');
+    }
   }
 
   /**
@@ -98,7 +139,7 @@ export class DailyRosterService {
         action: 'CREATE_ROSTER',
         summary: `Created ${roster.rosterType} roster '${roster.name}' for ${roster.operationalDate}`,
       },
-    }).catch(() => undefined);
+    }).catch((err) => this.logger.warn(`Failed to record audit log for CREATE_ROSTER: ${err instanceof Error ? err.message : String(err)}`));
 
     return roster;
   }
@@ -156,15 +197,16 @@ export class DailyRosterService {
   }
 
   /**
-   * Fetches roster details with workers, applying financial redaction where required.
+   * Fetches roster details with workers, applying department-membership authorization and rate redaction.
    */
   async getRoster(params: {
     facilityId: string;
+    actorUserId: string;
     rosterId: string;
     actorRole?: string | null;
     actorAllAccess?: boolean;
   }) {
-    const { facilityId, rosterId, actorRole, actorAllAccess = false } = params;
+    const { facilityId, actorUserId, rosterId, actorRole, actorAllAccess = false } = params;
 
     const roster = await this.prisma.dailyTemporaryRoster.findFirst({
       where: { facilityId, id: rosterId },
@@ -184,6 +226,15 @@ export class DailyRosterService {
     if (!roster) {
       throw new NotFoundException('Roster not found');
     }
+
+    // F-03: Enforce department-membership or admin authorization
+    await this.assertCanAccessDepartmentRoster({
+      facilityId,
+      actorUserId,
+      actorRole,
+      actorAllAccess,
+      departmentId: roster.departmentId,
+    });
 
     const canViewRates = this.canViewPayrollRates(actorRole, actorAllAccess);
     const workers = canViewRates
@@ -244,7 +295,7 @@ export class DailyRosterService {
         shiftStartTime: dto.shiftStartTime ? new Date(dto.shiftStartTime) : null,
         shiftEndTime: dto.shiftEndTime ? new Date(dto.shiftEndTime) : null,
         hourlyRateCents: dto.hourlyRateCents ?? 0,
-        attendanceStatus: 'scheduled',
+        attendanceStatus: dto.attendanceStatus ?? 'scheduled',
         notes: dto.notes?.trim(),
       },
     });
@@ -283,8 +334,16 @@ export class DailyRosterService {
       prisma: this.prisma,
     });
 
+    // F-06: Verify worker belongs to this roster
+    const worker = await this.prisma.dailyTemporaryRosterWorker.findFirst({
+      where: { id: workerId, rosterId: roster.id },
+    });
+    if (!worker) {
+      throw new NotFoundException('Worker not found on the specified roster');
+    }
+
     return this.prisma.dailyTemporaryRosterWorker.update({
-      where: { id: workerId },
+      where: { id: worker.id },
       data: {
         ...(dto.checkedInAt !== undefined ? { checkedInAt: dto.checkedInAt ? new Date(dto.checkedInAt) : null } : {}),
         ...(dto.checkedOutAt !== undefined ? { checkedOutAt: dto.checkedOutAt ? new Date(dto.checkedOutAt) : null } : {}),
@@ -299,7 +358,14 @@ export class DailyRosterService {
   /**
    * Submits a roster for supervisor/manager approval.
    */
-  async submitRoster(facilityId: string, actorUserId: string, rosterId: string) {
+  async submitRoster(params: {
+    facilityId: string;
+    actorUserId: string;
+    actorRole?: string | null;
+    actorAllAccess?: boolean;
+    rosterId: string;
+  }) {
+    const { facilityId, actorUserId, actorRole, actorAllAccess, rosterId } = params;
     const roster = await this.prisma.dailyTemporaryRoster.findFirst({
       where: { facilityId, id: rosterId },
     });
@@ -307,6 +373,15 @@ export class DailyRosterService {
     if (roster.status !== 'draft') {
       throw new BadRequestException('Only draft rosters can be submitted');
     }
+
+    // F-04: Verify actor belongs to the roster's department or is broad admin
+    await this.assertCanAccessDepartmentRoster({
+      facilityId,
+      actorUserId,
+      actorRole,
+      actorAllAccess,
+      departmentId: roster.departmentId,
+    });
 
     return this.prisma.dailyTemporaryRoster.update({
       where: { id: rosterId },
@@ -330,6 +405,11 @@ export class DailyRosterService {
       where: { facilityId, id: rosterId },
     });
     if (!roster) throw new NotFoundException('Roster not found');
+
+    // F-05: Precondition check - only submitted rosters can be approved
+    if (roster.status !== 'submitted') {
+      throw new BadRequestException('Only submitted rosters can be approved');
+    }
 
     if (!canManageVenue(actorRole, actorAllAccess)) {
       throw new ForbiddenException('Operational manager authority required to approve rosters');
@@ -365,7 +445,7 @@ export class DailyRosterService {
         action: 'APPROVE_ROSTER',
         summary: `Approved roster '${roster.name}' for operational date ${roster.operationalDate}`,
       },
-    }).catch(() => undefined);
+    }).catch((err) => this.logger.warn(`Failed to record audit log for APPROVE_ROSTER: ${err instanceof Error ? err.message : String(err)}`));
 
     return approved;
   }
@@ -386,6 +466,11 @@ export class DailyRosterService {
       where: { facilityId, id: rosterId },
     });
     if (!roster) throw new NotFoundException('Roster not found');
+
+    // F-05: Precondition check - only approved rosters can be closed
+    if (roster.status !== 'approved') {
+      throw new BadRequestException('Only approved rosters can be closed');
+    }
 
     if (!canManageVenue(actorRole, actorAllAccess)) {
       throw new ForbiddenException('Manager authority required to close operational rosters');
@@ -412,7 +497,7 @@ export class DailyRosterService {
   }
 
   /**
-   * Post-close/post-approval correction workflow with version increment and audit history.
+   * Post-close/post-approval correction workflow with version increment, IDOR prevention, CAS, and audit history.
    */
   async adjustClosedRoster(params: {
     organizationId: string;
@@ -445,9 +530,34 @@ export class DailyRosterService {
       prisma: this.prisma,
     });
 
-    const newVersion = roster.version + 1;
+    // F-06: Pre-verify all worker updates belong to this roster
+    if (dto.workerUpdates && dto.workerUpdates.length > 0) {
+      for (const update of dto.workerUpdates) {
+        const worker = await this.prisma.dailyTemporaryRosterWorker.findFirst({
+          where: { id: update.workerId, rosterId: roster.id },
+        });
+        if (!worker) {
+          throw new NotFoundException(`Worker ${update.workerId} does not belong to this roster`);
+        }
+      }
+    }
 
     return this.prisma.$transaction(async (tx) => {
+      // F-08: CAS version update
+      const updateResult = await tx.dailyTemporaryRoster.updateMany({
+        where: { id: rosterId, version: roster.version },
+        data: {
+          version: { increment: 1 },
+          updatedById: actorUserId,
+        },
+      });
+
+      if (updateResult.count === 0) {
+        throw new ConflictException('Roster was concurrently modified; please re-fetch and retry');
+      }
+
+      const newVersion = roster.version + 1;
+
       // Record history snapshot
       await tx.dailyTemporaryRosterHistory.create({
         data: {
@@ -458,7 +568,7 @@ export class DailyRosterService {
           changedByUserId: actorUserId,
           changeType: 'POST_APPROVAL_ADJUSTMENT',
           summary: dto.reason.trim(),
-          details: { updates: dto.workerUpdates ?? [] },
+          details: { updates: JSON.parse(JSON.stringify(dto.workerUpdates ?? [])) },
         },
       });
 
@@ -477,26 +587,23 @@ export class DailyRosterService {
         }
       }
 
-      return tx.dailyTemporaryRoster.update({
+      return tx.dailyTemporaryRoster.findUniqueOrThrow({
         where: { id: rosterId },
-        data: {
-          version: newVersion,
-          updatedById: actorUserId,
-        },
       });
     });
   }
 
   /**
-   * Generates CSV export of a roster with sensitive payroll fields redacted when unauthorized.
+   * Generates CSV export of a roster with sensitive payroll fields redacted and formula-injection sanitized.
    */
   async exportRosterCsv(params: {
     facilityId: string;
+    actorUserId: string;
     rosterId: string;
     actorRole?: string | null;
     actorAllAccess?: boolean;
   }): Promise<string> {
-    const { facilityId, rosterId, actorRole, actorAllAccess = false } = params;
+    const { facilityId, actorUserId, rosterId, actorRole, actorAllAccess = false } = params;
 
     const roster = await this.prisma.dailyTemporaryRoster.findFirst({
       where: { facilityId, id: rosterId },
@@ -507,6 +614,15 @@ export class DailyRosterService {
     });
 
     if (!roster) throw new NotFoundException('Roster not found');
+
+    // F-03: Assert department membership or admin authorization
+    await this.assertCanAccessDepartmentRoster({
+      facilityId,
+      actorUserId,
+      actorRole,
+      actorAllAccess,
+      departmentId: roster.departmentId,
+    });
 
     const canViewRates = this.canViewPayrollRates(actorRole, actorAllAccess);
 
@@ -528,22 +644,23 @@ export class DailyRosterService {
       'Notes',
     ];
 
+    // F-10: Neutralize CSV formula injection on every cell
     const rows = roster.workers.map((w) => [
-      roster.id,
-      roster.operationalDate,
-      `"${roster.name.replace(/"/g, '""')}"`,
-      `"${roster.staffingSource.replace(/"/g, '""')}"`,
-      `"${roster.department.name.replace(/"/g, '""')}"`,
-      roster.status,
-      `"${w.workerName.replace(/"/g, '""')}"`,
-      `"${w.workerRole.replace(/"/g, '""')}"`,
-      w.shiftStartTime ? w.shiftStartTime.toISOString() : '',
-      w.shiftEndTime ? w.shiftEndTime.toISOString() : '',
-      w.hoursWorked,
-      w.breakMinutes,
-      canViewRates ? w.hourlyRateCents : '[REDACTED]',
-      w.attendanceStatus,
-      `"${(w.notes ?? '').replace(/"/g, '""')}"`,
+      sanitizeCsvCell(roster.id),
+      sanitizeCsvCell(roster.operationalDate),
+      sanitizeCsvCell(roster.name),
+      sanitizeCsvCell(roster.staffingSource),
+      sanitizeCsvCell(roster.department.name),
+      sanitizeCsvCell(roster.status),
+      sanitizeCsvCell(w.workerName),
+      sanitizeCsvCell(w.workerRole),
+      sanitizeCsvCell(w.shiftStartTime ? w.shiftStartTime.toISOString() : ''),
+      sanitizeCsvCell(w.shiftEndTime ? w.shiftEndTime.toISOString() : ''),
+      sanitizeCsvCell(w.hoursWorked),
+      sanitizeCsvCell(w.breakMinutes),
+      sanitizeCsvCell(canViewRates ? w.hourlyRateCents : '[REDACTED]'),
+      sanitizeCsvCell(w.attendanceStatus),
+      sanitizeCsvCell(w.notes ?? ''),
     ]);
 
     return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');

@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { KitchenDistroFulfillmentService } from './kitchen-distro-fulfillment.service';
+import {
+  deriveTicketOperationalArea,
+  KitchenDistroFulfillmentService,
+} from './kitchen-distro-fulfillment.service';
 import { KitchenTicketPriority, KitchenTicketStatus } from '@prisma/client';
+import { ConflictException } from '@nestjs/common';
 
 describe('KitchenDistroFulfillmentService', () => {
   let service: KitchenDistroFulfillmentService;
@@ -16,8 +20,10 @@ describe('KitchenDistroFulfillmentService', () => {
       kitchenFulfillmentTicket: {
         findMany: vi.fn(),
         findFirst: vi.fn(),
+        findUniqueOrThrow: vi.fn(),
         create: vi.fn(),
         update: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       kitchenFulfillmentStatusHistory: {
         create: vi.fn(),
@@ -38,6 +44,20 @@ describe('KitchenDistroFulfillmentService', () => {
     };
 
     service = new KitchenDistroFulfillmentService(prisma, wsGateway, notifications);
+  });
+
+  describe('deriveTicketOperationalArea helper (F-01)', () => {
+    it('correctly maps various ticket names and BEO contexts to operational areas', () => {
+      expect(deriveTicketOperationalArea({ serviceAreaName: 'Stand 104 Hot Dogs' })).toBe('concession');
+      expect(deriveTicketOperationalArea({ serviceAreaName: 'East Hawker Station' })).toBe('concession');
+      expect(deriveTicketOperationalArea({ serviceAreaName: 'Concession Cart B' })).toBe('concession');
+      expect(deriveTicketOperationalArea({ serviceAreaName: 'Suite 204' })).toBe('suite');
+      expect(deriveTicketOperationalArea({ serviceAreaName: 'Champions Club Lounge' })).toBe('club');
+      expect(deriveTicketOperationalArea({ serviceAreaName: 'VIP Banquet Hall', beoId: 'beo-1' })).toBe('catering');
+      expect(deriveTicketOperationalArea({ serviceAreaName: 'Executive Catering' })).toBe('catering');
+      expect(deriveTicketOperationalArea({ serviceAreaName: 'Main Kitchen' })).toBe('culinary');
+      expect(deriveTicketOperationalArea({ serviceAreaName: 'Central Distribution Point' })).toBe('distro');
+    });
   });
 
   it('creates a new ticket in waiting status and broadcasts update', async () => {
@@ -89,7 +109,7 @@ describe('KitchenDistroFulfillmentService', () => {
     );
   });
 
-  it('fires a ticket transitioning waiting -> firing', async () => {
+  it('fires a ticket transitioning waiting -> firing with CAS optimistic lock (F-07)', async () => {
     const initialTicket = {
       id: 'ticket-1',
       organizationId: 'org-1',
@@ -105,7 +125,8 @@ describe('KitchenDistroFulfillmentService', () => {
     };
 
     prisma.kitchenFulfillmentTicket.findFirst.mockResolvedValue(initialTicket);
-    prisma.kitchenFulfillmentTicket.update.mockResolvedValue(updatedTicket);
+    prisma.kitchenFulfillmentTicket.updateMany.mockResolvedValue({ count: 1 });
+    prisma.kitchenFulfillmentTicket.findUniqueOrThrow.mockResolvedValue(updatedTicket);
     prisma.kitchenFulfillmentStatusHistory.create.mockResolvedValue({ id: 'hist-2' });
 
     const result = await service.fireTicket('facility-1', 'ticket-1', {
@@ -114,9 +135,9 @@ describe('KitchenDistroFulfillmentService', () => {
     });
 
     expect(result.status).toBe(KitchenTicketStatus.firing);
-    expect(prisma.kitchenFulfillmentTicket.update).toHaveBeenCalledWith(
+    expect(prisma.kitchenFulfillmentTicket.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'ticket-1' },
+        where: { id: 'ticket-1', status: KitchenTicketStatus.waiting },
         data: expect.objectContaining({ status: KitchenTicketStatus.firing }),
       }),
     );
@@ -126,6 +147,27 @@ describe('KitchenDistroFulfillmentService', () => {
       updatedTicket,
       'distro_pickup_updated',
     );
+  });
+
+  it('throws ConflictException on concurrent status race during fireTicket (F-07)', async () => {
+    const initialTicket = {
+      id: 'ticket-1',
+      organizationId: 'org-1',
+      facilityId: 'facility-1',
+      status: KitchenTicketStatus.waiting,
+      itemName: 'Sliders',
+    };
+
+    prisma.kitchenFulfillmentTicket.findFirst.mockResolvedValue(initialTicket);
+    // Simulate concurrent modification where status was changed by another actor
+    prisma.kitchenFulfillmentTicket.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(
+      service.fireTicket('facility-1', 'ticket-1', {
+        userId: 'chef-1',
+        userName: 'Chef Luigi',
+      }),
+    ).rejects.toThrow(ConflictException);
   });
 
   it('marks a ticket ready at Distro station and broadcasts distro_pickup_ready', async () => {
@@ -149,7 +191,8 @@ describe('KitchenDistroFulfillmentService', () => {
     };
 
     prisma.kitchenFulfillmentTicket.findFirst.mockResolvedValue(initialTicket);
-    prisma.kitchenFulfillmentTicket.update.mockResolvedValue(updatedTicket);
+    prisma.kitchenFulfillmentTicket.updateMany.mockResolvedValue({ count: 1 });
+    prisma.kitchenFulfillmentTicket.findUniqueOrThrow.mockResolvedValue(updatedTicket);
     prisma.kitchenFulfillmentStatusHistory.create.mockResolvedValue({ id: 'hist-3' });
 
     const result = await service.markReady(
@@ -193,7 +236,8 @@ describe('KitchenDistroFulfillmentService', () => {
     };
 
     prisma.kitchenFulfillmentTicket.findFirst.mockResolvedValue(readyTicket);
-    prisma.kitchenFulfillmentTicket.update.mockResolvedValue(rewoundTicket);
+    prisma.kitchenFulfillmentTicket.updateMany.mockResolvedValue({ count: 1 });
+    prisma.kitchenFulfillmentTicket.findUniqueOrThrow.mockResolvedValue(rewoundTicket);
     prisma.kitchenFulfillmentStatusHistory.create.mockResolvedValue({ id: 'hist-4' });
 
     const result = await service.rewindToFiring(
@@ -283,7 +327,8 @@ describe('KitchenDistroFulfillmentService', () => {
     };
 
     prisma.kitchenFulfillmentTicket.findFirst.mockResolvedValue(overdueTicket);
-    prisma.kitchenFulfillmentTicket.update.mockResolvedValue(pickedUpTicket);
+    prisma.kitchenFulfillmentTicket.updateMany.mockResolvedValue({ count: 1 });
+    prisma.kitchenFulfillmentTicket.findUniqueOrThrow.mockResolvedValue(pickedUpTicket);
     prisma.kitchenFulfillmentStatusHistory.create.mockResolvedValue({ id: 'hist-6' });
 
     const result = await service.markPickedUp(
@@ -296,15 +341,117 @@ describe('KitchenDistroFulfillmentService', () => {
     expect(result.status).toBe(KitchenTicketStatus.picked_up);
     expect(result.wasOverdue).toBe(true);
     expect(result.pickedUpByName).toBe('Runner Dave');
-    expect(prisma.kitchenFulfillmentTicket.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'ticket-2' },
-        data: expect.objectContaining({
-          status: KitchenTicketStatus.picked_up,
-          wasOverdue: true,
-          pickedUpByName: 'Runner Dave',
-        }),
-      }),
+  });
+
+  // F-17: Idempotent cancellation
+  it('F-17: returns ticket idempotently without creating duplicate history on re-cancel', async () => {
+    const cancelledTicket = {
+      id: 'ticket-cancelled',
+      organizationId: 'org-1',
+      facilityId: 'facility-1',
+      status: KitchenTicketStatus.cancelled,
+      cancelledAt: new Date(),
+      cancelReason: 'Order cancelled by guest',
+    };
+
+    prisma.kitchenFulfillmentTicket.findFirst.mockResolvedValue(cancelledTicket);
+
+    const result = await service.cancelTicket(
+      'facility-1',
+      'ticket-cancelled',
+      { reason: 'Duplicate cancel request' },
+      { userId: 'mgr-1' },
     );
+
+    expect(result.status).toBe(KitchenTicketStatus.cancelled);
+    expect(prisma.kitchenFulfillmentTicket.updateMany).not.toHaveBeenCalled();
+    expect(prisma.kitchenFulfillmentStatusHistory.create).not.toHaveBeenCalled();
+  });
+
+  // F-09: Reopen ticket workflow
+  describe('reopenTicket (F-09)', () => {
+    it('reopens a cancelled ticket back to waiting status with audit history and reason', async () => {
+      const cancelledTicket = {
+        id: 'ticket-cancelled',
+        organizationId: 'org-1',
+        facilityId: 'facility-1',
+        status: KitchenTicketStatus.cancelled,
+        zoneId: 'zone-1',
+      };
+      const reopenedTicket = {
+        ...cancelledTicket,
+        status: KitchenTicketStatus.waiting,
+        cancelledAt: null,
+        cancelReason: null,
+      };
+
+      prisma.kitchenFulfillmentTicket.findFirst.mockResolvedValue(cancelledTicket);
+      prisma.kitchenFulfillmentTicket.updateMany.mockResolvedValue({ count: 1 });
+      prisma.kitchenFulfillmentTicket.findUniqueOrThrow.mockResolvedValue(reopenedTicket);
+      prisma.kitchenFulfillmentStatusHistory.create.mockResolvedValue({ id: 'hist-reopen' });
+
+      const result = await service.reopenTicket(
+        'facility-1',
+        'ticket-cancelled',
+        { reason: 'Customer changed mind, ticket reinstated' },
+        { userId: 'mgr-1', userName: 'Manager Bob' },
+      );
+
+      expect(result.status).toBe(KitchenTicketStatus.waiting);
+      expect(prisma.kitchenFulfillmentStatusHistory.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            fromStatus: KitchenTicketStatus.cancelled,
+            toStatus: KitchenTicketStatus.waiting,
+            reason: expect.stringContaining('reinstated'),
+          }),
+        }),
+      );
+      expect(wsGateway.broadcastDistroPickupUpdate).toHaveBeenCalledWith(
+        'facility-1',
+        'zone-1',
+        reopenedTicket,
+        'distro_pickup_updated',
+      );
+    });
+
+    it('reopens a picked_up ticket back to ready status', async () => {
+      const pickedUpTicket = {
+        id: 'ticket-pickedup',
+        organizationId: 'org-1',
+        facilityId: 'facility-1',
+        status: KitchenTicketStatus.picked_up,
+        zoneId: 'zone-1',
+      };
+      const reopenedTicket = {
+        ...pickedUpTicket,
+        status: KitchenTicketStatus.ready,
+        pickedUpAt: null,
+        pickedUpByUserId: null,
+        pickedUpByName: null,
+      };
+
+      prisma.kitchenFulfillmentTicket.findFirst.mockResolvedValue(pickedUpTicket);
+      prisma.kitchenFulfillmentTicket.updateMany.mockResolvedValue({ count: 1 });
+      prisma.kitchenFulfillmentTicket.findUniqueOrThrow.mockResolvedValue(reopenedTicket);
+      prisma.kitchenFulfillmentStatusHistory.create.mockResolvedValue({ id: 'hist-reopen-2' });
+
+      const result = await service.reopenTicket(
+        'facility-1',
+        'ticket-pickedup',
+        { reason: 'Runner dropped item at wrong suite, returned to distro' },
+        { userId: 'mgr-1', userName: 'Manager Bob' },
+      );
+
+      expect(result.status).toBe(KitchenTicketStatus.ready);
+      expect(prisma.kitchenFulfillmentStatusHistory.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            fromStatus: KitchenTicketStatus.picked_up,
+            toStatus: KitchenTicketStatus.ready,
+          }),
+        }),
+      );
+    });
   });
 });

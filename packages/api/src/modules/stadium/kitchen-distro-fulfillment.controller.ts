@@ -21,12 +21,16 @@ import {
   Min,
 } from 'class-validator';
 import { canManageAssignedScope, canManageVenue, canViewPilotHealth } from '../../auth/roles';
+import { canAccessResource, ResourceAction } from '../../auth/access-control.helper';
 import { RequireSubscription } from '../../billing/require-subscription.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
-import { KitchenDistroFulfillmentService } from './kitchen-distro-fulfillment.service';
+import {
+  deriveTicketOperationalArea,
+  KitchenDistroFulfillmentService,
+} from './kitchen-distro-fulfillment.service';
 
 type Scope = NonNullable<VenueScopedRequest['venueScope']>;
 
@@ -78,6 +82,11 @@ export class CancelTicketRequestDto {
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
 }
 
+export class ReopenTicketRequestDto {
+  @IsString() @MaxLength(500) reason!: string;
+  @IsOptional() @IsString() @MaxLength(500) notes?: string;
+}
+
 @UseInterceptors(TenantRequestTransactionInterceptor)
 @Controller('v1/stadium/distro-tickets')
 @RequireSubscription()
@@ -114,6 +123,46 @@ export class KitchenDistroFulfillmentController {
     throw new ForbiddenException('Operational stadium access is required.');
   }
 
+  /**
+   * Evaluates operational area boundaries, department access rules, and action granularity (F-01, F-11).
+   */
+  private async assertTicketAccess(
+    scope: Scope,
+    action: ResourceAction,
+    ticketOrArea: {
+      serviceAreaName?: string | null;
+      notes?: string | null;
+      beoId?: string | null;
+      zoneId?: string | null;
+    } | string,
+  ) {
+    const zoneId = typeof ticketOrArea === 'object' ? ticketOrArea.zoneId ?? undefined : undefined;
+    await this.assertOperator(scope, zoneId);
+
+    const operationalAreaType = typeof ticketOrArea === 'string'
+      ? ticketOrArea
+      : deriveTicketOperationalArea(ticketOrArea);
+
+    const venue = await this.prisma.venue.findUniqueOrThrow({
+      where: { id: scope.venueId },
+      select: { organizationId: true },
+    });
+
+    const decision = await canAccessResource({
+      userId: scope.userId,
+      organizationId: venue.organizationId,
+      venueId: scope.venueId,
+      operationalAreaType,
+      resourceType: 'kitchen_fulfillment_ticket',
+      action,
+      prisma: this.prisma,
+    });
+
+    if (!decision.allowed) {
+      throw new ForbiddenException(decision.reason || 'Access denied for this operational area');
+    }
+  }
+
   @Get()
   async listTickets(
     @VenueScope() scope: Scope,
@@ -125,7 +174,7 @@ export class KitchenDistroFulfillmentController {
     @Query('status') status?: KitchenTicketStatus | 'active',
   ) {
     await this.assertOperator(scope, zoneId);
-    return this.service.listTickets(scope.venueId, {
+    const tickets = await this.service.listTickets(scope.venueId, {
       kitchenId,
       serviceAreaId,
       zoneId,
@@ -133,6 +182,39 @@ export class KitchenDistroFulfillmentController {
       eventId,
       status,
     });
+
+    // F-01: Filter visible tickets through department area authorization
+    const venue = await this.prisma.venue.findUniqueOrThrow({
+      where: { id: scope.venueId },
+      select: { organizationId: true },
+    });
+
+    const areaDecisions = new Map<string, boolean>();
+    const visibleTickets: typeof tickets = [];
+
+    for (const ticket of tickets) {
+      const area = deriveTicketOperationalArea(ticket);
+      let allowed = areaDecisions.get(area);
+      if (allowed === undefined) {
+        const decision = await canAccessResource({
+          userId: scope.userId,
+          organizationId: venue.organizationId,
+          venueId: scope.venueId,
+          operationalAreaType: area,
+          resourceType: 'kitchen_fulfillment_ticket',
+          action: 'view',
+          prisma: this.prisma,
+        });
+        allowed = decision.allowed;
+        areaDecisions.set(area, allowed);
+      }
+
+      if (allowed) {
+        visibleTickets.push(ticket);
+      }
+    }
+
+    return visibleTickets;
   }
 
   @Get(':id')
@@ -140,8 +222,9 @@ export class KitchenDistroFulfillmentController {
     @VenueScope() scope: Scope,
     @Param('id') id: string,
   ) {
-    await this.assertOperator(scope);
-    return this.service.getTicketById(scope.venueId, id);
+    const ticket = await this.service.getTicketById(scope.venueId, id);
+    await this.assertTicketAccess(scope, 'view', ticket);
+    return ticket;
   }
 
   @Post()
@@ -149,7 +232,7 @@ export class KitchenDistroFulfillmentController {
     @VenueScope() scope: Scope,
     @Body() dto: CreateTicketDto,
   ) {
-    await this.assertOperator(scope, dto.zoneId);
+    await this.assertTicketAccess(scope, 'create', dto);
     return this.service.createTicket(
       scope.venueId,
       dto,
@@ -163,7 +246,7 @@ export class KitchenDistroFulfillmentController {
     @Param('beoId') beoId: string,
     @Body() dto: GenerateFromBeoDto,
   ) {
-    await this.assertOperator(scope);
+    await this.assertTicketAccess(scope, 'create', 'catering');
     return this.service.createTicketsFromBeo(
       scope.venueId,
       beoId,
@@ -177,7 +260,8 @@ export class KitchenDistroFulfillmentController {
     @VenueScope() scope: Scope,
     @Param('id') id: string,
   ) {
-    await this.assertOperator(scope);
+    const ticket = await this.service.getTicketById(scope.venueId, id);
+    await this.assertTicketAccess(scope, 'fire', ticket);
     return this.service.fireTicket(
       scope.venueId,
       id,
@@ -191,7 +275,8 @@ export class KitchenDistroFulfillmentController {
     @Param('id') id: string,
     @Body() dto: MarkReadyRequestDto,
   ) {
-    await this.assertOperator(scope);
+    const ticket = await this.service.getTicketById(scope.venueId, id);
+    await this.assertTicketAccess(scope, 'ready', ticket);
     return this.service.markReady(
       scope.venueId,
       id,
@@ -206,7 +291,8 @@ export class KitchenDistroFulfillmentController {
     @Param('id') id: string,
     @Body() dto: RewindFireRequestDto,
   ) {
-    await this.assertOperator(scope);
+    const ticket = await this.service.getTicketById(scope.venueId, id);
+    await this.assertTicketAccess(scope, 'hold', ticket);
     return this.service.rewindToFiring(
       scope.venueId,
       id,
@@ -221,7 +307,8 @@ export class KitchenDistroFulfillmentController {
     @Param('id') id: string,
     @Body() dto: MarkPickedUpRequestDto,
   ) {
-    await this.assertOperator(scope);
+    const ticket = await this.service.getTicketById(scope.venueId, id);
+    await this.assertTicketAccess(scope, 'pickup', ticket);
     return this.service.markPickedUp(
       scope.venueId,
       id,
@@ -236,8 +323,25 @@ export class KitchenDistroFulfillmentController {
     @Param('id') id: string,
     @Body() dto: CancelTicketRequestDto,
   ) {
-    await this.assertOperator(scope);
+    const ticket = await this.service.getTicketById(scope.venueId, id);
+    await this.assertTicketAccess(scope, 'cancel', ticket);
     return this.service.cancelTicket(
+      scope.venueId,
+      id,
+      dto,
+      { userId: scope.userId, userName: scope.role, role: scope.role },
+    );
+  }
+
+  @Post(':id/reopen')
+  async reopenTicket(
+    @VenueScope() scope: Scope,
+    @Param('id') id: string,
+    @Body() dto: ReopenTicketRequestDto,
+  ) {
+    const ticket = await this.service.getTicketById(scope.venueId, id);
+    await this.assertTicketAccess(scope, 'reopen', ticket);
+    return this.service.reopenTicket(
       scope.venueId,
       id,
       dto,
