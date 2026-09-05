@@ -10,6 +10,8 @@ import Stadium3DModel from './Stadium3DModel';
 import { COMPREHENSIVE_STADIUM_ZONES, type StadiumZoneData } from './stadium-map/zone-data';
 import { styles } from './stadium-map/StadiumVenueMap.styles';
 import { asArray } from '../lib/format';
+import { PremiumSpacesDirectory } from './stadium-map/PremiumSpacesDirectory';
+import { groupPremiumSpaces } from './stadium-map/premium-spaces';
 
 // Static stadium zone/unit data and component styles were split out into
 // components/stadium-map/ to keep this file to the actual component logic —
@@ -37,16 +39,23 @@ export function StadiumVenueMap({
   const [viewPerspective, setViewPerspective] = useState<'3d_isometric' | '2d_plan'>('3d_isometric');
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
     stadium_gates: true,
-    field_sidelines: true,
-    concourse_bunkers: true,
-    concourse_service_areas: true,
-    locker_rooms_aux: true,
-    luxury_suites: true,
-    club_level: true,
+    field_sidelines: false,
+    concourse_bunkers: false,
+    concourse_service_areas: false,
+    locker_rooms_aux: false,
     upper_deck: false,
   });
+  const [expandedPremiumGroup, setExpandedPremiumGroup] = useState<string | null>(null);
+
+  const togglePremiumGroup = (groupId: string) => {
+    setExpandedPremiumGroup((prev) => (prev === groupId ? null : groupId));
+  };
 
   const zonesState = COMPREHENSIVE_STADIUM_ZONES;
+
+  const premiumGroups = useMemo(() => {
+    return groupPremiumSpaces(zonesState);
+  }, [zonesState]);
 
   // Selected Unit Data for live floating HUD
   const activeSelectedUnit = useMemo(() => {
@@ -63,7 +72,7 @@ export function StadiumVenueMap({
     setExpandedCategories((prev) => ({ ...prev, [catKey]: !prev[catKey] }));
   };
 
-  // Grouped Categories for sidebar
+  // General stadium sector categories for sidebar (excluding premium suites & clubs)
   const categoryGroups = useMemo(() => {
     const groups: Record<string, { label: string; icon: string; zones: StadiumZoneData[] }> = {
       stadium_gates: {
@@ -90,16 +99,6 @@ export function StadiumVenueMap({
         label: 'Team Lockers & Aux Suites (6)',
         icon: 'locker',
         zones: zonesState.filter((z) => z.category === 'locker_rooms_aux'),
-      },
-      luxury_suites: {
-        label: 'Luxury Suites 300 & 400 (80)',
-        icon: 'glass-cocktail',
-        zones: zonesState.filter((z) => z.category === 'luxury_suites'),
-      },
-      club_level: {
-        label: 'Club Level 200 (2)',
-        icon: 'trophy-award',
-        zones: zonesState.filter((z) => z.category === 'club_level'),
       },
       upper_deck: {
         label: 'Upper Deck 400 (3)',
@@ -159,22 +158,6 @@ export function StadiumVenueMap({
     }
     return allSuites;
   }, [allSuites, suiteFloorTab]);
-
-  const dropdownFilteredSuites = useMemo(() => {
-    let list = allSuites;
-    if (suiteFloorTab !== 'all') {
-      list = filteredFloorSuites;
-    }
-    if (!suiteDropdownQuery.trim()) return list;
-    const q = suiteDropdownQuery.toLowerCase();
-    return list.filter(
-      (s) =>
-        s.code.toLowerCase().includes(q) ||
-        s.name.toLowerCase().includes(q) ||
-        (s.suiteDetails?.suiteholder && s.suiteDetails.suiteholder.toLowerCase().includes(q)) ||
-        (s.suiteDetails?.suiteNumber && s.suiteDetails.suiteNumber.toLowerCase().includes(q))
-    );
-  }, [allSuites, filteredFloorSuites, suiteFloorTab, suiteDropdownQuery]);
 
   const totalUnitsCount = useMemo(() => {
     return zonesState.reduce((sum, z) => sum + z.units.length, 0);
@@ -337,6 +320,30 @@ export function StadiumVenueMap({
             </View>
 
             <ScrollView style={{ flex: 1, maxHeight: isMobile ? 480 : undefined }} showsVerticalScrollIndicator={false}>
+              {/* ── 1. COMPACT EXPANDABLE PREMIUM SPACES DIRECTORY ── */}
+              <PremiumSpacesDirectory
+                groups={premiumGroups}
+                expandedGroupId={expandedPremiumGroup}
+                onToggleGroup={togglePremiumGroup}
+                onSelectUnit={(unit) => {
+                  handleUnitPress(unit);
+                  setActiveModalUnit(unit);
+                }}
+                selectedUnitId={selectedUnitId}
+                searchQuery={searchQuery}
+                showTitle={true}
+              />
+
+              {/* ── 2. GENERAL VENUE SECTORS ── */}
+              <View style={[styles.sidebarHeader, { borderBottomColor: palette.divider, backgroundColor: '#F7F7F4', marginTop: 4 }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <MaterialCommunityIcons name="layers-outline" size={16} color="#013369" />
+                  <CommandText palette={palette} variant="label" style={{ color: '#013369', fontWeight: '800', fontSize: 11 }}>
+                    GENERAL VENUE SECTORS
+                  </CommandText>
+                </View>
+              </View>
+
               {Object.entries(categoryGroups).map(([catKey, catData]) => {
                 const isExpanded = expandedCategories[catKey] ?? true;
                 const allUnitsInCat = catData.zones.flatMap((z) => z.units);
@@ -888,74 +895,19 @@ export function StadiumVenueMap({
                               nestedScrollEnabled
                               showsVerticalScrollIndicator
                             >
-                              {dropdownFilteredSuites.map((suite) => {
-                                const isSelected = selectedUnitId === suite.id;
-                                const hasBeo = Boolean(suite.suiteDetails?.beoNumber);
-                                return (
-                                  <Pressable
-                                    key={suite.id}
-                                    onPress={() => {
-                                      handleUnitPress(suite, 'zone-300-suites');
-                                      setIsSuiteDropdownOpen(false);
-                                    }}
-                                    style={[
-                                      styles.suiteDropdownItemRow,
-                                      isSelected ? styles.suiteDropdownItemRowActive : null,
-                                    ]}
-                                  >
-                                    <View style={styles.suiteDropdownItemLeft}>
-                                      <View
-                                        style={[
-                                          styles.suiteStatusDot,
-                                          {
-                                            backgroundColor: hasBeo
-                                              ? '#2E7D32'
-                                              : isSelected
-                                                ? '#FFD700'
-                                                : '#B0BEC5',
-                                          },
-                                        ]}
-                                      />
-                                      <View style={{ flex: 1 }}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                          <Text
-                                            style={[
-                                              styles.suiteDropdownItemNumber,
-                                              isSelected ? { color: '#013369', fontWeight: '800' } : null,
-                                            ]}
-                                          >
-                                            {suite.code}
-                                          </Text>
-                                          <Text
-                                            numberOfLines={1}
-                                            style={[
-                                              styles.suiteDropdownItemHolder,
-                                              isSelected ? { color: '#013369', fontWeight: '700' } : null,
-                                            ]}
-                                          >
-                                            {suite.suiteDetails?.suiteholder ?? suite.name}
-                                          </Text>
-                                        </View>
-                                        <Text style={styles.suiteDropdownItemTier}>
-                                          {suite.stadiumZone} · {suite.suiteDetails?.tier ?? 'Suite'} (Cap: {suite.capacity ?? 20})
-                                        </Text>
-                                      </View>
-                                    </View>
-                                    <View style={styles.suiteDropdownItemRight}>
-                                      {hasBeo ? (
-                                        <View style={styles.suiteDropdownBeoPill}>
-                                          <Text style={styles.suiteDropdownBeoPillText}>BEO READY</Text>
-                                        </View>
-                                      ) : (
-                                        <Text style={styles.suiteDropdownOpenText}>OPEN</Text>
-                                      )}
-                                      {isSelected ? (
-                                        <MaterialCommunityIcons name="check-circle" size={15} color="#2E7D32" />
-                                      ) : null}
-                                    </View>
-                                  </Pressable>
-                                );
-                              })}
+                              <PremiumSpacesDirectory
+                                groups={premiumGroups}
+                                expandedGroupId={expandedPremiumGroup}
+                                onToggleGroup={togglePremiumGroup}
+                                onSelectUnit={(suite) => {
+                                  handleUnitPress(suite, 'zone-300-suites');
+                                  setActiveModalUnit(suite);
+                                  setIsSuiteDropdownOpen(false);
+                                }}
+                                selectedUnitId={selectedUnitId}
+                                searchQuery={suiteDropdownQuery}
+                                showTitle={false}
+                              />
                             </ScrollView>
                           </View>
                         ) : null}

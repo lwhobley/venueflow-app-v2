@@ -66,6 +66,17 @@ export interface StadiumZoneItem {
   capacity: number | null;
   stadiumZone: string | null;
   level: string | null;
+  stadiumLevel?: 'Field' | '100' | '200' | '300' | '400' | '500';
+  displayGroup?: 'suites' | 'clubs' | 'premium' | 'event_spaces';
+  premiumCategory?:
+    | '100_clubs'
+    | '200_clubs'
+    | '300_suites'
+    | '400_suites'
+    | 'field_suites'
+    | 'founders_suites'
+    | 'party_suites'
+    | 'premium_lounges';
   status: 'open' | 'restricted' | 'incident' | 'closed';
   suiteDetails?: {
     suiteNumber: string;
