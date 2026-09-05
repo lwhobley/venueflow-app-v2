@@ -1,11 +1,15 @@
+import type { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { StadiumZoneItem } from '../StadiumUnitDetailModal';
 import type { StadiumZoneData } from './zone-data';
+
+/** Icon glyph names accepted by MaterialCommunityIcons, the icon set already used by the stadium map. */
+export type PremiumGroupIconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
 export interface PremiumSpaceGroup {
   id: string;
   title: string;
   level: string;
-  icon: string;
+  icon: PremiumGroupIconName;
   units: StadiumZoneItem[];
   alertCount: number;
 }
@@ -93,7 +97,7 @@ export function classifyPremiumSpace(
   groupId: string;
   groupTitle: string;
   level: string;
-  icon: string;
+  icon: PremiumGroupIconName;
 } | null {
   // Explicit override takes precedence
   if (unit.displayGroup === 'event_spaces' || unit.type === 'party_suite') {
@@ -229,7 +233,7 @@ export function groupPremiumSpaces(zones: StadiumZoneData[]): PremiumSpaceGroup[
       id: string;
       title: string;
       level: string;
-      icon: string;
+      icon: PremiumGroupIconName;
       units: StadiumZoneItem[];
       alertCount: number;
     }

@@ -125,7 +125,7 @@ export function PremiumSpacesDirectory({
                   color={isExpanded ? '#8A5D23' : '#68706A'}
                 />
                 <MaterialCommunityIcons
-                  name={group.icon as any}
+                  name={group.icon}
                   size={18}
                   color={isExpanded ? '#8A5D23' : '#013369'}
                 />
