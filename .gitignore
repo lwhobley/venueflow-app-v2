@@ -72,3 +72,7 @@ builds/
 facebook-assets/
 screenshots/
 
+
+# Python bytecode from the GLB build scripts
+__pycache__/
+*.pyc
