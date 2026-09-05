@@ -4,6 +4,13 @@ export const HIGH_VOLUME_WRITE_EXCHANGE = 'stadium.writes';
 export const HIGH_VOLUME_WRITE_DLX = 'stadium.writes.dlx';
 export const HIGH_VOLUME_WRITE_QUEUE = 'stadium.high-volume-writes.v1';
 export const HIGH_VOLUME_WRITE_DLQ = 'stadium.high-volume-writes.dlq.v1';
+export const HIGH_VOLUME_RETRY_QUEUE = 'stadium.high-volume-writes.retry.v1';
+export const MAX_DELIVERY_RETRIES = 5;
+
+export function deliveryAttempt(headers: Record<string, unknown> = {}): number {
+  const value = Number(headers['x-write-attempt'] ?? 0);
+  return Number.isInteger(value) && value >= 0 ? value : MAX_DELIVERY_RETRIES;
+}
 
 /** Kept in one module so producer and worker cannot redeclare a queue differently. */
 export const HIGH_VOLUME_WRITE_QUEUE_OPTIONS: Options.AssertQueue = {
@@ -21,6 +28,10 @@ export async function assertQueueTopology(channel: {
   await channel.assertExchange(HIGH_VOLUME_WRITE_DLX, 'direct', { durable: true });
   await channel.assertQueue(HIGH_VOLUME_WRITE_QUEUE, HIGH_VOLUME_WRITE_QUEUE_OPTIONS);
   await channel.assertQueue(HIGH_VOLUME_WRITE_DLQ, { durable: true });
+  await channel.assertQueue(HIGH_VOLUME_RETRY_QUEUE, {
+    durable: true, messageTtl: 5000,
+    deadLetterExchange: HIGH_VOLUME_WRITE_EXCHANGE, deadLetterRoutingKey: 'write',
+  });
   await channel.bindQueue(HIGH_VOLUME_WRITE_QUEUE, HIGH_VOLUME_WRITE_EXCHANGE, 'write');
   await channel.bindQueue(HIGH_VOLUME_WRITE_DLQ, HIGH_VOLUME_WRITE_DLX, 'failed');
 }

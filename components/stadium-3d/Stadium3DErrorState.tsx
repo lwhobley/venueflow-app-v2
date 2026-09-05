@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { styles } from './Stadium3DViewer.styles';
 
@@ -14,8 +14,8 @@ export function Stadium3DErrorState({
   onOpenOperationsMap,
 }: Stadium3DErrorStateProps) {
   return (
-    <View
-      style={styles.errorContainer}
+    <ScrollView
+      contentContainerStyle={styles.errorContainer}
       accessibilityRole="alert"
       accessibilityLabel="Interactive 3D stadium view could not be loaded."
     >
@@ -52,6 +52,6 @@ export function Stadium3DErrorState({
           <Text style={styles.errorFallbackText}>Open Operations Map</Text>
         </Pressable>
       </View>
-    </View>
+    </ScrollView>
   );
 }

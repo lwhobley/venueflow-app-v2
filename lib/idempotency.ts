@@ -21,6 +21,11 @@ export function createIdempotencyKey(): string {
 }
 
 const FNV_PRIME = 0x100000001b3n;
+/** Native Hermes may not expose Web Crypto; use Expo's secure native UUID. */
+export async function createOperationId(): Promise<string> {
+  try { return createIdempotencyKey(); }
+  catch { return (await import('expo-crypto')).randomUUID(); }
+}
 const FNV_OFFSET = 0xcbf29ce484222325n;
 
 function fnv1a64(input: string): bigint {

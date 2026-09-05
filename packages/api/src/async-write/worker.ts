@@ -8,9 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { runWithTenant } from '../prisma/tenant-context';
 import { applyTenantSessionSettings } from '../prisma/tenant-transaction';
 import { AsyncWriteMessage, AsyncWriteService } from './async-write.service';
-import { assertQueueTopology, HIGH_VOLUME_WRITE_QUEUE } from './queue-topology';
-
-const MAX_DELIVERY_RETRIES = 5;
+import { assertQueueTopology, HIGH_VOLUME_WRITE_QUEUE, HIGH_VOLUME_RETRY_QUEUE, MAX_DELIVERY_RETRIES, deliveryAttempt } from './queue-topology';
 
 function payloadHash(payload: Record<string, unknown>) {
   return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
@@ -117,21 +115,25 @@ async function bootstrap() {
 
   let ready = false;
   const connection = await connect(process.env.RABBITMQ_URL.replace(/^\uFEFF/, '').trim());
-  const channel = await connection.createChannel();
+  const channel = await connection.createConfirmChannel();
+  connection.on('close', () => { ready = false; });
+  connection.on('error', () => { ready = false; });
+  channel.on('close', () => { ready = false; });
+  channel.on('error', () => { ready = false; });
   await assertQueueTopology(channel);
   await channel.prefetch(Math.max(1, Number(process.env.QUEUE_PREFETCH ?? 10)));
 
   await channel.consume(HIGH_VOLUME_WRITE_QUEUE, async (delivery) => {
     if (!delivery) return;
     let message: AsyncWriteMessage | null = null;
-    const deathHeader = delivery.properties.headers?.['x-death'];
-    const deliveryCount = Array.isArray(deathHeader) && deathHeader.length > 0
-      ? (Number(deathHeader[0]?.count) || 1)
-      : (delivery.fields.redelivered ? 1 : 0);
+    const deliveryCount = deliveryAttempt(delivery.properties.headers);
 
     try {
       message = JSON.parse(delivery.content.toString()) as AsyncWriteMessage;
-      if (!message.id || !message.kind || !message.idempotencyKey || !message.payload) throw new Error('Malformed async write message.');
+      if (!message || !message.id || !['clock_in', 'inventory_decrement'].includes(message.kind) || !message.idempotencyKey || !message.payload || typeof message.payload !== 'object') {
+        message = null;
+        throw new Error('Malformed async write message.');
+      }
       const result = await apply(prisma, message);
       await writes.markResult(message.kind, messageVenueId(message), message.idempotencyKey, result);
       channel.ack(delivery);
@@ -142,11 +144,26 @@ async function bootstrap() {
           accepted: false,
           status: permanent ? 'failed_permanent' : 'retrying',
           message: error instanceof Error ? error.message : 'Queued write failed.',
-        });
+        }).catch(() => undefined);
       }
-      // Permanent/malformed messages route to the configured DLQ; transient
-      // failures remain available for redelivery.
-      channel.nack(delivery, false, !permanent);
+      if (permanent) {
+        channel.nack(delivery, false, false);
+      } else {
+        try {
+          // Confirm the delayed copy before acknowledging the original.
+          await new Promise<void>((resolve, reject) => {
+            channel.sendToQueue(HIGH_VOLUME_RETRY_QUEUE, delivery.content, {
+              ...delivery.properties, persistent: true,
+              headers: { ...delivery.properties.headers, 'x-write-attempt': deliveryCount + 1 },
+            }, (err) => err ? reject(err) : resolve());
+          });
+          channel.ack(delivery);
+        } catch {
+          ready = false;
+          // Closing returns unacked work to the broker; avoid a hot requeue loop.
+          await connection.close().catch(() => undefined);
+        }
+      }
     }
   });
   ready = true;

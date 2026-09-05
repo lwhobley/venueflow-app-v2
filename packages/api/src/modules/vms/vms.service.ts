@@ -1204,7 +1204,7 @@ export class VmsService {
       include: { staffMember: true },
     });
     if (!attendance) throw new NotFoundException('Attendance record not found');
-    if (attendance.status !== VmsAttendanceStatus.clocked_in && attendance.status !== VmsAttendanceStatus.flagged_exception) {
+    if (!attendance.clockOut && attendance.status !== VmsAttendanceStatus.clocked_in && attendance.status !== VmsAttendanceStatus.flagged_exception) {
       throw new BadRequestException('Record is not in active clocked-in status');
     }
 
@@ -1254,6 +1254,12 @@ export class VmsService {
       }
     }
 
+    // A punch is a one-way transition. Even exception-producing punches are
+    // terminal once clockOut is set; replay must never recompute billed hours.
+    if (attendance.clockOut) {
+      if (attendance.staffMember) attendance.staffMember = sanitizeStaffMember(attendance.staffMember) as any;
+      return attendance;
+    }
     const clockOutTime = new Date();
     const durationMs = clockOutTime.getTime() - new Date(attendance.clockIn).getTime();
     const rawHours = Math.max(0.1, Number((durationMs / (1000 * 3600)).toFixed(2)));
@@ -1282,8 +1288,8 @@ export class VmsService {
 
     const totalBilledCents = Math.round(billableHours * attendance.billedRateCents);
 
-    const updated = await this.prisma.vmsTimeAttendance.update({
-      where: { id: dto.attendanceId },
+    const claimed = await this.prisma.vmsTimeAttendance.updateMany({
+      where: { id: dto.attendanceId, organizationId, facilityId, clockOut: null },
       data: {
         clockOut: clockOutTime,
         hoursWorked: rawHours,
@@ -1293,8 +1299,14 @@ export class VmsService {
         deviationFlags,
         status: deviationFlags.length > 0 ? VmsAttendanceStatus.flagged_exception : VmsAttendanceStatus.clocked_out,
       },
-      include: { staffMember: true },
     });
+    const updated = await this.prisma.vmsTimeAttendance.findFirstOrThrow({
+      where: { id: dto.attendanceId, organizationId, facilityId }, include: { staffMember: true },
+    });
+    if (claimed.count === 0) {
+      if (updated.staffMember) updated.staffMember = sanitizeStaffMember(updated.staffMember) as any;
+      return updated;
+    }
 
     await this.logAudit({
       organizationId,

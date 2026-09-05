@@ -170,7 +170,8 @@ export function StadiumVenueMap({
   // Click Handler
   const handleUnitPress = (unit: StadiumZoneItem, zoneId?: string) => {
     setSelectedUnitId(unit.id);
-    if (zoneId) setSelectedZoneId(zoneId);
+    const owner = zonesState.find((zone) => zone.units.some((candidate) => candidate.id === unit.id));
+    setSelectedZoneId(owner?.id ?? zoneId ?? 'ALL');
     if (onSelectUnit) onSelectUnit(unit);
   };
 
@@ -571,7 +572,7 @@ export function StadiumVenueMap({
 
             {/* Actual GLB renderer in 3D mode; the architectural plan remains available in 2D mode. */}
             {viewPerspective === '3d_isometric' ? (
-              <View style={[styles.interactiveModelFrame, { height: isMobile ? 440 : 540 }]}>
+              <View style={styles.interactiveModelFrame}>
                 <Stadium3DViewer
                   zones={zonesState}
                   selectedZoneId={selectedZoneId !== 'ALL' ? selectedZoneId : null}
@@ -1604,4 +1605,4 @@ export function StadiumVenueMap({
       ) : null}
     </View>
   );
-}
+}

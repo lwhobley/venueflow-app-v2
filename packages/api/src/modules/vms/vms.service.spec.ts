@@ -60,6 +60,8 @@ describe('VmsService', () => {
         findUnique: vi.fn().mockResolvedValue({ timezone: 'UTC' }),
       },
       vmsTimeAttendance: {
+        updateMany: vi.fn(),
+        findFirstOrThrow: vi.fn(),
         findFirst: vi.fn(),
         findMany: vi.fn(),
         create: vi.fn(),
@@ -357,7 +359,10 @@ describe('VmsService', () => {
         billedRateCents: 2500,
         staffMember: { id: 'staff-1', pinHash: null, pinSalt: null, badgeNumber: null },
       });
-      prisma.vmsTimeAttendance.update.mockImplementation((args: any) => Promise.resolve(args.data));
+      prisma.vmsTimeAttendance.updateMany.mockImplementation(async (args: any) => {
+        prisma.vmsTimeAttendance.findFirstOrThrow.mockResolvedValue(args.data);
+        return { count: 1 };
+      });
 
       const res = await service.clockOut(
         mockOrgId,
@@ -372,6 +377,24 @@ describe('VmsService', () => {
       expect(res.deviationFlags).toContain('meal_break_penalty');
       expect(res.status).toBe(VmsAttendanceStatus.flagged_exception);
       expect(res.billableHours).toBeGreaterThanOrEqual(5.8);
+    });
+
+    it.each([VmsAttendanceStatus.clocked_out, VmsAttendanceStatus.flagged_exception])('replays a terminal %s punch without changing money, timestamps, or audit', async (status) => {
+      const completed = { id: 'att-1', status, clockOut: new Date('2026-09-05T01:00:00Z'), totalBilledCents: 15000 };
+      prisma.vmsTimeAttendance.findFirst.mockResolvedValue(completed);
+      const result = await service.clockOut(mockOrgId, mockFacilityId, { attendanceId: 'att-1', clientMutationId: 'repeat-clock-out-id' }, { isManager: true });
+      expect(result).toEqual(completed);
+      expect(prisma.vmsTimeAttendance.updateMany).not.toHaveBeenCalled();
+      expect(prisma.vmsAuditLog.create).not.toHaveBeenCalled();
+    });
+
+    it('returns the winning punch when a concurrent clock-out wins the atomic update', async () => {
+      prisma.vmsTimeAttendance.findFirst.mockResolvedValue({ id: 'att-1', status: VmsAttendanceStatus.clocked_in, clockIn: new Date(), billedRateCents: 2500 });
+      prisma.vmsTimeAttendance.updateMany.mockResolvedValue({ count: 0 });
+      const winner = { id: 'att-1', clockOut: new Date(), totalBilledCents: 250 };
+      prisma.vmsTimeAttendance.findFirstOrThrow.mockResolvedValue(winner);
+      expect(await service.clockOut(mockOrgId, mockFacilityId, { attendanceId: 'att-1' }, { isManager: true })).toEqual(winner);
+      expect(prisma.vmsAuditLog.create).not.toHaveBeenCalled();
     });
 
     it('approves attendance record and writes audit trail', async () => {

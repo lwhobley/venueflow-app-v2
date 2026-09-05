@@ -65,8 +65,8 @@ export const styles = StyleSheet.create({
     gap: 6,
   },
   iconActionBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     borderRadius: 8,
     backgroundColor: 'rgba(6, 20, 36, 0.92)',
     borderWidth: 1,
@@ -86,7 +86,7 @@ export const styles = StyleSheet.create({
   // ── Camera Presets Bar ──
   presetsBar: {
     position: 'absolute',
-    top: 54,
+    top: 64,
     left: 10,
     right: 10,
     zIndex: 20,
@@ -108,7 +108,7 @@ export const styles = StyleSheet.create({
     backgroundColor: 'rgba(8, 24, 44, 0.88)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.12)',
-    minHeight: 32,
+    minHeight: 44,
   },
   presetPillActive: {
     backgroundColor: '#00E5FF',
@@ -268,8 +268,9 @@ export const styles = StyleSheet.create({
 
   // ── Loading Skeleton State ──
   loadingContainer: {
+    position: 'absolute', top: 0, right: 0, bottom: 0, left: 0,
+    zIndex: 30,
     width: '100%',
-    minHeight: 440,
     backgroundColor: '#060D15',
     alignItems: 'center',
     justifyContent: 'center',
@@ -316,7 +317,7 @@ export const styles = StyleSheet.create({
   // ── Error / Fallback State ──
   errorContainer: {
     width: '100%',
-    minHeight: 420,
+    flexGrow: 1,
     backgroundColor: '#081422',
     alignItems: 'center',
     justifyContent: 'center',

@@ -96,13 +96,8 @@ export const STADIUM_ZONE_MODEL_BINDINGS: StadiumZoneModelBinding[] = [
     name: 'VIP Field Bunkers',
     level: '1',
     category: 'concourse_bunkers',
-    meshNames: [
-      'Bunker_North',
-      'Bunker_South',
-      'Node_Bunker_North',
-      'Node_Bunker_South',
-      'ZONE_premium_club',
-    ],
+    // This asset has no bunker geometry. Use the Operations Map/directory.
+    meshNames: [],
     anchor: [0, 1.2, -11.5],
     cameraPreset: 'field',
     colorHex: '#69F0AE',
@@ -131,6 +126,8 @@ export const STADIUM_ZONE_MODEL_BINDINGS: StadiumZoneModelBinding[] = [
     meshNames: [
       'Suites_300_Balcony',
       'Suites_300_Glass',
+      'Suites_400_Balcony',
+      'Suites_400_Glass',
       'Node_Suites_300_Balcony',
       'Node_Suites_300_Glass',
       'ZONE_suites_300',
@@ -140,13 +137,11 @@ export const STADIUM_ZONE_MODEL_BINDINGS: StadiumZoneModelBinding[] = [
     colorHex: '#FFD700',
   },
   {
-    zoneId: 'zone-upper-deck',
+    zoneId: 'zone-400-upper',
     name: 'Upper Deck 500/600',
     level: '5',
     category: 'upper_deck',
     meshNames: [
-      'Suites_400_Balcony',
-      'Suites_400_Glass',
       'Bowl_500_UpperRed',
       'Upper_Concourse_Rim',
       'Node_Bowl_500_UpperRed',
@@ -182,30 +177,12 @@ export const STADIUM_ZONE_MODEL_BINDINGS: StadiumZoneModelBinding[] = [
     level: '0',
     category: 'locker_rooms_aux',
     meshNames: [
-      'Bench_Texans_Home',
-      'Bench_Visiting_Away',
       'Node_Bench_Home',
       'Node_Bench_Away',
-      'ZONE_commissary_boh',
     ],
     anchor: [-7, 0.4, -6],
     cameraPreset: 'field',
     colorHex: '#7B1FA2',
-  },
-  {
-    zoneId: 'zone-commissary-boh',
-    name: 'Central Commissary & Logistics',
-    level: '0',
-    category: 'commissary_boh',
-    meshNames: [
-      'Plaza_GroundSlab',
-      'Exterior_Wall_West',
-      'Node_Plaza_Ground',
-      'ZONE_loading_dock',
-    ],
-    anchor: [-14, 1.0, 0],
-    cameraPreset: 'concourse',
-    colorHex: '#455A64',
   },
 ];
 
@@ -220,7 +197,7 @@ export function findZoneByMeshName(meshName: string): StadiumZoneModelBinding | 
   return STADIUM_ZONE_MODEL_BINDINGS.find((b) =>
     b.meshNames.some((m) => {
       const lowerM = m.toLowerCase();
-      return lowerMesh.includes(lowerM) || lowerM.includes(lowerMesh);
+      return lowerMesh === lowerM || lowerMesh === `node_${lowerM}`;
     })
   );
 }
@@ -229,21 +206,21 @@ export function resolveZoneHighlightStatus(
   zone: StadiumZoneData | undefined,
   isSelected: boolean
 ): OperationalHighlightStatus {
-  if (isSelected) return 'selected';
   if (!zone) return 'normal';
+
+  const hasIncident = zone.units.some((u) => u.status === 'incident');
+  if (hasIncident) return 'critical';
 
   if (zone.alertCount > 0) {
     return zone.alertCount >= 3 ? 'critical' : 'attention';
   }
-
-  const hasIncident = zone.units.some((u) => u.status === 'incident');
-  if (hasIncident) return 'critical';
 
   const hasRestricted = zone.units.some((u) => u.status === 'restricted');
   if (hasRestricted) return 'watch';
 
   const hasPendingReplenish = zone.units.some((u) => Boolean(u.suiteDetails?.replenishmentPending));
   if (hasPendingReplenish) return 'attention';
+  if (isSelected) return 'selected';
 
   const hasActiveOrders = zone.units.some(
     (u) =>

@@ -3,7 +3,7 @@ import { useMutation as useReactMutation, useQuery as useReactQuery, useQueryCli
 import { apiRequest, getApiBaseUrl } from './api-client';
 import { useAuthStore } from './auth-store';
 import { enqueueOfflineMutation } from './offline-queue';
-import { createStableIdempotencyKey, stableStringify } from './idempotency';
+import { createOperationId } from './idempotency';
 import type { RailwayFunctionRef } from './railway-api';
 
 type QueryArgs = Record<string, unknown> | 'skip' | undefined;
@@ -778,11 +778,11 @@ export function useMutation<TArgs = any, TResult = any>(
   const route = mutationRoutes[key];
   const queryClient = useQueryClient();
   const mutation = useReactMutation({
-    mutationFn: async (args: TArgs) => {
+    mutationFn: async ({ args, operationId }: { args: TArgs; operationId: string }) => {
       if (!route) {
         throw new Error('This feature is still being moved to the Railway API.');
       }
-      return requestRoute<TResult>(route, args);
+      return requestRoute<TResult>(route, args, undefined, operationId);
     },
     onSuccess: async () => {
       const invalidations = route?.invalidate ?? [key.split('.')];
@@ -790,7 +790,7 @@ export function useMutation<TArgs = any, TResult = any>(
     },
   });
   const mutateAsync = mutation.mutateAsync;
-  return useCallback((args: TArgs) => mutateAsync(args), [mutateAsync]);
+  return useCallback(async (args: TArgs) => mutateAsync({ args, operationId: await createOperationId() }), [mutateAsync]);
 }
 
 export function useAction<TArgs = any, TResult = any>(
@@ -812,11 +812,11 @@ function getKey(ref: RailwayFunctionRef) {
   return ref.__railwayKey;
 }
 
-async function requestRoute<T>(route: Route, args: any, signal?: AbortSignal): Promise<T> {
+async function requestRoute<T>(route: Route, args: any, signal?: AbortSignal, operationId?: string): Promise<T> {
   const path = typeof route.path === 'function' ? route.path(args ?? {}) : route.path;
   const rawBody = route.method && route.method !== 'GET' && route.method !== 'DELETE' ? route.body?.(args ?? {}) ?? args ?? {} : undefined;
   const mutationId = route.idempotent || route.offline
-    ? await createStableIdempotencyKey(`${route.method}\n${path}\n${stableStringify(rawBody ?? null)}`)
+    ? operationId ?? await createOperationId()
     : undefined;
   const body = mutationId
     && rawBody

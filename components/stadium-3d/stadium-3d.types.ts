@@ -60,9 +60,12 @@ export interface Stadium3DCanvasProps {
   highlightedZones: Record<string, OperationalHighlightStatus>;
   cameraPreset: CameraPresetId;
   autoRotate: boolean;
+  resetToken?: number;
+  active?: boolean;
+  reducedMotion?: boolean;
   onSelectZone: (zoneId: string) => void;
   onLoadProgress?: (progressPercent: number) => void;
-  onLoadComplete?: () => void;
+  onLoadComplete?: (fallback?: boolean) => void;
   onLoadError?: (errorMessage: string) => void;
   dom?: import('expo/dom').DOMProps;
 }

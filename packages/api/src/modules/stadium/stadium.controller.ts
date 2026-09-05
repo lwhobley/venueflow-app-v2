@@ -537,12 +537,18 @@ export class StadiumController {
     const organizationId = await this.organizationIdFor(scope.venueId);
 
     return withTenantTransaction(this.prisma, async (tx) => {
+      // Serialize drafts/finalization, including the first closeout creation.
+      await tx.$queryRaw`SELECT "id" FROM "VenueEvent" WHERE "id" = ${eventId} FOR UPDATE`;
       const existing = await tx.eventCloseout.findUnique({ where: { eventId } });
       if (existing && existing.status !== 'draft') {
         throw new ConflictException('Finalized or adjusted closeouts must be modified via immutable revisions.');
       }
 
       const status = isFinalizing ? ('finalized' as const) : (existing?.status ?? ('draft' as const));
+      const parent = existing ? await tx.eventCloseoutRevision.findFirst({
+        where: { closeoutId: existing.id }, orderBy: { version: 'desc' },
+      }) : null;
+      const version = (parent?.version ?? 0) + 1;
       const closeout = await tx.eventCloseout.upsert({
         where: { eventId },
         create: {
@@ -550,7 +556,7 @@ export class StadiumController {
           venueId: scope.venueId,
           eventId,
           status,
-          currentVersion: 1,
+          currentVersion: version,
           actualAttendance: body.actualAttendance ?? null,
           actualSalesCents: body.actualSalesCents ?? null,
           forecastSalesCents: body.forecastSalesCents ?? null,
@@ -566,6 +572,7 @@ export class StadiumController {
         },
         update: {
           status,
+          currentVersion: version,
           actualAttendance: body.actualAttendance ?? undefined,
           actualSalesCents: body.actualSalesCents ?? undefined,
           forecastSalesCents: body.forecastSalesCents ?? undefined,
@@ -591,15 +598,15 @@ export class StadiumController {
         inventoryResults: closeout.inventoryResults,
         laborResults: closeout.laborResults,
       };
-      const revisionHash = computeRevisionHash(null, 1, payload);
+      const revisionHash = computeRevisionHash(parent?.revisionHash ?? null, version, payload);
 
-      await tx.eventCloseoutRevision.upsert({
-        where: { closeoutId_version: { closeoutId: closeout.id, version: 1 } },
-        create: {
+      await tx.eventCloseoutRevision.create({
+        data: {
           organizationId,
           venueId: scope.venueId,
           closeoutId: closeout.id,
-          version: 1,
+          version,
+          parentRevisionId: parent?.id ?? null,
           revisionHash,
           actualAttendance: closeout.actualAttendance,
           actualSalesCents: closeout.actualSalesCents,
@@ -614,20 +621,6 @@ export class StadiumController {
           approvedBy: isFinalizing ? scope.profileId : null,
           approvedAt: isFinalizing ? new Date() : null,
         },
-        update: {
-          revisionHash,
-          actualAttendance: closeout.actualAttendance,
-          actualSalesCents: closeout.actualSalesCents,
-          forecastSalesCents: closeout.forecastSalesCents,
-          laborHours: closeout.laborHours,
-          laborCostCents: closeout.laborCostCents,
-          inventoryVarianceCents: closeout.inventoryVarianceCents,
-          outletResults: (closeout.outletResults as Prisma.InputJsonValue) ?? undefined,
-          inventoryResults: (closeout.inventoryResults as Prisma.InputJsonValue) ?? undefined,
-          laborResults: (closeout.laborResults as Prisma.InputJsonValue) ?? undefined,
-          approvedBy: isFinalizing ? scope.profileId : undefined,
-          approvedAt: isFinalizing ? new Date() : undefined,
-        },
       });
 
       await tx.eventAuditLog.create({
@@ -639,7 +632,7 @@ export class StadiumController {
           entityType: 'event_closeout',
           entityId: closeout.id,
           action: isFinalizing ? 'closeout_finalized' : 'closeout_saved',
-          metadata: { version: 1, status },
+          metadata: { version, status },
         },
       });
 
@@ -659,18 +652,18 @@ export class StadiumController {
       throw new BadRequestException('A reason is required to submit a closeout revision.');
     }
 
-    const closeout = await this.prisma.eventCloseout.findUnique({
-      where: { eventId },
-      include: { revisions: { orderBy: { version: 'desc' }, take: 1 } },
-    });
-    if (!closeout) throw new NotFoundException('Event closeout not found.');
-
     const organizationId = await this.organizationIdFor(scope.venueId);
-    const nextVersion = closeout.currentVersion + 1;
-    const latestRevision = closeout.revisions[0];
-    const parentHash = latestRevision?.revisionHash ?? null;
-
     return withTenantTransaction(this.prisma, async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "VenueEvent" WHERE "id" = ${eventId} AND "venueId" = ${scope.venueId} FOR UPDATE`;
+      const closeout = await tx.eventCloseout.findFirst({
+        where: { eventId, venueId: scope.venueId },
+        include: { revisions: { orderBy: { version: 'desc' }, take: 1 } },
+      });
+      if (!closeout) throw new NotFoundException('Event closeout not found.');
+      if (closeout.status === 'draft') throw new ConflictException('Finalize the draft before submitting an adjustment.');
+      const nextVersion = closeout.currentVersion + 1;
+      const latestRevision = closeout.revisions[0];
+      const parentHash = latestRevision?.revisionHash ?? null;
       const payload = {
         actualAttendance: body.actualAttendance ?? closeout.actualAttendance,
         actualSalesCents: body.actualSalesCents ?? closeout.actualSalesCents,

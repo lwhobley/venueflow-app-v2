@@ -1,26 +1,28 @@
 'use dom';
 
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
   CAMERA_PRESETS,
-  STADIUM_ZONE_MODEL_BINDINGS,
   findZoneByMeshName,
-  getHighlightColor,
 } from './stadium-model-bindings';
+import { applyHighlights, disposeScene, isolateMaterials } from './scene-resources';
 import type { CameraPresetId, OperationalHighlightStatus, Stadium3DCanvasProps } from './stadium-3d.types';
 
 // Asset reference bundled by Metro
 // @ts-ignore
 import nrgStadiumGlbAsset from '../../assets/nrg-stadium.glb';
 
-export default function Stadium3DCanvas({
+function StadiumScene({
   selectedZoneId,
   highlightedZones,
   cameraPreset = 'overview',
   autoRotate = false,
+  resetToken = 0,
+  active = true,
+  reducedMotion = false,
   onSelectZone,
   onLoadProgress,
   onLoadComplete,
@@ -39,8 +41,14 @@ export default function Stadium3DCanvas({
   const targetCamPosRef = useRef<THREE.Vector3>(new THREE.Vector3(28, 24, 36));
   const targetCamLookRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 2, 0));
 
-  // Cloned material cache to prevent cross-zone leaks
-  const meshOriginalMaterialsRef = useRef<Map<THREE.Mesh, THREE.Material | THREE.Material[]>>(new Map());
+  const transitioning = useRef(true);
+  const needsRender = useRef(true);
+  const activeRef = useRef(active);
+  activeRef.current = active;
+  const reducedMotionRef = useRef(reducedMotion);
+  reducedMotionRef.current = reducedMotion;
+  const onSelectRef = useRef(onSelectZone);
+  onSelectRef.current = onSelectZone;
 
   // Current props mirror refs
   const selectedZoneIdRef = useRef<string | null>(selectedZoneId);
@@ -60,12 +68,20 @@ export default function Stadium3DCanvas({
     const preset = CAMERA_PRESETS[cameraPreset] || CAMERA_PRESETS.overview;
     targetCamPosRef.current.set(preset.position[0], preset.position[1], preset.position[2]);
     targetCamLookRef.current.set(preset.target[0], preset.target[1], preset.target[2]);
-  }, [cameraPreset]);
+    transitioning.current = true;
+  }, [cameraPreset, resetToken]);
 
   // Main Scene Setup
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
+    let disposed = false;
+    let failed = false;
+    const fail = () => {
+      if (disposed || failed) return;
+      failed = true;
+      onLoadError?.('The 3D renderer stopped. Retry or open the Operations Map.');
+    };
 
     const width = Math.max(host.clientWidth, 1);
     const height = Math.max(host.clientHeight, 1);
@@ -177,14 +193,21 @@ export default function Stadium3DCanvas({
 
     const loader = new GLTFLoader();
     let hasModelLoaded = false;
+    const useFallback = () => {
+      if (disposed || failed || hasModelLoaded) return;
+      try {
+        buildProceduralStadium(modelGroup);
+        isolateMaterials(modelGroup);
+        applyHighlights(modelGroup, selectedZoneIdRef.current, highlightedZonesRef.current);
+        needsRender.current = true;
+        hasModelLoaded = true;
+        onLoadComplete?.(true);
+      } catch { fail(); }
+    };
 
     // Timeout guard: if GLB takes > 7s, generate procedural stadium bowl so screen is never blank
     const loadTimeout = setTimeout(() => {
-      if (!hasModelLoaded) {
-        buildProceduralStadium(modelGroup);
-        hasModelLoaded = true;
-        onLoadComplete?.();
-      }
+      useFallback();
     }, 7000);
 
     if (assetUri) {
@@ -192,8 +215,9 @@ export default function Stadium3DCanvas({
         assetUri,
         (gltf) => {
           clearTimeout(loadTimeout);
-          if (hasModelLoaded) return;
+          if (disposed || failed || hasModelLoaded) { disposeScene(gltf.scene); return; }
           hasModelLoaded = true;
+          try {
 
           // Auto-scale and center the loaded model
           const bbox = new THREE.Box3().setFromObject(gltf.scene);
@@ -213,21 +237,19 @@ export default function Stadium3DCanvas({
               mesh.castShadow = true;
               mesh.receiveShadow = true;
 
-              if (mesh.material) {
-                meshOriginalMaterialsRef.current.set(
-                  mesh,
-                  Array.isArray(mesh.material) ? mesh.material.slice() : mesh.material.clone()
-                );
-              }
             }
           });
 
+          isolateMaterials(gltf.scene);
           modelGroup.add(gltf.scene);
+          applyHighlights(modelGroup, selectedZoneIdRef.current, highlightedZonesRef.current);
+          needsRender.current = true;
           onLoadProgress?.(100);
           onLoadComplete?.();
+          } catch { disposeScene(gltf.scene); fail(); }
         },
         (xhr) => {
-          if (xhr.lengthComputable && xhr.total > 0) {
+          if (!disposed && !failed && !hasModelLoaded && xhr.lengthComputable && xhr.total > 0) {
             const percent = Math.round((xhr.loaded / xhr.total) * 100);
             onLoadProgress?.(percent);
           }
@@ -235,18 +257,12 @@ export default function Stadium3DCanvas({
         (error) => {
           clearTimeout(loadTimeout);
           // Fall back gracefully to built-in procedural stadium bowl
-          if (!hasModelLoaded) {
-            buildProceduralStadium(modelGroup);
-            hasModelLoaded = true;
-            onLoadComplete?.();
-          }
+          useFallback();
         }
       );
     } else {
       clearTimeout(loadTimeout);
-      buildProceduralStadium(modelGroup);
-      hasModelLoaded = true;
-      onLoadComplete?.();
+      useFallback();
     }
 
     // 7. Tap / Raycasting Detection
@@ -254,10 +270,13 @@ export default function Stadium3DCanvas({
     const pointer = new THREE.Vector2();
 
     const handlePointerDown = (e: PointerEvent) => {
+      transitioning.current = false;
+      if (!e.isPrimary) { pointerDownPosRef.current.time = -Infinity; return; }
       pointerDownPosRef.current = { x: e.clientX, y: e.clientY, time: performance.now() };
     };
 
     const handlePointerUp = (e: PointerEvent) => {
+      if (!e.isPrimary) return;
       const down = pointerDownPosRef.current;
       const dx = Math.abs(e.clientX - down.x);
       const dy = Math.abs(e.clientY - down.y);
@@ -277,7 +296,7 @@ export default function Stadium3DCanvas({
             const hitName = hit.object.name;
             const binding = findZoneByMeshName(hitName);
             if (binding) {
-              onSelectZone(binding.zoneId);
+              onSelectRef.current(binding.zoneId);
               break;
             }
           }
@@ -287,6 +306,12 @@ export default function Stadium3DCanvas({
 
     renderer.domElement.addEventListener('pointerdown', handlePointerDown);
     renderer.domElement.addEventListener('pointerup', handlePointerUp);
+    const stopTransition = () => { transitioning.current = false; };
+    controls.addEventListener('start', stopTransition);
+    const contextLost = (event: Event) => { event.preventDefault(); fail(); };
+    renderer.domElement.addEventListener('webglcontextlost', contextLost);
+    window.addEventListener('error', fail);
+    window.addEventListener('unhandledrejection', fail);
 
     // 8. Resize Observer
     const handleResize = () => {
@@ -294,6 +319,7 @@ export default function Stadium3DCanvas({
       const w = Math.max(hostRef.current.clientWidth, 1);
       const h = Math.max(hostRef.current.clientHeight, 1);
       rendererRef.current.setSize(w, h, false);
+      needsRender.current = true;
       cameraRef.current.aspect = w / h;
       cameraRef.current.updateProjectionMatrix();
     };
@@ -303,7 +329,7 @@ export default function Stadium3DCanvas({
 
     // 9. Animation Render Loop
     let animationFrame = 0;
-    let isPaused = false;
+    let isPaused = document.hidden;
 
     const handleVisibilityChange = () => {
       isPaused = document.hidden;
@@ -311,22 +337,34 @@ export default function Stadium3DCanvas({
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     const animate = () => {
-      if (!isPaused) {
+      if (disposed || failed) return;
+      if (!isPaused && activeRef.current) {
+        try {
         // Subtle auto-rotation when enabled and user not interacting
-        if (autoRotateRef.current) {
+        if (autoRotateRef.current && !reducedMotionRef.current && !transitioning.current) {
           controls.autoRotate = true;
           controls.autoRotateSpeed = 0.8;
         } else {
           controls.autoRotate = false;
         }
 
-        controls.update();
+        const changed = controls.update();
+        const moving = transitioning.current;
 
         // Smoothly interpolate camera towards target preset
-        camera.position.lerp(targetCamPosRef.current, 0.05);
-        controls.target.lerp(targetCamLookRef.current, 0.05);
+        if (transitioning.current) {
+          const amount = reducedMotionRef.current ? 1 : 0.12;
+          camera.position.lerp(targetCamPosRef.current, amount);
+          controls.target.lerp(targetCamLookRef.current, amount);
+          camera.lookAt(controls.target);
+          if (camera.position.distanceTo(targetCamPosRef.current) < 0.02 && controls.target.distanceTo(targetCamLookRef.current) < 0.02) transitioning.current = false;
+        }
 
-        renderer.render(scene, camera);
+        if (changed || moving || needsRender.current) {
+          renderer.render(scene, camera);
+          needsRender.current = false;
+        }
+        } catch { fail(); return; }
       }
       animationFrame = requestAnimationFrame(animate);
     };
@@ -334,25 +372,21 @@ export default function Stadium3DCanvas({
 
     // 10. Resource Cleanup on Unmount
     return () => {
+      disposed = true;
       clearTimeout(loadTimeout);
       cancelAnimationFrame(animationFrame);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       resizeObserver.disconnect();
       renderer.domElement.removeEventListener('pointerdown', handlePointerDown);
       renderer.domElement.removeEventListener('pointerup', handlePointerUp);
+      renderer.domElement.removeEventListener('webglcontextlost', contextLost);
+      window.removeEventListener('error', fail);
+      window.removeEventListener('unhandledrejection', fail);
+      controls.removeEventListener('start', stopTransition);
       controls.dispose();
 
       // Dispose geometries and materials
-      scene.traverse((obj) => {
-        if ((obj as THREE.Mesh).isMesh) {
-          const m = obj as THREE.Mesh;
-          if (m.geometry) m.geometry.dispose();
-          if (m.material) {
-            if (Array.isArray(m.material)) m.material.forEach((mat) => mat.dispose());
-            else m.material.dispose();
-          }
-        }
-      });
+      disposeScene(scene);
 
       renderer.dispose();
       renderer.domElement.remove();
@@ -364,30 +398,8 @@ export default function Stadium3DCanvas({
     const modelGroup = modelRootRef.current;
     if (!modelGroup) return;
 
-    modelGroup.traverse((obj) => {
-      if ((obj as THREE.Mesh).isMesh) {
-        const mesh = obj as THREE.Mesh;
-        const binding = findZoneByMeshName(mesh.name);
-
-        if (binding) {
-          const isSelected = selectedZoneId === binding.zoneId;
-          const status = isSelected
-            ? 'selected'
-            : highlightedZones[binding.zoneId] || 'normal';
-
-          const { emissiveColor, intensity } = getHighlightColor(status);
-
-          if (mesh.material && !Array.isArray(mesh.material)) {
-            const mat = mesh.material as THREE.MeshStandardMaterial;
-            if (mat.isMeshStandardMaterial) {
-              mat.emissive = new THREE.Color(emissiveColor);
-              mat.emissiveIntensity = intensity;
-              mat.needsUpdate = true;
-            }
-          }
-        }
-      }
-    });
+    applyHighlights(modelGroup, selectedZoneId, highlightedZones);
+    needsRender.current = true;
   }, [selectedZoneId, highlightedZones]);
 
   return (
@@ -397,7 +409,7 @@ export default function Stadium3DCanvas({
         position: 'relative',
         width: '100%',
         height: '100%',
-        minHeight: 440,
+        minHeight: 0,
         backgroundColor: '#060D15',
         overflow: 'hidden',
         userSelect: 'none',
@@ -406,7 +418,18 @@ export default function Stadium3DCanvas({
   );
 }
 
-// Procedural Stadium Bowl (Zero-Failure Fallback)
+class CanvasBoundary extends React.Component<React.PropsWithChildren<{ onError?: (message: string) => void }>, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch() { this.props.onError?.('The stadium scene could not initialize. Open the Operations Map or retry.'); }
+  render() { return this.state.failed ? null : this.props.children; }
+}
+
+export default function Stadium3DCanvas(props: Stadium3DCanvasProps) {
+  return <CanvasBoundary onError={props.onLoadError}><StadiumScene {...props} /></CanvasBoundary>;
+}
+
+// Simplified geometry when the bundled asset cannot load.
 function buildProceduralStadium(group: THREE.Group) {
   // Turf
   const turf = new THREE.Mesh(

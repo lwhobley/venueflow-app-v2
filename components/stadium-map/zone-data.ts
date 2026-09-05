@@ -1127,7 +1127,7 @@ export const COMPREHENSIVE_STADIUM_ZONES: StadiumZoneData[] = [
     alertCount: 0,
     units: [
       {
-        id: 'u-401',
+        id: 'u-upper-401',
         code: 'SKY-401',
         name: 'Skyline Terrace Bar & Craft Drafts',
         department: 'concessions',
@@ -1144,7 +1144,7 @@ export const COMPREHENSIVE_STADIUM_ZONES: StadiumZoneData[] = [
         },
       },
       {
-        id: 'u-408',
+        id: 'u-upper-408',
         code: 'UD-408',
         name: 'Upper North 408 · Redzone Tenders & Fries',
         department: 'concessions',

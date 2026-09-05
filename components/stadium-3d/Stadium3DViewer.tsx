@@ -1,5 +1,6 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { View, useWindowDimensions } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { AccessibilityInfo, AppState, Pressable, Text, View, useWindowDimensions } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import Stadium3DCanvas from './Stadium3DCanvas';
 import { Stadium3DControls } from './Stadium3DControls';
 import { Stadium3DErrorState } from './Stadium3DErrorState';
@@ -55,13 +56,33 @@ export function Stadium3DViewer({
   const isMobile = windowWidth < 768;
 
   // Viewport height calculation (responsive, thumb-friendly)
-  const viewerHeight = isMobile ? Math.min(480, windowHeight * 0.6) : 560;
+  const viewerHeight = isMobile ? Math.max(280, Math.min(480, windowHeight * 0.6)) : 560;
+  const [resetToken, setResetToken] = useState(0);
+  const [foreground, setForeground] = useState(AppState.currentState === 'active');
+  const [focused, setFocused] = useState(true);
+  const [reducedMotion, setReducedMotion] = useState(true);
+  useFocusEffect(useCallback(() => { setFocused(true); return () => setFocused(false); }, []));
+  useEffect(() => {
+    let mounted = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((value) => { if (mounted) setReducedMotion(value); }).catch(() => undefined);
+    const motion = AccessibilityInfo.addEventListener('reduceMotionChanged', setReducedMotion);
+    const app = AppState.addEventListener('change', (state) => setForeground(state === 'active'));
+    return () => { mounted = false; motion.remove(); app.remove(); };
+  }, []);
 
   // Renderer and state machine
   const [renderStatus, setRenderStatus] = useState<Stadium3DRenderStatus>('loading');
-  const [loadProgress, setLoadProgress] = useState<number>(15);
+  const [loadProgress, setLoadProgress] = useState<number>(0);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [retryCount, setRetryCount] = useState<number>(0);
+  useEffect(() => {
+    if (renderStatus !== 'loading' || !foreground || !focused) return;
+    const timeout = setTimeout(() => {
+      setErrorMessage('The 3D view did not start. Retry or use the Operations Map.');
+      setRenderStatus('error');
+    }, 15000);
+    return () => clearTimeout(timeout);
+  }, [renderStatus, retryCount, foreground, focused]);
 
   // Controls state
   const [cameraPreset, setCameraPreset] = useState<CameraPresetId>(initialPreset);
@@ -94,6 +115,7 @@ export function Stadium3DViewer({
 
   const handleResetCamera = useCallback(() => {
     setCameraPreset('overview');
+    setResetToken((value) => value + 1);
   }, []);
 
   const handleToggleAutoRotate = useCallback(() => {
@@ -126,7 +148,7 @@ export function Stadium3DViewer({
   // Retry handler
   const handleRetry = useCallback(() => {
     setRenderStatus('loading');
-    setLoadProgress(20);
+    setLoadProgress(0);
     setErrorMessage('');
     setRetryCount((c) => c + 1);
   }, []);
@@ -139,6 +161,9 @@ export function Stadium3DViewer({
 
   return (
     <View style={styles.container}>
+      <Pressable onPress={onOpenOperationsMap} accessibilityRole="button" accessibilityLabel="Open Operations Map" style={{ padding: 12, minHeight: 44 }}>
+        <Text style={{ color: '#FFFFFF' }}>{renderStatus === 'fallback' ? 'Simplified 3D — some sections are unavailable. Open Operations Map' : 'Open Operations Map'}</Text>
+      </Pressable>
       <View style={[styles.canvasWrapper, { height: viewerHeight }]}>
         {/* Loading State Overlay */}
         {renderStatus === 'loading' ? (
@@ -163,9 +188,12 @@ export function Stadium3DViewer({
               highlightedZones={highlightedZonesSimple}
               cameraPreset={cameraPreset}
               autoRotate={autoRotate}
+              resetToken={resetToken}
+              active={foreground && focused}
+              reducedMotion={reducedMotion}
               onSelectZone={handleSelectZone}
               onLoadProgress={(p) => setLoadProgress(p)}
-              onLoadComplete={() => setRenderStatus('ready')}
+              onLoadComplete={(fallback) => setRenderStatus(fallback ? 'fallback' : 'ready')}
               onLoadError={(err) => {
                 setErrorMessage(err);
                 setRenderStatus('error');
@@ -174,13 +202,16 @@ export function Stadium3DViewer({
                 scrollEnabled: false,
                 contentInsetAdjustmentBehavior: 'never',
                 style: { width: '100%', height: '100%' },
+                onError: () => handleLocalError(new Error('The stadium WebView could not load.')),
+                onContentProcessDidTerminate: () => handleLocalError(new Error('The stadium renderer stopped. Retry or open the Operations Map.')),
+                onRenderProcessGone: () => handleLocalError(new Error('The stadium renderer stopped. Retry or open the Operations Map.')),
               }}
             />
           </Local3DErrorBoundary>
         ) : null}
 
         {/* Interactive Controls Overlay */}
-        {renderStatus === 'ready' ? (
+        {renderStatus === 'ready' || renderStatus === 'fallback' ? (
           <>
             <Stadium3DControls
               currentPreset={cameraPreset}

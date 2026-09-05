@@ -48,10 +48,7 @@ export class AsyncWriteService implements OnModuleDestroy {
     if (this.channel && this.redis) return { redis: this.redis, channel: this.channel };
     if (!this.clientsPromise) {
       this.clientsPromise = (async () => {
-        if (!this.redis) {
-          this.redis = new Redis(cleanConnectionUrl(process.env.REDIS_URL!), { maxRetriesPerRequest: 1, enableOfflineQueue: false });
-          this.redis.on('error', (error) => this.logger.warn(`Redis cache unavailable: ${error.message}`));
-        }
+        await this.resultClient();
         const connection = await connect(cleanConnectionUrl(process.env.RABBITMQ_URL!));
         connection.on('error', (error) => this.resetChannel(`AMQP error: ${error.message}`));
         connection.on('close', () => this.resetChannel('AMQP connection closed'));
@@ -113,7 +110,7 @@ export class AsyncWriteService implements OnModuleDestroy {
     // worker is the authority, avoiding the lost-write window on process death.
     try {
       await this.publish(channel, message);
-      await redis.set(key, JSON.stringify(accepted), 'EX', 7 * 86400).catch(() => undefined);
+      await redis.set(key, JSON.stringify(accepted), 'EX', 7 * 86400, 'NX').catch(() => undefined);
       return accepted;
     } catch (error) {
       this.resetChannel('publish confirmation failed');
@@ -123,8 +120,28 @@ export class AsyncWriteService implements OnModuleDestroy {
   }
 
   async markResult(kind: AsyncWriteKind, venueId: string, idempotencyKey: string, result: Record<string, unknown>) {
-    if (!this.redis) return;
-    await this.redis.set(this.cacheKey(kind, venueId, idempotencyKey), JSON.stringify(result), 'EX', 7 * 86400).catch(() => undefined);
+    const redis = await this.resultClient();
+    // Never regress a completed receipt to a duplicate delivery's retry state.
+    await redis.eval(`
+      local current = redis.call('GET', KEYS[1])
+      if current then
+        local value = cjson.decode(current)
+        if value.status == 'completed' then return 0 end
+      end
+      return redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2])
+    `, 1, this.cacheKey(kind, venueId, idempotencyKey), JSON.stringify(result), 7 * 86400);
+  }
+
+  private async resultClient(): Promise<Redis> {
+    if (!process.env.REDIS_URL) throw new ServiceUnavailableException('Result cache is not configured');
+    if (!this.redis) {
+      this.redis = new Redis(cleanConnectionUrl(process.env.REDIS_URL), {
+        lazyConnect: true, maxRetriesPerRequest: 1, enableOfflineQueue: false,
+      });
+      this.redis.on('error', () => this.logger.warn('Queue result cache unavailable'));
+    }
+    if (this.redis.status === 'wait') await this.redis.connect();
+    return this.redis;
   }
 
   async onModuleDestroy() {
