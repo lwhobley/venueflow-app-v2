@@ -1,4 +1,12 @@
-import React from 'react';
+import { Platform, ScrollView, View } from 'react-native';
+import { router } from 'expo-router';
+import { Button, Card, Text } from 'react-native-paper';
+import { useA0Purchases } from '../lib/a0-purchases-stub';
+import { getTrialState } from '../lib/trial';
+import { colors, spacing } from '../lib/theme';
+import { config } from '../lib/config';
+import { useAuthenticatedSession } from '../lib/auth-readiness';
+import { hasAllAccess } from '../lib/permissions';
 
 // Wraps premium-only features (Integrations, CRM). Intro access unlocks these
 // features until it expires; after that the user must upgrade. When billing is
@@ -41,4 +49,3 @@ export function PremiumFeatureGate({ feature, children }: { feature: string; chi
     </ScrollView>
   );
 }
-
