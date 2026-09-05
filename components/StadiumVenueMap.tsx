@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { TextInput } from 'react-native-paper';
@@ -24,11 +24,18 @@ export function StadiumVenueMap({
   initialSelectedUnitId,
   initialViewMode = 'operations',
   onSelectUnit,
+  onViewPerspectiveChange,
 }: {
   initialZoneId?: string;
   initialSelectedUnitId?: string;
   initialViewMode?: 'operations' | '3d';
   onSelectUnit?: (unit: StadiumZoneItem) => void;
+  /**
+   * Notifies the host screen which perspective is active. The 3D canvas is a
+   * WebView that needs the vertical drag for orbiting, so the host disables its
+   * own scrolling while 3D is on screen.
+   */
+  onViewPerspectiveChange?: (perspective: '3d_isometric' | '2d_plan') => void;
 }) {
   const palette = useDesignTheme();
   const { width: windowWidth, isMobile } = useResponsive();
@@ -41,6 +48,10 @@ export function StadiumVenueMap({
   const [viewPerspective, setViewPerspective] = useState<'3d_isometric' | '2d_plan'>(
     initialViewMode === '3d' ? '3d_isometric' : '2d_plan'
   );
+  useEffect(() => {
+    onViewPerspectiveChange?.(viewPerspective);
+  }, [viewPerspective, onViewPerspectiveChange]);
+
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
     stadium_gates: true,
     field_sidelines: false,
