@@ -70,9 +70,11 @@
     "@emnapi/runtime": "1.11.3",
     "@emnapi/wasi-threads": "1.2.3",
     "@types/react": "~19.2.18",
+    "@types/react-dom": "^19.2.7",
     "@types/three": "^0.170.0",
     "@vitest/coverage-v8": "^4.1.9",
     "expo-doctor": "1.20.1",
+    "jsdom": "^30.0.1",
     "typescript": "~6.0.3",
     "vitest": "^4.1.9"
   },

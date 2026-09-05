@@ -110,7 +110,10 @@ export function PremiumSpacesDirectory({
             <Pressable
               onPress={() => onToggleGroup(group.id)}
               accessibilityRole="button"
+              // accessibilityState covers native; react-native-web only
+              // reflects the aria prop, so both are needed for screen readers.
               accessibilityState={{ expanded: isExpanded }}
+              aria-expanded={isExpanded}
               accessibilityLabel={`${group.title}, ${group.units.length} spaces${group.alertCount > 0 ? `, ${group.alertCount} alerts` : ''}`}
               style={({ pressed }) => [
                 styles.premiumGroupHeader,
