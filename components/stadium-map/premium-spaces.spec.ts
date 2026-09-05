@@ -168,6 +168,26 @@ describe('Premium Spaces Pure Grouping Logic', () => {
     expect(suiteGroup?.alertCount).toBe(2);
   });
 
+  it('tags every premium unit in the venue data with grouping metadata', () => {
+    const untagged: string[] = [];
+    let premiumUnits = 0;
+
+    for (const zone of COMPREHENSIVE_STADIUM_ZONES) {
+      for (const unit of zone.units) {
+        if (!classifyPremiumSpace(unit, zone.id)) {
+          // Non-premium units (gates, concessions, locker rooms) stay untagged.
+          expect(unit.premiumCategory).toBeUndefined();
+          continue;
+        }
+        premiumUnits += 1;
+        if (!unit.premiumCategory || !unit.stadiumLevel) untagged.push(unit.code);
+      }
+    }
+
+    expect(premiumUnits).toBeGreaterThan(0);
+    expect(untagged).toEqual([]);
+  });
+
   it('classifies premium units from explicit metadata rather than hardcoded ids', () => {
     const foundersUnit: StadiumZoneItem = {
       id: 'unit-founders-metadata',

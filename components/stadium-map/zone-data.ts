@@ -103,6 +103,8 @@ export const COMPREHENSIVE_STADIUM_ZONES: StadiumZoneData[] = [
         capacity: 250,
         stadiumZone: 'North Field Endzone',
         level: '0',
+        stadiumLevel: 'Field',
+        premiumCategory: 'field_suites',
         status: 'open',
         standDetails: {
           standNumber: 'EZ-N-100',
@@ -132,6 +134,8 @@ export const COMPREHENSIVE_STADIUM_ZONES: StadiumZoneData[] = [
         capacity: 300,
         stadiumZone: 'South Field Endzone',
         level: '0',
+        stadiumLevel: 'Field',
+        premiumCategory: 'field_suites',
         status: 'open',
         standDetails: {
           standNumber: 'EZ-S-100',
@@ -176,6 +180,8 @@ export const COMPREHENSIVE_STADIUM_ZONES: StadiumZoneData[] = [
         capacity: 180,
         stadiumZone: 'North Concourse Level 100 Tunnel Access',
         level: '1',
+        stadiumLevel: '100',
+        premiumCategory: '100_clubs',
         status: 'open',
         suiteDetails: {
           suiteNumber: 'BUNKER-N',
@@ -217,6 +223,8 @@ export const COMPREHENSIVE_STADIUM_ZONES: StadiumZoneData[] = [
         capacity: 160,
         stadiumZone: 'South Concourse Level 100 Tunnel Access',
         level: '1',
+        stadiumLevel: '100',
+        premiumCategory: '100_clubs',
         status: 'open',
         suiteDetails: {
           suiteNumber: 'BUNKER-S',
@@ -737,6 +745,8 @@ export const COMPREHENSIVE_STADIUM_ZONES: StadiumZoneData[] = [
         capacity: 24,
         stadiumZone: 'West Suite Tower Level 3',
         level: '3',
+        stadiumLevel: '300',
+        premiumCategory: '300_suites',
         status: 'open',
         suiteDetails: {
           suiteNumber: '302',
@@ -759,6 +769,8 @@ export const COMPREHENSIVE_STADIUM_ZONES: StadiumZoneData[] = [
         capacity: 20,
         stadiumZone: 'West Suite Tower Level 3',
         level: '3',
+        stadiumLevel: '300',
+        premiumCategory: '300_suites',
         status: 'open',
         suiteDetails: {
           suiteNumber: '303',
@@ -800,6 +812,8 @@ export const COMPREHENSIVE_STADIUM_ZONES: StadiumZoneData[] = [
         capacity: 22,
         stadiumZone: 'West Suite Tower Level 3',
         level: '3',
+        stadiumLevel: '300',
+        premiumCategory: '300_suites',
         status: 'open',
         suiteDetails: {
           suiteNumber: '305',
@@ -840,6 +854,8 @@ export const COMPREHENSIVE_STADIUM_ZONES: StadiumZoneData[] = [
         capacity: 24,
         stadiumZone: 'West Suite Tower Level 3',
         level: '3',
+        stadiumLevel: '300',
+        premiumCategory: '300_suites',
         status: 'open',
         suiteDetails: {
           suiteNumber: '307',
@@ -880,6 +896,8 @@ export const COMPREHENSIVE_STADIUM_ZONES: StadiumZoneData[] = [
         capacity: 22,
         stadiumZone: 'West Suite Tower Level 3',
         level: '3',
+        stadiumLevel: '300',
+        premiumCategory: '300_suites',
         status: 'open',
         suiteDetails: {
           suiteNumber: '309',
@@ -924,6 +942,8 @@ export const COMPREHENSIVE_STADIUM_ZONES: StadiumZoneData[] = [
           capacity: 22,
           stadiumZone: 'West Suite Tower Level 3',
           level: '3',
+          stadiumLevel: '300' as const,
+          premiumCategory: '300_suites' as const,
           status: 'open' as const,
           suiteDetails: {
             suiteNumber: String(num),
@@ -947,6 +967,8 @@ export const COMPREHENSIVE_STADIUM_ZONES: StadiumZoneData[] = [
         capacity: 24,
         stadiumZone: 'East Suite Tower Level 3',
         level: '3',
+        stadiumLevel: '300',
+        premiumCategory: '300_suites',
         status: 'open',
         suiteDetails: {
           suiteNumber: '321',
@@ -1012,6 +1034,8 @@ export const COMPREHENSIVE_STADIUM_ZONES: StadiumZoneData[] = [
           capacity: 22,
           stadiumZone: 'East Suite Tower Level 3',
           level: '3',
+          stadiumLevel: '300' as const,
+          premiumCategory: '300_suites' as const,
           status: 'open' as const,
           suiteDetails: {
             suiteNumber: String(num),
@@ -1040,6 +1064,8 @@ export const COMPREHENSIVE_STADIUM_ZONES: StadiumZoneData[] = [
           capacity: 24,
           stadiumZone: isNorth ? 'North Endzone Suite Ring' : 'South Endzone Suite Ring',
           level: '3',
+          stadiumLevel: '300' as const,
+          premiumCategory: '300_suites' as const,
           status: 'open' as const,
           suiteDetails: {
             suiteNumber: String(num),
@@ -1066,6 +1092,8 @@ export const COMPREHENSIVE_STADIUM_ZONES: StadiumZoneData[] = [
           capacity: 18,
           stadiumZone: isWest ? 'Level 400 West Loge' : 'Level 400 East Loge',
           level: '4',
+          stadiumLevel: '400' as const,
+          premiumCategory: '400_suites' as const,
           status: 'open' as const,
           suiteDetails: {
             suiteNumber: String(num),
@@ -1102,6 +1130,8 @@ export const COMPREHENSIVE_STADIUM_ZONES: StadiumZoneData[] = [
         capacity: 450,
         stadiumZone: 'East Club Tier Level 2',
         level: '2',
+        stadiumLevel: '200',
+        premiumCategory: '200_clubs',
         status: 'open',
         standDetails: {
           standNumber: 'CL-201',
@@ -1119,6 +1149,8 @@ export const COMPREHENSIVE_STADIUM_ZONES: StadiumZoneData[] = [
         capacity: 480,
         stadiumZone: 'West Club Tier Level 2',
         level: '2',
+        stadiumLevel: '200',
+        premiumCategory: '200_clubs',
         status: 'open',
         standDetails: {
           standNumber: 'CL-202',
