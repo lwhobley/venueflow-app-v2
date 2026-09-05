@@ -168,6 +168,52 @@ describe('Premium Spaces Pure Grouping Logic', () => {
     expect(suiteGroup?.alertCount).toBe(2);
   });
 
+  it('does not classify a non-premium unit as a club on stadium level alone', () => {
+    const concourseStand: StadiumZoneItem = {
+      id: 'unit-level2-stand',
+      code: 'SVC-201',
+      name: 'Level 200 Concourse Taco Stand',
+      department: 'concessions',
+      type: 'concourse_service_area',
+      capacity: null,
+      stadiumZone: 'East Concourse 200',
+      level: '2',
+      status: 'open',
+    };
+
+    // Sits on level 2 but is not a premium space, so it belongs to no group.
+    expect(classifyPremiumSpace(concourseStand)).toBeNull();
+
+    const clubLounge: StadiumZoneItem = {
+      ...concourseStand,
+      id: 'unit-level2-club',
+      code: 'CLUB-N',
+      name: 'North Club Lounge',
+      type: 'club_lounge',
+    };
+
+    expect(classifyPremiumSpace(clubLounge)?.groupId).toBe('200-level-clubs');
+  });
+
+  it('still groups untagged legacy records through the fallback heuristics', () => {
+    const untaggedSuite: StadiumZoneItem = {
+      id: 'unit-legacy-318',
+      code: 'SUITE-318',
+      name: 'Suite 318',
+      department: 'premium_hospitality',
+      type: 'premium_suite',
+      capacity: 22,
+      stadiumZone: 'West Suite Tower Level 3',
+      level: '3',
+      status: 'open',
+      suiteDetails: { suiteNumber: '318' },
+    };
+
+    // No premiumCategory / stadiumLevel: the compatibility path must still work.
+    expect(untaggedSuite.premiumCategory).toBeUndefined();
+    expect(classifyPremiumSpace(untaggedSuite)?.groupId).toBe('300-level-suites');
+  });
+
   it('tags every premium unit in the venue data with grouping metadata', () => {
     const untagged: string[] = [];
     let premiumUnits = 0;
