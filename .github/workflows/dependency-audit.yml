@@ -2,7 +2,7 @@ name: Dependency Security Audit
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, desktop-web]
     paths:
       - 'package.json'
       - 'package-lock.json'
