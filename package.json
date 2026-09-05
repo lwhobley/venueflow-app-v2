@@ -26,6 +26,7 @@
     "doctor": "expo-doctor",
     "typecheck": "tsc --noEmit && npm run typecheck -w @venue-wrangler/api",
     "test": "npm run api:prisma:generate && vitest run",
+    "test:ui": "vitest run --exclude \"packages/api/**\" --exclude \"**/*.integration.spec.ts\"",
     "test:watch": "npm run api:prisma:generate && vitest"
   },
   "dependencies": {
