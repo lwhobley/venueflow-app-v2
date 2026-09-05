@@ -30,4 +30,23 @@ describe('Event Closeout Immutable Revision Hash Chain', () => {
     expect(revisionHashV2).toHaveLength(64);
     expect(revisionHashV2).not.toBe(parentHash);
   });
+
+  it('incorporates outletResults, inventoryResults, and laborResults into revision hash', () => {
+    const basePayload = {
+      actualAttendance: 45000,
+      actualSalesCents: 85000000,
+    };
+    const withResults = {
+      ...basePayload,
+      outletResults: { stand101: { salesCents: 1500000 } },
+      inventoryResults: { beerKegs: { variance: -2 } },
+      laborResults: { supervisors: { hours: 42.5 } },
+    };
+
+    const baseHash = computeRevisionHash(null, 1, basePayload);
+    const resultsHash = computeRevisionHash(null, 1, withResults);
+
+    expect(resultsHash).toHaveLength(64);
+    expect(resultsHash).not.toBe(baseHash);
+  });
 });

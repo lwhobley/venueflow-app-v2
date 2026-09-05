@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ScrollView, StyleSheet, View, Pressable } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -9,12 +10,16 @@ export default function StadiumMapScreen() {
   const palette = useDesignTheme();
   const params = useLocalSearchParams<{ zoneId?: string }>();
   const initialZoneId = typeof params.zoneId === 'string' ? params.zoneId : undefined;
+  // The 3D canvas is a WebView that needs the vertical drag to orbit. While it
+  // is on screen this ScrollView must not claim that gesture.
+  const [scrollEnabled, setScrollEnabled] = useState(true);
 
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: palette.background }}
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
       showsVerticalScrollIndicator={false}
+      scrollEnabled={scrollEnabled}
     >
       <View
         style={{
@@ -49,7 +54,10 @@ export default function StadiumMapScreen() {
         </CommandText>
       </View>
       <View style={{ padding: spacing.md, gap: spacing.md }}>
-        <StadiumVenueMap initialZoneId={initialZoneId} />
+        <StadiumVenueMap
+          initialZoneId={initialZoneId}
+          onViewPerspectiveChange={(perspective) => setScrollEnabled(perspective !== '3d_isometric')}
+        />
         <View style={[styles.quickActionsCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
           <CommandText palette={palette} variant="title">Stadium F&B Workflows</CommandText>
           <View style={styles.actionsGrid}>
@@ -74,3 +82,8 @@ const styles = StyleSheet.create({
   quickActionsCard: { borderRadius: 8, borderWidth: 1, padding: spacing.md, gap: spacing.md },
   actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
 });
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../components/ErrorBoundary';

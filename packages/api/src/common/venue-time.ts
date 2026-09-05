@@ -97,3 +97,31 @@ export function zonedDayBounds(
   const targetIso = new Date(Date.UTC(y, m - 1, d + offsetDays)).toISOString().slice(0, 10);
   return zonedDateBounds(tz, targetIso);
 }
+
+/**
+ * The UTC instant of a venue-local wall-clock time on a specific local date.
+ *
+ * Shift times are stored as a local date (`YYYY-MM-DD`) plus a local clock
+ * string (`HH:mm`) with no offset, so reading them as UTC shifts every venue by
+ * its own offset — for a US venue that lands hours away from the real moment.
+ *
+ * Uses the same double-correction as zonedDateBounds so it stays right across a
+ * DST boundary. Falls back to UTC for an unknown zone, and to midnight for an
+ * unparseable time, matching the rest of this module.
+ */
+export function zonedWallClockToUtc(
+  timeZone: string | null | undefined,
+  isoDate: string,
+  clock: string,
+): number {
+  const tz = safeTimeZone(timeZone);
+  const [y, m, d] = isoDate.split('-').map(Number);
+  const [rawH, rawMin] = (clock || '00:00').split(':').map(Number);
+  const hour = Number.isFinite(rawH) ? Math.min(23, Math.max(0, rawH)) : 0;
+  const minute = Number.isFinite(rawMin) ? Math.min(59, Math.max(0, rawMin)) : 0;
+
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return NaN;
+
+  const utcGuess = Date.UTC(y, m - 1, d, hour, minute);
+  return utcGuess - tzOffsetMs(tz, new Date(utcGuess - tzOffsetMs(tz, new Date(utcGuess))));
+}

@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Query,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   IsArray,
@@ -25,6 +26,7 @@ import { RequireSubscription } from '../../billing/require-subscription.decorato
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 import { FloorService } from './floor.service';
+import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
 
 type Scope = VenueScopedRequest['venueScope'];
 
@@ -216,6 +218,7 @@ function requireManager(scope: Scope): asserts scope is NonNullable<Scope> {
   if (!scope || !canManageVenue(scope.role, scope.allAccess)) throw new ForbiddenException('Not authorized');
 }
 
+@UseInterceptors(TenantRequestTransactionInterceptor)
 @Controller('v1/floor')
 export class FloorController {
   constructor(private readonly floor: FloorService) {}

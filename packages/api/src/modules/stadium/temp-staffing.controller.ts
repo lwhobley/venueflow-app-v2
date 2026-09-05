@@ -1,9 +1,10 @@
-import { Body, Controller, ForbiddenException, Headers, Post } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Headers, Post, UseInterceptors } from '@nestjs/common';
 import { TempStaffingService, RosterImportRow } from './temp-staffing.service';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 import { canManageVenue } from '../../auth/roles';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
 import { RequireSubscription } from '../../billing/require-subscription.decorator';
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsOptional, IsString, Matches, ValidateNested } from 'class-validator';
@@ -18,6 +19,7 @@ class KioskCheckInDto {
   @IsOptional() @IsString() outletId?: string;
 }
 
+@UseInterceptors(TenantRequestTransactionInterceptor)
 @Controller('v1/stadium/temp-staffing')
 @RequireSubscription()
 export class TempStaffingController {

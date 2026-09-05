@@ -102,9 +102,21 @@ export function VenueSwitcher() {
       {error ? (
         <View style={{ gap: 4 }}>
           <Text style={styles.errorText}>{error}</Text>
+          {error.includes('Multi-Venue Pro') ? (
+            <Button
+              mode="contained"
+              buttonColor={colors.primary}
+              compact
+              onPress={() => {
+                setRegisterVisible(false);
+                router.push('/billing/paywall');
+              }}
+            >
+              Upgrade to Multi-Venue Pro ($399/mo)
+            </Button>
+          ) : null}
         </View>
       ) : null}
-
 
       <View style={styles.venueList}>
         {venues.map((v) => {

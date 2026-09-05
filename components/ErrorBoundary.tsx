@@ -1,7 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { View, ScrollView } from 'react-native';
 import { Button, Text } from 'react-native-paper';
-import { router } from 'expo-router';
+import { router, type ErrorBoundaryProps } from 'expo-router';
 import { colors, spacing, radius } from '../lib/theme';
 
 type Props = { children: ReactNode };
@@ -75,4 +75,42 @@ export class ErrorBoundary extends Component<Props, State> {
       </ScrollView>
     );
   }
+}
+
+/**
+ * Per-route boundary. Expo Router renders the `ErrorBoundary` a route file
+ * exports around that route only, so a screen that throws shows this recovery
+ * card *inside* the navigator — tab bar intact, other screens still reachable
+ * — instead of unmounting the whole app tree through the root boundary.
+ *
+ * Route files opt in with a single line:
+ *   `export { RouteErrorBoundary as ErrorBoundary } from '<path>/components/ErrorBoundary';`
+ */
+export function RouteErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: spacing.xl, gap: spacing.md }}
+    >
+      <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.xl, gap: spacing.md }}>
+        <Text variant="headlineSmall" style={{ color: colors.primary, fontWeight: '800' }}>
+          This screen didn’t load
+        </Text>
+        <Text style={{ color: colors.muted }}>
+          Something went wrong rendering this screen. Your data is safe — retry, or use the tabs to keep working.
+        </Text>
+        {typeof __DEV__ !== 'undefined' && __DEV__ ? (
+          <Text style={{ color: colors.danger, fontSize: 12, fontWeight: '700' }}>
+            {error.name}: {error.message}
+          </Text>
+        ) : null}
+        <Button mode="contained" buttonColor={colors.primary} onPress={() => void retry()}>
+          Try again
+        </Button>
+        <Button mode="text" textColor={colors.primary} onPress={() => router.replace('/(tabs)/home')}>
+          Back to Home
+        </Button>
+      </View>
+    </ScrollView>
+  );
 }

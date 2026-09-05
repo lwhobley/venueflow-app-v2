@@ -208,7 +208,7 @@ export class UnionComplianceService {
 
       let resolvedZoneId = zoneId;
       if (outletId) {
-        const outlet = await tx.concourseOutlet.findFirst({
+        const outlet = await tx.outlet.findFirst({
           where: { id: outletId, facilityId },
           select: { id: true, zoneId: true },
         });
@@ -223,7 +223,7 @@ export class UnionComplianceService {
         }
       }
       if (resolvedZoneId) {
-        const zone = await tx.zone.findFirst({
+        const zone = await tx.facilityZone.findFirst({
           where: { id: resolvedZoneId, facilityId },
           select: { id: true },
         });
@@ -412,4 +412,3 @@ export class UnionComplianceService {
     };
   }
 }
-

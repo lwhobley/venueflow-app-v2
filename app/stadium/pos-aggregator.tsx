@@ -2,18 +2,19 @@ import { useState } from 'react';
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { TextInput } from 'react-native-paper';
+import { Button, Chip, TextInput } from 'react-native-paper';
 import { CommandButton, CommandText, StatusPill } from '../../components/FutureUI';
 import { spacing, useDesignTheme } from '../../lib/theme';
 import { useVenueAuth } from '../../lib/useVenueAuth';
 import { useMutation, useQuery } from '../../lib/railway-hooks';
+import { asArray, errorMessage } from '../../lib/format';
 import { api } from '../../lib/railway-api';
 
 interface PosProviderCard {
   provider: string;
   name: string;
   icon: string;
-  status: 'connected' | 'standby' | 'syncing' | 'error';
+  status: 'connected' | 'standby' | 'syncing' | 'error' | 'unconfigured';
   terminals: number;
   latencyMs: number;
   checksPerMin: number;
@@ -22,12 +23,12 @@ interface PosProviderCard {
 }
 
 const PROVIDER_METRICS: PosProviderCard[] = [
-  { provider: 'toast', name: 'Toast POS (Main Concourse)', icon: 'food-fork-drink', status: 'connected', terminals: 24, latencyMs: 28, checksPerMin: 34, grossSales: '$28,450.00', role: 'Concessions & Stands 100-112' },
-  { provider: 'square', name: 'Square Terminal Hub (Club 200)', icon: 'credit-card-chip-outline', status: 'connected', terminals: 16, latencyMs: 35, checksPerMin: 18, grossSales: '$16,920.00', role: 'Champions Club & VIP Bars' },
-  { provider: 'spoton', name: 'SpotOn Enterprise (300 Suites)', icon: 'glass-cocktail', status: 'connected', terminals: 28, latencyMs: 42, checksPerMin: 12, grossSales: '$44,180.00', role: '300 Level Luxury Skyboxes' },
-  { provider: 'clover', name: 'Clover Station (Upper Deck 400)', icon: 'clover', status: 'connected', terminals: 12, latencyMs: 31, checksPerMin: 14, grossSales: '$9,840.00', role: '400 Level Upper Concourse' },
-  { provider: 'shopify_pos', name: 'Shopify POS (RFID Grab & Go)', icon: 'shopping-outline', status: 'connected', terminals: 8, latencyMs: 22, checksPerMin: 26, grossSales: '$11,350.00', role: 'Express Walk-thru Markets' },
-  { provider: 'generic', name: 'In-Seat Fan Mobile Ordering Engine', icon: 'seat-passenger', status: 'connected', terminals: 120, latencyMs: 48, checksPerMin: 42, grossSales: '$18,600.00', role: 'Mobile Seat Delivery Grid' },
+  { provider: 'toast', name: 'Toast POS (Main Concourse)', icon: 'food-fork-drink', status: 'unconfigured', terminals: 0, latencyMs: 0, checksPerMin: 0, grossSales: '$0.00', role: 'Concessions & Stands 100-112' },
+  { provider: 'square', name: 'Square Terminal Hub (Club 200)', icon: 'credit-card-chip-outline', status: 'unconfigured', terminals: 0, latencyMs: 0, checksPerMin: 0, grossSales: '$0.00', role: 'Champions Club & VIP Bars' },
+  { provider: 'spoton', name: 'SpotOn Enterprise (300 Suites)', icon: 'glass-cocktail', status: 'unconfigured', terminals: 0, latencyMs: 0, checksPerMin: 0, grossSales: '$0.00', role: '300 Level Luxury Skyboxes' },
+  { provider: 'clover', name: 'Clover Station (Upper Deck 400)', icon: 'clover', status: 'unconfigured', terminals: 0, latencyMs: 0, checksPerMin: 0, grossSales: '$0.00', role: '400 Level Upper Concourse' },
+  { provider: 'shopify_pos', name: 'Shopify POS (RFID Grab & Go)', icon: 'shopping-outline', status: 'unconfigured', terminals: 0, latencyMs: 0, checksPerMin: 0, grossSales: '$0.00', role: 'Express Walk-thru Markets' },
+  { provider: 'generic', name: 'In-Seat Fan Mobile Ordering Engine', icon: 'seat-passenger', status: 'unconfigured', terminals: 0, latencyMs: 0, checksPerMin: 0, grossSales: '$0.00', role: 'Mobile Seat Delivery Grid' },
 ];
 
 export default function PosAggregatorScreen() {
@@ -40,6 +41,8 @@ export default function PosAggregatorScreen() {
   const settlement = useQuery(api.pos.getAggregatorSettlement, isReady && canManage && venue?.id ? { venueId: venue.id } : 'skip') as any;
 
   const sync86Mutation = useMutation(api.pos.sync86Broadcast);
+  const createChannel = useMutation(api.pos.createAggregatorChannel);
+  const updateChannelStatus = useMutation(api.pos.updateAggregatorChannelStatus);
 
   const [activeTab, setActiveTab] = useState<'feed' | 'providers' | 'channels' | 'sync86' | 'settlement'>('feed');
   const [newItem86, setNewItem86] = useState('');
@@ -47,13 +50,53 @@ export default function PosAggregatorScreen() {
   const [syncStatusMessage, setSyncStatusMessage] = useState<string | null>(null);
   const [isBroadcasting, setIsBroadcasting] = useState(false);
 
-  const liveFeeds = aggregatorStatus?.recentTransactions?.length ? aggregatorStatus.recentTransactions : [
-    { id: 'tx-1', externalCheckId: 'CHK-TOAST-9821', provider: 'toast', totalCents: 4400, status: 'paid', openedAt: Date.now() - 15000, revenueCenter: 'Stand 101 · Smokehouse BBQ', items: '2x Brisket Sandwich, 2x Draft IPA' },
-    { id: 'tx-2', externalCheckId: 'CHK-SPOTON-3042', provider: 'spoton', totalCents: 32000, status: 'paid', openedAt: Date.now() - 45000, revenueCenter: 'Suite 301 · Founders Skybox', items: '2x Casamigos Reposado Carafe' },
-    { id: 'tx-3', externalCheckId: 'CHK-SQUARE-2184', provider: 'square', totalCents: 8500, status: 'paid', openedAt: Date.now() - 72000, revenueCenter: 'Club 50 · Midfield Lounge', items: '3x Craft Cocktails, 1x Charcuterie' },
-    { id: 'tx-4', externalCheckId: 'CHK-MOB-8841', provider: 'generic', totalCents: 3600, status: 'paid', openedAt: Date.now() - 95000, revenueCenter: 'Section 104 · Row 12 Seat 8', items: '1x Smashburger, 1x Souvenir Soda' },
-    { id: 'tx-5', externalCheckId: 'CHK-SHOPIFY-109', provider: 'shopify_pos', totalCents: 1850, status: 'paid', openedAt: Date.now() - 120000, revenueCenter: 'Express Grab & Go Market', items: '1x Pretzel, 1x Bottled Water' },
-  ];
+  const [showChannelForm, setShowChannelForm] = useState(false);
+  const [channelName, setChannelName] = useState('');
+  const [channelZone, setChannelZone] = useState('');
+  const [channelPrimary, setChannelPrimary] = useState('toast');
+  const [channelFallback, setChannelFallback] = useState('square');
+  const [channelTerminals, setChannelTerminals] = useState('');
+  const [channelMessage, setChannelMessage] = useState<string | null>(null);
+  const [channelBusy, setChannelBusy] = useState<string | null>(null);
+
+  const channels = asArray<{ id: string; name: string; zone: string; primaryProvider: string; fallbackProvider: string; terminalCount: number; status: string }>(aggregatorChannels);
+
+  const handleCreateChannel = async () => {
+    if (!channelName.trim() || !channelZone.trim()) return;
+    setChannelBusy('create');
+    setChannelMessage(null);
+    try {
+      await createChannel({
+        name: channelName.trim(),
+        zone: channelZone.trim(),
+        primaryProvider: channelPrimary,
+        fallbackProvider: channelFallback,
+        terminalsCount: parseInt(channelTerminals, 10) || 1,
+      });
+      setChannelName('');
+      setChannelZone('');
+      setChannelTerminals('');
+      setShowChannelForm(false);
+    } catch (error) {
+      setChannelMessage(errorMessage(error, 'The channel could not be registered.'));
+    } finally {
+      setChannelBusy(null);
+    }
+  };
+
+  const toggleChannelStatus = async (channel: { id: string; status: string }) => {
+    setChannelBusy(channel.id);
+    setChannelMessage(null);
+    try {
+      await updateChannelStatus({ channelId: channel.id, active: channel.status !== 'active' });
+    } catch (error) {
+      setChannelMessage(errorMessage(error, 'The channel status could not be changed.'));
+    } finally {
+      setChannelBusy(null);
+    }
+  };
+
+  const liveFeeds = aggregatorStatus?.recentTransactions ?? [];
 
   const handleBroadcast86 = async () => {
     if (!newItem86.trim()) return;
@@ -65,10 +108,14 @@ export default function PosAggregatorScreen() {
         category: selectedCategory,
         reason: 'Kitchen out of stock / 86 par hit',
       });
-      setSyncStatusMessage(`Broadcast dispatched: "${newItem86.trim()}" 86'd across Toast, Square, Clover, SpotOn & Mobile apps.`);
+      setSyncStatusMessage(
+        res?.targetEndpoints?.length
+          ? `Broadcast dispatched: "${newItem86.trim()}" 86'd across ${res.targetEndpoints.join(', ')}.`
+          : `86 update for "${newItem86.trim()}" logged internally (no external POS adapters configured).`,
+      );
       setNewItem86('');
     } catch (e: any) {
-      setSyncStatusMessage(`Broadcast failed: ${e?.message ?? 'Unknown error'}`);
+      setSyncStatusMessage(`Broadcast failed: ${e.message || 'Network error'}`);
     } finally {
       setIsBroadcasting(false);
     }
@@ -205,8 +252,15 @@ export default function PosAggregatorScreen() {
               <StatusPill palette={palette} tone="good">STREAM CONNECTED</StatusPill>
             </View>
 
-            {liveFeeds.map((tx: any) => (
-              <View key={tx.id} style={[styles.transactionCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+            {liveFeeds.length === 0 ? (
+              <View style={[styles.transactionCard, { backgroundColor: palette.surface, borderColor: palette.border, alignItems: 'center', padding: spacing.lg }]}>
+                <CommandText palette={palette} variant="body" style={{ color: '#68706A' }}>
+                  No live transactions recorded yet for this venue.
+                </CommandText>
+              </View>
+            ) : (
+              liveFeeds.map((tx: any) => (
+                <View key={tx.id} style={[styles.transactionCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <View style={styles.providerTag}>
@@ -231,8 +285,9 @@ export default function PosAggregatorScreen() {
                     Items: {tx.items}
                   </CommandText>
                 ) : null}
-              </View>
-            ))}
+                </View>
+              ))
+            )}
           </View>
         ) : null}
 
@@ -253,7 +308,9 @@ export default function PosAggregatorScreen() {
                         {prov.name}
                       </CommandText>
                     </View>
-                    <StatusPill palette={palette} tone="good">CONNECTED</StatusPill>
+                    <StatusPill palette={palette} tone={prov.status === 'connected' ? 'good' : 'neutral'}>
+                      {prov.status.toUpperCase()}
+                    </StatusPill>
                   </View>
 
                   <CommandText palette={palette} variant="caption" style={{ color: '#68706A' }}>
@@ -283,22 +340,64 @@ export default function PosAggregatorScreen() {
         {/* TAB 3: CHANNEL ROUTING MATRIX */}
         {activeTab === 'channels' ? (
           <View style={{ gap: spacing.sm }}>
-            <CommandText palette={palette} variant="label" style={{ color: '#17643B', fontWeight: '800' }}>
-              VENUE MULTI-CHANNEL ROUTING MATRIX
-            </CommandText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <CommandText palette={palette} variant="label" style={{ color: '#17643B', fontWeight: '800' }}>
+                VENUE MULTI-CHANNEL ROUTING MATRIX
+              </CommandText>
+              <Button compact mode="text" textColor="#17643B" onPress={() => setShowChannelForm((value) => !value)}>
+                {showChannelForm ? 'Cancel' : 'Add channel'}
+              </Button>
+            </View>
 
-            {(aggregatorChannels || []).map((ch: any) => (
+            {channelMessage ? (
+              <CommandText palette={palette} variant="caption" style={{ color: palette.danger }}>{channelMessage}</CommandText>
+            ) : null}
+
+            {showChannelForm ? (
+              <View style={[styles.channelCard, { backgroundColor: palette.surface, borderColor: palette.border, gap: spacing.sm }]}>
+                <TextInput mode="outlined" label="Channel name" value={channelName} onChangeText={setChannelName} placeholder="e.g. North Concourse 100 Stands" />
+                <TextInput mode="outlined" label="Zone" value={channelZone} onChangeText={setChannelZone} placeholder="e.g. North 100" />
+                <CommandText palette={palette} variant="caption">Primary provider</CommandText>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+                  {PROVIDER_METRICS.map((p) => (
+                    <Chip key={`primary-${p.provider}`} selected={channelPrimary === p.provider} onPress={() => setChannelPrimary(p.provider)}>{p.provider}</Chip>
+                  ))}
+                </View>
+                <CommandText palette={palette} variant="caption">Fallback provider</CommandText>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+                  {PROVIDER_METRICS.map((p) => (
+                    <Chip key={`fallback-${p.provider}`} selected={channelFallback === p.provider} onPress={() => setChannelFallback(p.provider)}>{p.provider}</Chip>
+                  ))}
+                </View>
+                <TextInput mode="outlined" label="Terminal count (optional)" keyboardType="number-pad" value={channelTerminals} onChangeText={setChannelTerminals} />
+                <Button mode="contained" buttonColor="#17643B" loading={channelBusy === 'create'} disabled={channelBusy === 'create' || !channelName.trim() || !channelZone.trim()} onPress={() => void handleCreateChannel()}>
+                  Save channel
+                </Button>
+              </View>
+            ) : null}
+
+            {channels.length === 0 ? (
+              <CommandText palette={palette} variant="caption" style={{ color: palette.muted }}>
+                No POS channels configured yet. Channels group a zone's terminals under a primary and fallback provider.
+              </CommandText>
+            ) : null}
+
+            {channels.map((ch) => (
               <View key={ch.id} style={[styles.channelCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                   <CommandText palette={palette} variant="body" style={{ fontWeight: '700' }}>
                     {ch.name}
                   </CommandText>
-                  <StatusPill palette={palette} tone="good">{ch.status.toUpperCase()}</StatusPill>
+                  <Pressable onPress={() => void toggleChannelStatus(ch)} disabled={channelBusy === ch.id}>
+                    <StatusPill palette={palette} tone={ch.status === 'active' ? 'good' : 'neutral'}>
+                      {(ch.status ?? 'unknown').toUpperCase()}
+                    </StatusPill>
+                  </Pressable>
                 </View>
                 <View style={styles.channelDetailsRow}>
                   <CommandText palette={palette} variant="caption">Zone: {ch.zone} · Terminals: {ch.terminalCount}</CommandText>
                   <CommandText palette={palette} variant="caption" style={{ color: '#17643B', fontWeight: '700' }}>
-                    Primary: {ch.primaryProvider.toUpperCase()} (Fallback: {ch.fallbackProvider.toUpperCase()})
+                    Primary: {(ch.primaryProvider ?? '—').toUpperCase()} (Fallback: {(ch.fallbackProvider ?? '—').toUpperCase()})
                   </CommandText>
                 </View>
               </View>
@@ -527,3 +626,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
 });
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

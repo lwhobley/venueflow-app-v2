@@ -982,7 +982,7 @@ export class PosController {
         entityType: 'pos_aggregator_86_sync',
         entityId: scope.venueId,
         action: 'pos_86_broadcast_dispatched',
-        summary: `Broadcasted 86 update for ${body.itemNames.length} items to all POS terminals and mobile apps.`,
+        summary: `Internal 86 update recorded for ${body.itemNames.length} items (audit logged, pending external adapter dispatch).`,
         metadata: {
           items: body.itemNames,
           category: body.category,
@@ -996,7 +996,8 @@ export class PosController {
       success: true,
       broadcastId: `86-sync-${Date.now()}`,
       dispatchedCount: body.itemNames.length,
-      targetEndpoints: ['Toast KDS', 'Square Terminals', 'Clover Hub', 'SpotOn Suite Tablets', 'Mobile In-Seat Engine'],
+      targetEndpoints: [],
+      deliveryMode: 'internal_audit_only',
       syncedAt: new Date().toISOString(),
     };
   }
@@ -1016,19 +1017,19 @@ export class PosController {
 
     return {
       settlementDate: new Date().toISOString().split('T')[0],
-      totalGrossCents: totalCents || 4285000,
-      tenderSplits: [
-        { tender: 'Credit / Debit Card (Visa, MC, Amex)', amountCents: Math.round((totalCents || 4285000) * 0.68), percentage: 68 },
-        { tender: 'Apple Pay / Google Pay (NFC Contactless)', amountCents: Math.round((totalCents || 4285000) * 0.22), percentage: 22 },
-        { tender: 'Stadium RFID Loaded Wristbands & Season Member Balance', amountCents: Math.round((totalCents || 4285000) * 0.07), percentage: 7 },
-        { tender: 'Cash & Concourse Currency', amountCents: Math.round((totalCents || 4285000) * 0.03), percentage: 3 },
-      ],
-      providerBreakdown: [
-        { provider: 'toast', grossCents: Math.round((totalCents || 4285000) * 0.54), terminalCount: 18, matchedRatio: 1.0 },
-        { provider: 'square', grossCents: Math.round((totalCents || 4285000) * 0.26), terminalCount: 12, matchedRatio: 0.99 },
-        { provider: 'spoton', grossCents: Math.round((totalCents || 4285000) * 0.14), terminalCount: 8, matchedRatio: 1.0 },
-        { provider: 'clover', grossCents: Math.round((totalCents || 4285000) * 0.06), terminalCount: 4, matchedRatio: 1.0 },
-      ],
+      totalGrossCents: totalCents,
+      tenderSplits: totalCents > 0 ? [
+        { tender: 'Credit / Debit Card (Visa, MC, Amex)', amountCents: Math.round(totalCents * 0.68), percentage: 68 },
+        { tender: 'Apple Pay / Google Pay (NFC Contactless)', amountCents: Math.round(totalCents * 0.22), percentage: 22 },
+        { tender: 'Stadium RFID Loaded Wristbands & Season Member Balance', amountCents: Math.round(totalCents * 0.07), percentage: 7 },
+        { tender: 'Cash & Concourse Currency', amountCents: Math.round(totalCents * 0.03), percentage: 3 },
+      ] : [],
+      providerBreakdown: totalCents > 0 ? [
+        { provider: 'toast', grossCents: Math.round(totalCents * 0.54), terminalCount: 18, matchedRatio: 1.0 },
+        { provider: 'square', grossCents: Math.round(totalCents * 0.26), terminalCount: 12, matchedRatio: 0.99 },
+        { provider: 'spoton', grossCents: Math.round(totalCents * 0.14), terminalCount: 8, matchedRatio: 1.0 },
+        { provider: 'clover', grossCents: Math.round(totalCents * 0.06), terminalCount: 4, matchedRatio: 1.0 },
+      ] : [],
     };
   }
 }

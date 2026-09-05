@@ -121,3 +121,30 @@ export function formatDuration(minutes: number | null | undefined): string {
 export function pad2(n: number): string {
   return n.toString().padStart(2, '0');
 }
+
+/**
+ * Coerce a value that is *supposed* to be a list into one.
+ *
+ * API payloads are not runtime-validated, so a degraded, partial, or
+ * non-JSON response can hand a screen an object or a string where it expects
+ * an array. `value ?? []` only covers null/undefined; anything else reaches
+ * `.map`/`.filter` and throws, which takes the whole screen down. Use this at
+ * every boundary where a network payload is first treated as a list.
+ */
+export function asArray<T>(value: T[] | null | undefined): T[];
+export function asArray<T = unknown>(value: unknown): T[];
+export function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+/**
+ * Render a snake_case API enum as a human label ("pre_open" -> "Pre Open").
+ *
+ * Accepts a missing value because these are read straight off API rows: a
+ * status the server omitted used to throw inside `replaceAll` and take the
+ * screen down.
+ */
+export function humanizeLabel(value: string | null | undefined, fallback = '—'): string {
+  if (typeof value !== 'string' || !value) return fallback;
+  return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+}

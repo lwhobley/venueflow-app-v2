@@ -8,11 +8,12 @@ import { InlineMessage } from '../../components/InlineMessage';
 import { SectionHeader } from '../../components/AppCard';
 import { api } from '../../lib/railway-api';
 import { useMutation, useQueryState } from '../../lib/railway-hooks';
-import { errorMessage } from '../../lib/format';
+import { asArray, errorMessage } from '../../lib/format';
 import { useI18n, type TranslationKey } from '../../lib/i18n';
 import { radius, spacing, useDesignTheme } from '../../lib/theme';
 import { useVenueAuth } from '../../lib/useVenueAuth';
 import { readPickedFileBase64 } from '../../lib/picked-file';
+
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const CATEGORIES = ['sop', 'manual', 'recipe', 'menu', 'training', 'form', 'other'] as const;
@@ -97,7 +98,7 @@ function DocumentsScreenInner() {
   const categoryLabel = (value: DocumentCategory) =>
     t(`documents.categories.${value}` as TranslationKey);
 
-  const documents = query.data ?? [];
+  const documents = asArray(query.data);
   const filteredDocuments = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase();
     return documents.filter((document) => {
@@ -321,3 +322,8 @@ function DocumentsScreenInner() {
     </ScrollView>
   );
 }
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

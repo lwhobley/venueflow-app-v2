@@ -11,6 +11,7 @@ import { useAuthenticatedSession } from "../../lib/auth-readiness";
 import { canManageBilling, canManageVenue } from "../../lib/permissions";
 import { useI18n } from "../../lib/i18n";
 
+
 export default function ProfileScreen() {
   const { t } = useI18n();
   const user = useAuthStore((state: AuthState) => state.user);
@@ -18,10 +19,13 @@ export default function ProfileScreen() {
   const clearSession = useAuthStore((state: AuthState) => state.clearSession);
   const { isReady } = useAuthenticatedSession();
   const me = useQuery(api.app.getMe, isReady ? {} : "skip");
-  const serverRole = me?.profile.role ?? null;
-  const allAccess = me?.profile.allAccess ?? false;
+  const serverRole = me?.profile?.role ?? null;
+  const allAccess = me?.profile?.allAccess ?? false;
   const canManage = Boolean(
     serverRole && canManageVenue(serverRole, allAccess),
+  );
+  const canViewBilling = Boolean(
+    serverRole && canManageBilling(serverRole, allAccess),
   );
   const { signOut } = useAuthActions();
   const deleteAccount = useMutation(api.app.deleteMyAccount);
@@ -41,6 +45,9 @@ export default function ProfileScreen() {
     router.push("/(tabs)/staff");
   };
 
+  const onOpenBilling = () => {
+    router.push(Platform.OS === "web" ? "/billing" : "/billing/paywall");
+  };
 
   const onDeleteAccount = async () => {
     setDeleting(true);
@@ -109,11 +116,21 @@ export default function ProfileScreen() {
         </Button>
       ) : null}
 
+      {canViewBilling ? (
+        <Button
+          mode="outlined"
+          textColor={colors.primary}
+          onPress={onOpenBilling}
+          style={{ marginBottom: spacing.sm }}
+        >
+          {t("profile.billing")}
+        </Button>
+      ) : null}
+
       <Button
         mode="outlined"
         textColor={colors.primary}
         icon="notebook-outline"
-
         onPress={() => router.push("/logbook")}
         style={{ marginBottom: spacing.sm }}
       >
@@ -205,3 +222,8 @@ export default function ProfileScreen() {
     </ScrollView>
   );
 }
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

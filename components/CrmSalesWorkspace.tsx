@@ -6,7 +6,7 @@ import { api } from '../lib/railway-api';
 import type { Id } from '../lib/ids';
 import { accents, colors, spacing } from '../lib/theme';
 import { useIsDesktop } from '../lib/responsive';
-import { formatMoneyWhole, formatShortDate, dollarsToCents, splitTags as baseSplitTags, errorMessage } from '../lib/format';
+import { asArray, dollarsToCents, errorMessage, formatMoneyWhole, formatShortDate, splitTags as baseSplitTags } from '../lib/format';
 import { AnimatedTab } from './AppCard';
 
 type LeadStatus = 'new' | 'contacted' | 'qualified' | 'proposal_sent' | 'negotiating' | 'won' | 'lost' | 'unqualified' | 'on_hold';
@@ -152,11 +152,11 @@ export function CrmSalesWorkspace({ venueId, enabled }: { venueId: Id<'venues'> 
   const deleteTemplate = useMutation(api.crm.deleteTemplate);
 
   const selectedLead = detail?.lead ?? leads?.find((lead) => lead._id === selectedLeadId) ?? null;
-  const openLeads = useMemo(() => (leads ?? []).filter((lead) => !lostStatuses.includes(lead.status) && lead.status !== 'won'), [leads]);
+  const openLeads = useMemo(() => asArray(leads).filter((lead) => !lostStatuses.includes(lead.status) && lead.status !== 'won'), [leads]);
   const stats = useMemo(() => {
-    const rows = leads ?? [];
-    const events = beos ?? [];
-    const docs = contracts ?? [];
+    const rows = asArray(leads);
+    const events = asArray(beos);
+    const docs = asArray(contracts);
     return {
       pipelineCents: openLeads.reduce((sum, lead) => sum + (lead.estimatedValueCents ?? 0), 0),
       wonCents: rows.filter((lead) => lead.status === 'won').reduce((sum, lead) => sum + (lead.estimatedValueCents ?? 0), 0),
@@ -435,7 +435,7 @@ export function CrmSalesWorkspace({ venueId, enabled }: { venueId: Id<'venues'> 
 
           {view === 'templates' ? (
             <TemplatesView
-              templates={templates ?? []}
+              templates={asArray(templates)}
               onSave={async (tpl) => {
                 try {
                   await saveTemplate({ venueId, ...tpl });
@@ -461,8 +461,8 @@ export function CrmSalesWorkspace({ venueId, enabled }: { venueId: Id<'venues'> 
         <LeadDetailPanel
           lead={selectedLead}
           detail={detail}
-          activity={leadActivity ?? []}
-          beos={detail?.beos ?? []}
+          activity={asArray(leadActivity)}
+          beos={asArray(detail?.beos)}
           onEmailBeo={async (beoId, toEmail, message) => {
             try {
               await emailBeo({ venueId, beoId, toEmail, message });
@@ -496,7 +496,7 @@ function DashboardView({
   onSelectLead: (id: Id<'crmLeads'>) => void;
   onView: (view: WorkspaceView) => void;
 }) {
-  const hotLeads = [...(leads ?? [])].sort((a, b) => (b.estimatedValueCents ?? 0) - (a.estimatedValueCents ?? 0)).slice(0, 5);
+  const hotLeads = [...asArray(leads)].sort((a, b) => (b.estimatedValueCents ?? 0) - (a.estimatedValueCents ?? 0)).slice(0, 5);
   return (
     <View style={{ gap: spacing.md }}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
@@ -514,8 +514,8 @@ function DashboardView({
         </View>
         <View style={{ flexGrow: 1, flexBasis: 320, gap: spacing.sm }}>
           <SectionHeader title="Recent documents" action="Docs" onPress={() => onView('events')} />
-          {(beos ?? []).slice(0, 3).map((beo) => <DocRow key={beo._id} title={beo.eventName} subtitle={`${beo.leadName ?? 'Unlinked'} - ${formatShortDate(beo.eventDate, 'TBD')}`} status={beo.status} />)}
-          {(contracts ?? []).slice(0, 3).map((contract) => <DocRow key={contract._id} title={contract.eventName ?? contract.contractNumber} subtitle={`${contract.leadName ?? 'Unlinked'} - ${contract.contractNumber}`} status={contract.status} />)}
+          {asArray(beos).slice(0, 3).map((beo) => <DocRow key={beo._id} title={beo.eventName} subtitle={`${beo.leadName ?? 'Unlinked'} - ${formatShortDate(beo.eventDate, 'TBD')}`} status={beo.status} />)}
+          {asArray(contracts).slice(0, 3).map((contract) => <DocRow key={contract._id} title={contract.eventName ?? contract.contractNumber} subtitle={`${contract.leadName ?? 'Unlinked'} - ${contract.contractNumber}`} status={contract.status} />)}
           {!(beos?.length || contracts?.length) ? <EmptyLine text="No BEOs or contracts yet." /> : null}
         </View>
       </View>
@@ -534,12 +534,12 @@ function PipelineView({
   onSelectLead: (id: Id<'crmLeads'>) => void;
   onMove: (leadId: Id<'crmLeads'>, status: LeadStatus) => void;
 }) {
-  const selectedLead = (leads ?? []).find((lead) => lead._id === selectedLeadId) ?? null;
+  const selectedLead = asArray(leads).find((lead) => lead._id === selectedLeadId) ?? null;
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
       <View style={{ flexDirection: 'row', gap: spacing.sm, paddingBottom: spacing.xs }}>
         {statusColumns.map((column) => {
-          const rows = (leads ?? []).filter((lead) => lead.status === column.status);
+          const rows = asArray(leads).filter((lead) => lead.status === column.status);
           const total = rows.reduce((sum, lead) => sum + (lead.estimatedValueCents ?? 0), 0);
           const canMoveSelectedHere = selectedLead != null && selectedLead.status !== column.status;
           return (
@@ -574,7 +574,7 @@ function ContactsView({ leads, search, onSearch, onSelectLead }: { leads: LeadRo
   return (
     <View style={{ gap: spacing.sm }}>
       <TextInput label="Search contacts and deals" value={search} onChangeText={onSearch} mode="outlined" style={{ backgroundColor: colors.surface }} />
-      {(leads ?? []).length === 0 ? <EmptyLine text="No matching CRM contacts." /> : (leads ?? []).map((lead) => (
+      {asArray(leads).length === 0 ? <EmptyLine text="No matching CRM contacts." /> : asArray(leads).map((lead) => (
         <LeadListRow key={lead._id} lead={lead} onPress={() => onSelectLead(lead._id)} />
       ))}
     </View>
@@ -584,7 +584,7 @@ function ContactsView({ leads, search, onSearch, onSelectLead }: { leads: LeadRo
 function EventsView({ beos, onConvert }: { beos: BeoRow[] | undefined; onConvert: (beoId: Id<'crmBeos'>) => Promise<void> }) {
   return (
     <View style={{ gap: spacing.sm }}>
-      {(beos ?? []).length === 0 ? <EmptyLine text="No BEO drafts yet." /> : (beos ?? []).map((beo) => (
+      {asArray(beos).length === 0 ? <EmptyLine text="No BEO drafts yet." /> : asArray(beos).map((beo) => (
         <View key={beo._id} style={{ padding: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: 8, gap: 4 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm }}>
             <View style={{ flex: 1 }}>
@@ -620,7 +620,7 @@ function EventsView({ beos, onConvert }: { beos: BeoRow[] | undefined; onConvert
 function ContractsView({ contracts }: { contracts: ContractRow[] | undefined }) {
   return (
     <View style={{ gap: spacing.sm }}>
-      {(contracts ?? []).length === 0 ? <EmptyLine text="No contracts yet." /> : (contracts ?? []).map((contract) => (
+      {asArray(contracts).length === 0 ? <EmptyLine text="No contracts yet." /> : asArray(contracts).map((contract) => (
         <DocRow
           key={contract._id}
           title={contract.eventName ?? contract.contractNumber}
@@ -682,7 +682,7 @@ function LeadDetailPanel({
           <TextInput label="Log note or next step" value={noteText} onChangeText={onNoteText} mode="outlined" multiline style={{ backgroundColor: colors.surface }} />
           <Button mode="contained" buttonColor={colors.primary} disabled={!noteText.trim()} onPress={onSaveNote}>Add note</Button>
           {detail === undefined ? <Text style={{ color: colors.muted }}>Loading activity...</Text> : null}
-          {(detail?.notes ?? []).slice(0, 4).map((note) => (
+          {asArray(detail?.notes).slice(0, 4).map((note) => (
             <View key={note._id} style={{ padding: spacing.sm, borderRadius: 8, backgroundColor: colors.background }}>
               <Text style={{ color: colors.charcoal }}>{note.text}</Text>
               <Text style={{ color: colors.muted, fontSize: 12 }}>{note.authorName} - {formatShortDate(note.createdAt)}</Text>
@@ -728,7 +728,7 @@ function LeadDetailPanel({
                   )}
                 </View>
               ))}
-              {(detail?.contracts ?? []).slice(0, 3).map((contract) => (
+              {asArray(detail?.contracts).slice(0, 3).map((contract) => (
                 <Text key={contract._id} style={{ color: colors.muted }}>Contract · {contract.contractNumber} · {contract.status}</Text>
               ))}
             </View>

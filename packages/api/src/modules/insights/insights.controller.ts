@@ -1,13 +1,15 @@
-import { Controller, Get, Req } from '@nestjs/common';
+import { Controller, Get, Req, UseInterceptors } from '@nestjs/common';
 import type { Request } from 'express';
 import { getClientIp } from '../../common/http';
 import { assertWithinSharedRateLimit } from '../../common/rate-limit';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RequireSubscription } from '../../billing/require-subscription.decorator';
+import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
 
 const INSIGHTS_RATE_LIMIT_MAX = 60;
 const INSIGHTS_RATE_LIMIT_WINDOW_MS = 60_000;
 
+@UseInterceptors(TenantRequestTransactionInterceptor)
 @Controller('v1/insights')
 export class InsightsController {
   constructor(private readonly prisma: PrismaService) {}

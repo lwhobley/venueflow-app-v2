@@ -13,6 +13,7 @@ import {
   Req,
   ServiceUnavailableException,
   UnauthorizedException,
+  UseInterceptors,
 } from '@nestjs/common';
 import { IsArray, IsBoolean, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -27,6 +28,8 @@ import { assertWithinSharedRateLimit } from '../../common/rate-limit';
 import { zonedDateBounds, zonedIsoDate } from '../../common/venue-time';
 import { secretsMatch } from '../../common/webhook-auth';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
+import { withTenantTransaction } from '../../prisma/tenant-transaction';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 import { ReservationMutationService } from './reservation-mutation.service';
@@ -227,6 +230,7 @@ class ReservationHoldDto {
   reason!: string;
 }
 
+@UseInterceptors(TenantRequestTransactionInterceptor)
 @Controller('v1/reservations')
 export class ReservationsController {
   constructor(
@@ -319,7 +323,19 @@ export class ReservationsController {
         if (isNaN(sourceEventAt.getTime())) {
           throw new BadRequestException('Invalid eventTimestamp');
         }
-        const result = await this.prisma.$transaction(async (tx) => {
+        // TODO(RLS cutover, tracked in scripts/rls-cutover/README.md): this is
+        // a @Public() webhook with no tenant context, so every prisma call in
+        // this handler — not just this one — currently runs unbound under a
+        // future NOBYPASSRLS stadium_api role. This transaction (the actual
+        // Reservation write) is fixed via withTenantTransaction below; the
+        // connection lookup above and the reservationSyncEvent
+        // create/findFirst/updateMany calls in this loop (deliberately
+        // committed independently of this transaction for idempotency
+        // durability — see the comment at the top of this method) are NOT yet
+        // — they need the same withTenantTransaction(..., { venueId }) wrap
+        // applied individually before cutover, since collapsing them into one
+        // transaction would break that durability guarantee.
+        const result = await withTenantTransaction(this.prisma, async (tx) => {
           await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`reservation-sync:${venueId}:${provider}:${event.externalId}`}))`;
           const fields: Prisma.ReservationUpdateInput = {
             guestName: event.guestName,
@@ -361,7 +377,7 @@ export class ReservationsController {
                 select: { id: true },
               })).id;
           return { reservationId, ignoredStale: false };
-        });
+        }, { venueId });
 
         // 3) Mark processed (committed independently of the processing tx).
         await this.prisma.reservationSyncEvent.updateMany({

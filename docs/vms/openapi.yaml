@@ -1,0 +1,1352 @@
+openapi: 3.1.0
+info:
+  title: Venue Wrangler — Vendor Management System (VMS) API
+  version: "1.0.0"
+  description: |
+    Multi-agency staffing requisitions, worker rosters, time & attendance,
+    payroll export and inventory sync for stadium and arena operations.
+
+    ## Authentication
+    Every endpoint requires a bearer JWT issued by the Venue Wrangler auth
+    service, plus an active subscription on the venue.
+
+        Authorization: Bearer <jwt>
+
+    Tokens expire; refresh through the standard auth endpoints. The token binds
+    the caller to exactly one venue — the venue scope is taken from the token,
+    never from a request parameter, so there is no `venueId` in any path below.
+
+    ## Authorization
+    All endpoints except the two clock-punch routes require a manager role
+    (`admin`, `owner`, `manager`) or an all-access grant. A request from a
+    lesser role returns `403`.
+
+    The punch routes are deliberately open to any authenticated venue member,
+    because a kiosk session is not a manager session — but a non-manager must
+    present the worker's PIN or badge code, and a worker with no credential on
+    file cannot be punched at all.
+
+    ## Rate limiting
+    The global throttler applies: 1,000 requests/minute per user. Exceeding it
+    returns `429` with a `Retry-After` header.
+
+    ## Error model
+    Errors follow the NestJS envelope:
+
+        { "statusCode": 400, "message": "...", "error": "Bad Request" }
+
+    | Code | Meaning in this API |
+    | ---- | ------------------- |
+    | 400  | Validation failure, illegal state transition, or a business rule (e.g. break minutes exceeding shift length, assigning to a cancelled order) |
+    | 401  | Missing, malformed or expired bearer token |
+    | 403  | Role is insufficient, or a worker is locked out after 5 failed punch attempts |
+    | 404  | Entity does not exist inside the caller's venue — indistinguishable from "exists elsewhere", by design |
+    | 429  | Rate limit exceeded |
+    | 500  | Unexpected failure. A failed audit-log write also surfaces here: the operation is rolled back rather than proceeding unrecorded |
+
+servers:
+  - url: https://api.venuewrangler.com
+    description: Production
+  - url: http://localhost:3000
+    description: Local development
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Vendors
+  - name: Staff
+  - name: Availability
+  - name: Orders
+  - name: Assignments
+  - name: Templates
+  - name: Attendance
+  - name: Payroll
+  - name: Inventory
+  - name: Analytics
+  - name: Notifications
+  - name: Audit
+
+paths:
+  # ---------------------------------------------------------------- Vendors
+  /v1/vms/vendors:
+    get:
+      tags: [Vendors]
+      summary: List vendors
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/VendorStatus' } }
+        - { name: vendorType, in: query, schema: { $ref: '#/components/schemas/VendorType' } }
+        - { name: search, in: query, schema: { type: string }, description: Matches name, code or contact email }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+      responses:
+        '200':
+          description: Vendor page
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Vendor' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Vendors]
+      summary: Create a vendor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateVendor' }
+            example:
+              name: Apex Staffing
+              code: APEX
+              vendorType: staffing_agency
+              contactEmail: ops@apexstaffing.test
+              billingRateMultiplier: 1.35
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Vendor' }
+        '400':
+          description: Vendor code already exists at this facility
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /v1/vms/vendors/export:
+    get:
+      tags: [Vendors]
+      summary: Export the vendor directory as CSV
+      description: Declared ahead of `/vendors/{id}` so the literal path is reachable.
+      responses:
+        '200':
+          description: CSV payload
+          content:
+            text/csv:
+              schema: { type: string }
+
+  /v1/vms/vendors/import:
+    post:
+      tags: [Vendors]
+      summary: Bulk import vendors from CSV
+      description: |
+        Header row required; `name` and `code` are mandatory. Existing codes are
+        skipped rather than overwritten, so re-running the same file is safe.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CsvImport' }
+            example:
+              csv: "name,code,contactEmail\nApex Staffing,APEX,ops@apex.test\n"
+      responses:
+        '201':
+          description: Import summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CsvImportResult' }
+
+  /v1/vms/vendors/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get:
+      tags: [Vendors]
+      summary: Get one vendor with services, staff and recent fulfillments
+      description: Worker credential fields are stripped from the embedded roster.
+      responses:
+        '200':
+          description: Vendor
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Vendor' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Vendors]
+      summary: Update a vendor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateVendor' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Vendor' }
+    delete:
+      tags: [Vendors]
+      summary: Hard-delete a vendor
+      description: |
+        Refused with `400` when the vendor has active or confirmed fulfillments —
+        deactivate instead to preserve history.
+      responses:
+        '200': { description: Deleted }
+        '400':
+          description: Vendor has active fulfillments
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /v1/vms/vendors/{id}/deactivate:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    patch:
+      tags: [Vendors]
+      summary: Deactivate a vendor without data loss
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { reason: { type: string } }
+      responses:
+        '200':
+          description: Vendor set to inactive
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Vendor' }
+
+  /v1/vms/vendors/{id}/services:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    post:
+      tags: [Vendors]
+      summary: Add a rate-carded service to a vendor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [serviceType, hourlyRateCents]
+              properties:
+                serviceType: { type: string, example: Bartender }
+                hourlyRateCents: { type: integer, example: 2800 }
+                overtimeRateCents: { type: integer }
+                minimumNoticeHours: { type: integer, default: 24 }
+                active: { type: boolean, default: true }
+      responses:
+        '201': { description: Service added }
+
+  # ------------------------------------------------------------------ Staff
+  /v1/vms/staff:
+    get:
+      tags: [Staff]
+      summary: List staff
+      parameters:
+        - { name: vendorId, in: query, schema: { type: string } }
+        - { name: role, in: query, schema: { type: string }, description: Matches against the skills array }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+      responses:
+        '200':
+          description: Staff page — credential fields are never returned
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/StaffMember' } }
+    post:
+      tags: [Staff]
+      summary: Create a staff member
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateStaffMember' }
+            example:
+              firstName: Rosa
+              lastName: Klein
+              email: rosa.klein@example.test
+              skills: [Bartender, TIPS]
+              hourlyRateCents: 3200
+              pin: "4821"
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffMember' }
+
+  /v1/vms/staff/export:
+    get:
+      tags: [Staff]
+      summary: Export the staff roster as CSV
+      responses:
+        '200':
+          description: CSV payload
+          content: { text/csv: { schema: { type: string } } }
+
+  /v1/vms/staff/import:
+    post:
+      tags: [Staff]
+      summary: Bulk import staff from CSV
+      description: |
+        Columns: firstName, lastName, email, phone, skills (semicolon-separated),
+        hourlyRateCents, vendorCode, badgeNumber. Duplicates are detected on
+        (firstName, lastName, email).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CsvImport' }
+      responses:
+        '201':
+          description: Import summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CsvImportResult' }
+
+  /v1/vms/staff/availability:
+    get:
+      tags: [Availability]
+      summary: List availability windows
+      parameters:
+        - { name: staffMemberId, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        '200': { description: Availability windows }
+    post:
+      tags: [Availability]
+      summary: Declare an availability or unavailability window
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SetAvailability' }
+            example:
+              staffMemberId: ckstaff123
+              startDate: "2026-09-09"
+              endDate: "2026-09-12"
+              available: false
+              reason: Annual leave
+      responses:
+        '201': { description: Window recorded }
+
+  /v1/vms/staff/calendar:
+    get:
+      tags: [Availability]
+      summary: Assignment calendar with conflicts
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Assignments, unavailable blocks and detected double-bookings
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AvailabilityCalendar' }
+
+  /v1/vms/staff/certifications/expiring:
+    get:
+      tags: [Staff]
+      summary: Certifications lapsing inside the window
+      parameters:
+        - name: withinDays
+          in: query
+          schema: { type: integer, default: 30 }
+      responses:
+        '200':
+          description: Expiring certifications, soonest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/CertificationDue' } }
+
+  # ----------------------------------------------------------------- Orders
+  /v1/vms/orders:
+    get:
+      tags: [Orders]
+      summary: List staffing orders
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/OrderStatus' } }
+        - { name: shiftDate, in: query, schema: { type: string, format: date } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+      responses:
+        '200':
+          description: Order page
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/StaffingOrder' } }
+    post:
+      tags: [Orders]
+      summary: Create a staffing order
+      description: Triggers an `order_submitted` notification to venue managers.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateOrder' }
+            example:
+              title: Saturday night bar service
+              roleRequired: Bartender
+              quantityRequested: 10
+              shiftDate: "2026-09-12"
+              startTime: "16:00"
+              endTime: "23:00"
+              durationHours: 7
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffingOrder' }
+
+  /v1/vms/orders/escalations:
+    get:
+      tags: [Orders]
+      summary: Orders inside the 48-hour window that are still unfilled
+      description: |
+        Bounded on both sides — today through T+48h — so stale past orders do
+        not accumulate in the result. The hourly escalation cron reads the same
+        query and emails managers about shortfalls.
+      responses:
+        '200':
+          description: Orders needing escalation
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/StaffingOrder' } }
+
+  /v1/vms/orders/ai-parse:
+    post:
+      tags: [Orders]
+      summary: Parse a natural-language requisition into order fields
+      description: |
+        Falls back to deterministic keyword extraction when the AI provider is
+        unavailable, so the endpoint never hard-fails.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [naturalLanguagePrompt]
+              properties:
+                naturalLanguagePrompt:
+                  type: string
+                  example: Find me 10 bartenders for Saturday night
+      responses:
+        '201':
+          description: Parsed order draft
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ParsedOrder' }
+
+  /v1/vms/orders/from-template:
+    post:
+      tags: [Templates]
+      summary: Create an order from a saved template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [templateId, shiftDate]
+              properties:
+                templateId: { type: string }
+                shiftDate: { type: string, format: date }
+                title: { type: string }
+                eventId: { type: string }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffingOrder' }
+
+  /v1/vms/orders/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get:
+      tags: [Orders]
+      summary: Get one order with fulfillments and attendance
+      responses:
+        '200':
+          description: Order
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffingOrder' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/vms/orders/{id}/status:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    patch:
+      tags: [Orders]
+      summary: Move an order through its lifecycle
+      description: |
+        Transitions are validated:
+
+            draft     → requested | cancelled
+            requested → quoted | booked | confirmed | cancelled
+            quoted    → booked | confirmed | cancelled
+            booked    → confirmed | completed | cancelled
+            confirmed → completed | cancelled
+            completed → (terminal)
+            cancelled → (terminal)
+
+        An illegal move returns `400` naming the allowed set.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: '#/components/schemas/OrderStatus' }
+                cancellationReason: { type: string }
+      responses:
+        '200': { description: Updated }
+        '400':
+          description: Illegal transition
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /v1/vms/orders/{id}/bids:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    post:
+      tags: [Orders]
+      summary: Record a vendor bid
+      description: The vendor must belong to the caller's venue. Sends `bid_received`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [vendorId, staffCountAssigned, bidHourlyRateCents]
+              properties:
+                vendorId: { type: string }
+                staffCountAssigned: { type: integer, minimum: 1 }
+                bidHourlyRateCents: { type: integer, minimum: 0 }
+                notes: { type: string }
+      responses:
+        '201': { description: Bid recorded }
+        '404': { description: Order or vendor not found in this venue }
+
+  /v1/vms/orders/fulfillments/{fulfillmentId}/confirm:
+    parameters:
+      - { name: fulfillmentId, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [Orders]
+      summary: Accept a bid and recompute fulfilled headcount
+      description: Sends `order_confirmed`.
+      responses:
+        '201': { description: Confirmed }
+
+  /v1/vms/orders/{id}/match:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    post:
+      tags: [Orders]
+      summary: AI vendor matching with a deterministic fallback
+      responses:
+        '201':
+          description: Ranked vendor matches, best fit first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/VendorMatch' } }
+
+  /v1/vms/orders/{id}/clone:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    post:
+      tags: [Orders]
+      summary: Duplicate an order onto a new date
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { shiftDate: { type: string, format: date } }
+      responses:
+        '201': { description: Cloned order }
+
+  /v1/vms/orders/{id}/assignments:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get:
+      tags: [Assignments]
+      summary: List workers rostered onto this order
+      responses:
+        '200': { description: Assignments }
+    post:
+      tags: [Assignments]
+      summary: Roster a named worker onto the order
+      description: |
+        Rejected with `400` when the worker is inside an unavailable window or
+        already assigned to another order that day. Re-submit with `force: true`
+        to override; the override reason is stored on the assignment.
+
+        Assignment is what makes no-show detection meaningful — an unassigned
+        order can only be reported as an unstaffed vendor shortfall.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AssignStaff' }
+      responses:
+        '201': { description: Assigned }
+        '400': { description: Availability or double-booking conflict }
+
+  /v1/vms/assignments/{assignmentId}:
+    parameters:
+      - { name: assignmentId, in: path, required: true, schema: { type: string } }
+    delete:
+      tags: [Assignments]
+      summary: Release a worker from an order
+      responses:
+        '200': { description: Released }
+
+  /v1/vms/order-templates:
+    get:
+      tags: [Templates]
+      summary: List saved requisition templates
+      responses:
+        '200': { description: Templates }
+    post:
+      tags: [Templates]
+      summary: Save a requisition template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTemplate' }
+      responses:
+        '201': { description: Created }
+
+  /v1/vms/order-templates/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    delete:
+      tags: [Templates]
+      summary: Delete a template
+      responses:
+        '200': { description: Deleted }
+
+  # ------------------------------------------------------------- Attendance
+  /v1/vms/attendance/authorize-punch:
+    post:
+      tags: [Attendance]
+      summary: Authorize a worker punch and issue a short-lived signed punch token
+      description: |
+        Authenticates a worker via PIN or badge code and returns a short-lived
+        (5-minute) signed punch authorization token. This token can be passed
+        to clock-in or clock-out without caching or persisting plaintext credentials
+        in client offline storage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [staffMemberId, action]
+              properties:
+                staffMemberId: { type: string }
+                pin: { type: string }
+                badgeCode: { type: string }
+                action: { type: string, enum: [clock_in, clock_out] }
+      responses:
+        '201':
+          description: Punch authorization issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  punchAuthToken: { type: string }
+                  expiresAt: { type: string, format: date-time }
+                  action: { type: string }
+                  staffMemberId: { type: string }
+        '400': { description: Invalid credential or missing action }
+        '403': { description: Locked out after repeated failures }
+
+  /v1/vms/attendance/clock-in:
+    post:
+      tags: [Attendance]
+      summary: Clock a worker in
+      description: |
+        A manager may punch on a worker's behalf. Any other caller must supply
+        the worker's `pin` or `badgeCode`; a worker with neither on file cannot
+        be punched at all. Five failed attempts lock that worker out for
+        15 minutes, counted in the database so the limit holds across replicas
+        and restarts.
+
+        When GPS is supplied and the facility has coordinates, a punch more than
+        500 m away is flagged `off_site_punch`. A facility without coordinates
+        logs a warning and flags `geofence_unconfigured` rather than silently
+        passing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClockIn' }
+            example:
+              staffMemberId: ckstaff123
+              pin: "4821"
+              gpsLatitude: 34.1614
+              gpsLongitude: -118.1676
+      responses:
+        '201':
+          description: Punch recorded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Attendance' }
+        '400': { description: Already clocked in, or invalid credential }
+        '403': { description: Locked out after repeated failures }
+
+  /v1/vms/attendance/clock-out:
+    post:
+      tags: [Attendance]
+      summary: Clock a worker out
+      description: |
+        Computes billable hours, applies the statutory meal-break rule and
+        flags overtime and double-time. `breakMinutes` may not exceed the shift
+        length. A deviation sends `time_deviation` to managers.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClockOut' }
+      responses:
+        '201':
+          description: Punch closed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Attendance' }
+
+  /v1/vms/attendance/{id}/approve:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    post:
+      tags: [Attendance]
+      summary: Manager sign-off on an attendance record
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { managerNotes: { type: string } }
+      responses:
+        '201': { description: Approved }
+
+  /v1/vms/attendance/reports:
+    get:
+      tags: [Attendance]
+      summary: Attendance log
+      parameters:
+        - { name: startDate, in: query, schema: { type: string, format: date } }
+        - { name: endDate, in: query, schema: { type: string, format: date } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/AttendanceStatus' } }
+      responses:
+        '200':
+          description: Attendance rows with staff and vendor context
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Attendance' } }
+
+  /v1/vms/attendance/detect-no-shows:
+    post:
+      tags: [Attendance]
+      summary: Run the no-show sweep for this venue
+      description: |
+        Idempotent — already-flagged absences are excluded from the shortfall
+        count, so repeated runs converge. Also runs automatically every 30
+        minutes.
+
+        Absences are attributed only to workers actually assigned to the order.
+        Headcount a vendor confirmed but never named a worker for is recorded
+        against the vendor with a null staff member.
+      parameters:
+        - { name: gracePeriodMinutes, in: query, schema: { type: integer, default: 30 } }
+      responses:
+        '201':
+          description: Sweep result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NoShowSweep' }
+
+  # ---------------------------------------------------------------- Payroll
+  /v1/vms/attendance/payroll/adp:
+    get:
+      tags: [Payroll]
+      summary: ADP Workforce Now CSV export
+      description: |
+        Splits each shift into REG / OT / DT earnings codes with a separate
+        MEAL_PENALTY row where the statutory break rule was missed. Rows with no
+        staff member (unstaffed shortfalls) are excluded.
+      responses:
+        '200':
+          description: CSV payload
+          content: { text/csv: { schema: { type: string } } }
+
+  /v1/vms/attendance/payroll/gusto:
+    get:
+      tags: [Payroll]
+      summary: Gusto payroll JSON export
+      responses:
+        '200':
+          description: Period-bounded gross pay per worker
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GustoExport' }
+
+  # -------------------------------------------------------------- Inventory
+  /v1/vms/integrations/sync:
+    post:
+      tags: [Inventory]
+      summary: Trigger an inventory sync
+      description: |
+        With `YELLOW_DOG_API_URL` and `YELLOW_DOG_API_KEY` set, pushes the
+        catalog and adopts the stock levels the remote returns. Transient
+        failures get one retry; a non-2xx response is not retried. Without
+        credentials the run is recorded as `demo_mode` and returns the baseline
+        catalog — it is never reported as a successful live sync.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                system: { $ref: '#/components/schemas/SyncSystem' }
+                syncType: { type: string }
+                items:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      sku: { type: string }
+                      name: { type: string }
+                      quantity: { type: integer }
+      responses:
+        '201':
+          description: Sync result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncResult' }
+
+  /v1/vms/inventory/status:
+    get:
+      tags: [Inventory]
+      summary: Latest inventory snapshot and sync history
+      description: A pure read — it does not perform or record a sync.
+      responses:
+        '200': { description: Snapshot plus the last ten sync log entries }
+
+  # -------------------------------------------------------------- Analytics
+  /v1/vms/analytics/vendor-scorecard:
+    get:
+      tags: [Analytics]
+      summary: Vendor performance scorecard
+      description: |
+        Aggregated in the database. Rates are `null` rather than a placeholder
+        when a vendor has no measurable history; `hasData` says which.
+        No-shows with no named worker are attributed through the order's
+        confirmed fulfillment, so a vendor that supplied nobody still scores.
+      responses:
+        '200':
+          description: Scorecard rows
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/ScorecardRow' } }
+
+  /v1/vms/analytics/cost-breakdown:
+    get:
+      tags: [Analytics]
+      summary: Budget versus actual by role
+      responses:
+        '200': { description: Cost breakdown }
+
+  /v1/vms/analytics/forecast:
+    get:
+      tags: [Analytics]
+      summary: Demand forecast for an event
+      description: |
+        Reads up to 50 historical orders and models role averages scaled by
+        attendance. `confidenceScore` is derived from the sample size: 0.48 with
+        no history, rising to 0.94 at 20+ past orders.
+      parameters:
+        - { name: name, in: query, schema: { type: string } }
+        - { name: type, in: query, schema: { type: string } }
+        - { name: expectedAttendance, in: query, schema: { type: integer } }
+        - { name: hours, in: query, schema: { type: number } }
+      responses:
+        '200':
+          description: Forecast
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Forecast' }
+
+  /v1/vms/analytics/anomalies:
+    get:
+      tags: [Analytics]
+      summary: Attendance anomalies with severity and suggested action
+      responses:
+        '200':
+          description: Anomaly list
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Anomaly' } }
+
+  # ---------------------------------------------------------- Notifications
+  /v1/vms/notifications/log:
+    get:
+      tags: [Notifications]
+      summary: Notification delivery log
+      description: Includes suppressed rows, so an opt-out is visible rather than absent.
+      parameters:
+        - { name: eventType, in: query, schema: { $ref: '#/components/schemas/NotificationEvent' } }
+        - { name: status, in: query, schema: { type: string, enum: [sent, failed, suppressed] } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+      responses:
+        '200': { description: Delivery rows with a total count }
+
+  /v1/vms/notifications/preferences:
+    get:
+      tags: [Notifications]
+      summary: The calling user's notification preferences
+      responses:
+        '200': { description: Preferences }
+    put:
+      tags: [Notifications]
+      summary: Opt in or out of an event type
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [eventType]
+              properties:
+                eventType: { $ref: '#/components/schemas/NotificationEvent' }
+                emailEnabled: { type: boolean }
+                smsEnabled: { type: boolean }
+      responses:
+        '200': { description: Preference saved }
+
+  /v1/vms/maintenance/run-sweeps:
+    post:
+      tags: [Notifications]
+      summary: Force the scheduled sweeps to run now
+      responses:
+        '201': { description: Results for each sweep }
+
+  # ------------------------------------------------------------------ Audit
+  /v1/vms/audit-logs:
+    get:
+      tags: [Audit]
+      summary: Audit trail
+      parameters:
+        - { name: entityType, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+      responses:
+        '200': { description: Audit entries, newest first }
+
+  /v1/vms/audit-logs/export:
+    get:
+      tags: [Audit]
+      summary: Export the audit trail for compliance reporting
+      parameters:
+        - { name: entityType, in: query, schema: { type: string } }
+        - { name: startDate, in: query, schema: { type: string, format: date } }
+        - { name: endDate, in: query, schema: { type: string, format: date } }
+        - { name: format, in: query, schema: { type: string, enum: [csv, json], default: csv } }
+      responses:
+        '200':
+          description: Export payload
+          content:
+            text/csv: { schema: { type: string } }
+            application/json: { schema: { type: array, items: { type: object } } }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+
+  responses:
+    Forbidden:
+      description: Manager role required
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Not found in this venue
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        statusCode: { type: integer, example: 400 }
+        message: { type: string }
+        error: { type: string }
+
+    VendorType:
+      type: string
+      enum: [staffing_agency, labor_contractor, local_supplier, concessions_operator, security_firm, cleaning_crew]
+    VendorStatus:
+      type: string
+      enum: [active, pending_onboarding, inactive, suspended]
+    OrderStatus:
+      type: string
+      enum: [draft, requested, quoted, booked, confirmed, completed, cancelled]
+    AttendanceStatus:
+      type: string
+      enum: [clocked_in, clocked_out, approved, flagged_exception, rejected]
+    SyncSystem:
+      type: string
+      enum: [yellow_dog, marginedge, toast, adp, gusto]
+    NotificationEvent:
+      type: string
+      enum: [order_submitted, bid_received, order_confirmed, shift_reminder, time_deviation, no_show_alert, fulfillment_failure, certification_expiring]
+
+    Vendor:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        code: { type: string }
+        vendorType: { $ref: '#/components/schemas/VendorType' }
+        status: { $ref: '#/components/schemas/VendorStatus' }
+        rating: { type: number, format: float }
+        billingRateMultiplier: { type: number, format: float, default: 1.35 }
+        contactName: { type: string, nullable: true }
+        contactEmail: { type: string, nullable: true }
+        contactPhone: { type: string, nullable: true }
+        insuranceExpiry: { type: string, format: date-time, nullable: true }
+
+    CreateVendor:
+      type: object
+      required: [name, code]
+      properties:
+        name: { type: string }
+        code: { type: string, description: Uppercased; unique per facility }
+        vendorType: { $ref: '#/components/schemas/VendorType' }
+        contactName: { type: string }
+        contactEmail: { type: string }
+        contactPhone: { type: string }
+        billingRateMultiplier: { type: number, minimum: 1.0 }
+        taxId: { type: string }
+        insuranceExpiry: { type: string, format: date }
+
+    StaffMember:
+      type: object
+      description: Credential fields (pinHash, pinSalt) are never serialised.
+      properties:
+        id: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string, nullable: true }
+        skills: { type: array, items: { type: string } }
+        hourlyRateCents: { type: integer }
+        badgeNumber: { type: string, nullable: true }
+        vendorId: { type: string, nullable: true }
+
+    CreateStaffMember:
+      type: object
+      required: [firstName, lastName]
+      properties:
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        vendorId: { type: string }
+        skills: { type: array, items: { type: string } }
+        certifications:
+          description: Array of { name, expiresAt } or a map of name → ISO date.
+          oneOf:
+            - type: array
+              items:
+                type: object
+                properties:
+                  name: { type: string }
+                  expiresAt: { type: string, format: date }
+            - type: object
+              additionalProperties: { type: string, format: date }
+        hourlyRateCents: { type: integer }
+        badgeNumber: { type: string }
+        pin: { type: string, description: Stored as a scrypt hash; never returned }
+
+    SetAvailability:
+      type: object
+      required: [staffMemberId, startDate, endDate, available]
+      properties:
+        staffMemberId: { type: string }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        available: { type: boolean }
+        reason: { type: string }
+
+    AvailabilityCalendar:
+      type: object
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        assignments: { type: array, items: { type: object } }
+        unavailableBlocks: { type: array, items: { type: object } }
+        conflicts:
+          type: array
+          items:
+            type: object
+            properties:
+              staffMemberId: { type: string }
+              staffName: { type: string }
+              shiftDate: { type: string, format: date }
+              orderIds: { type: array, items: { type: string } }
+
+    CertificationDue:
+      type: object
+      properties:
+        staffMemberId: { type: string }
+        staffName: { type: string }
+        certification: { type: string }
+        expiresOn: { type: string, format: date }
+        daysRemaining: { type: integer }
+        expired: { type: boolean }
+
+    StaffingOrder:
+      type: object
+      properties:
+        id: { type: string }
+        orderNumber: { type: string }
+        title: { type: string }
+        roleRequired: { type: string }
+        quantityRequested: { type: integer }
+        quantityFulfilled: { type: integer }
+        shiftDate: { type: string, format: date }
+        startTime: { type: string, example: "16:00" }
+        endTime: { type: string, example: "23:00" }
+        durationHours: { type: number }
+        budgetCents: { type: integer }
+        actualCostCents: { type: integer }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        cancellationReason: { type: string, nullable: true }
+
+    CreateOrder:
+      type: object
+      required: [title, roleRequired, quantityRequested, shiftDate, startTime, endTime]
+      properties:
+        title: { type: string }
+        roleRequired: { type: string }
+        quantityRequested: { type: integer, minimum: 1 }
+        shiftDate: { type: string, format: date }
+        startTime: { type: string }
+        endTime: { type: string }
+        durationHours: { type: number }
+        budgetCents: { type: integer }
+        specialRequirements: { type: string }
+        templateName: { type: string }
+        eventId: { type: string }
+
+    CreateTemplate:
+      type: object
+      required: [name, roleRequired, quantityRequested]
+      properties:
+        name: { type: string }
+        roleRequired: { type: string }
+        quantityRequested: { type: integer, minimum: 1 }
+        startTime: { type: string }
+        endTime: { type: string }
+        durationHours: { type: number }
+        budgetCents: { type: integer }
+        specialRequirements: { type: string }
+
+    AssignStaff:
+      type: object
+      required: [staffMemberId]
+      properties:
+        staffMemberId: { type: string }
+        fulfillmentId: { type: string }
+        notes: { type: string }
+        force: { type: boolean, description: Override a detected conflict; recorded on the assignment }
+
+    ParsedOrder:
+      type: object
+      properties:
+        title: { type: string }
+        roleRequired: { type: string }
+        quantityRequested: { type: integer }
+        shiftDate: { type: string, format: date }
+        startTime: { type: string }
+        endTime: { type: string }
+        durationHours: { type: number }
+        estimatedBudgetCents: { type: integer }
+
+    VendorMatch:
+      type: object
+      properties:
+        vendorId: { type: string }
+        vendorName: { type: string }
+        fitScorePercent: { type: integer, minimum: 0, maximum: 100 }
+        recommendedHourlyRateCents: { type: integer }
+        reasoning: { type: string }
+        strengths: { type: array, items: { type: string } }
+        riskFactors: { type: array, items: { type: string } }
+
+    ClockIn:
+      type: object
+      required: [staffMemberId]
+      properties:
+        staffMemberId: { type: string }
+        orderId: { type: string }
+        pin: { type: string }
+        badgeCode: { type: string }
+        deviceInfo: { type: string }
+        gpsLatitude: { type: number }
+        gpsLongitude: { type: number }
+
+    ClockOut:
+      type: object
+      required: [attendanceId]
+      properties:
+        attendanceId: { type: string }
+        breakMinutes: { type: integer, minimum: 0 }
+        pin: { type: string }
+        badgeCode: { type: string }
+        deviceInfo: { type: string }
+
+    Attendance:
+      type: object
+      properties:
+        id: { type: string }
+        staffMemberId: { type: string, nullable: true, description: Null for an unstaffed vendor shortfall }
+        orderId: { type: string, nullable: true }
+        clockIn: { type: string, format: date-time }
+        clockOut: { type: string, format: date-time, nullable: true }
+        hoursWorked: { type: number }
+        breakMinutes: { type: integer }
+        billableHours: { type: number }
+        billedRateCents: { type: integer }
+        totalBilledCents: { type: integer }
+        status: { $ref: '#/components/schemas/AttendanceStatus' }
+        isWithinGeofence: { type: boolean }
+        deviationFlags:
+          type: array
+          items:
+            type: string
+            enum: [no_show, unfilled_shift, off_site_punch, geofence_unconfigured, meal_break_penalty, overtime, double_time]
+
+    NoShowSweep:
+      type: object
+      properties:
+        scannedOrdersCount: { type: integer }
+        flaggedNoShowsCount: { type: integer }
+        flaggedNoShows:
+          type: array
+          items:
+            type: object
+            properties:
+              orderId: { type: string }
+              orderNumber: { type: string }
+              vendorId: { type: string, nullable: true }
+              staffMemberId: { type: string, nullable: true }
+              staffName: { type: string, nullable: true }
+              role: { type: string }
+              reason: { type: string }
+
+    GustoExport:
+      type: object
+      properties:
+        records:
+          type: array
+          items:
+            type: object
+            properties:
+              employeeId: { type: string }
+              employeeName: { type: string }
+              regularHours: { type: number }
+              overtimeHours: { type: number }
+              doubleTimeHours: { type: number }
+              hourlyRate: { type: number }
+              grossPay: { type: number }
+              periodStart: { type: string, format: date }
+              periodEnd: { type: string, format: date }
+        totalHours: { type: number }
+        totalGrossPayCents: { type: integer }
+
+    SyncResult:
+      type: object
+      properties:
+        system: { $ref: '#/components/schemas/SyncSystem' }
+        syncType: { type: string }
+        itemsSynced: { type: integer }
+        status: { type: string, enum: [success, partial, failed, demo_mode] }
+        message: { type: string }
+        supplies: { type: array, items: { type: object } }
+
+    ScorecardRow:
+      type: object
+      properties:
+        vendorId: { type: string }
+        vendorName: { type: string }
+        code: { type: string }
+        rating: { type: number }
+        totalOrdersAssigned: { type: integer }
+        fulfillmentRatePercent: { type: integer, nullable: true }
+        onTimeRatePercent: { type: integer, nullable: true }
+        noShowCount: { type: integer }
+        hasData: { type: boolean }
+        totalBilledCents: { type: integer }
+        tierStatus: { type: string }
+
+    Forecast:
+      type: object
+      properties:
+        eventType: { type: string }
+        expectedAttendance: { type: integer }
+        recommendedRoles:
+          type: array
+          items:
+            type: object
+            properties:
+              role: { type: string }
+              headcount: { type: integer }
+              recommendedDurationHours: { type: number }
+              estimatedCostCents: { type: integer }
+              notes: { type: string }
+        totalEstimatedHeadcount: { type: integer }
+        totalEstimatedCostCents: { type: integer }
+        confidenceScore: { type: number, minimum: 0, maximum: 1 }
+
+    Anomaly:
+      type: object
+      properties:
+        attendanceId: { type: string }
+        staffName: { type: string }
+        severity: { type: string, enum: [low, medium, high] }
+        flag: { type: string }
+        description: { type: string }
+        suggestedAction: { type: string }
+
+    CsvImport:
+      type: object
+      required: [csv]
+      properties:
+        csv: { type: string, description: Raw CSV including the header row }
+
+    CsvImportResult:
+      type: object
+      properties:
+        parsed: { type: integer }
+        imported: { type: integer }
+        skipped: { type: integer }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              row: { type: integer }
+              reason: { type: string }

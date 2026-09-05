@@ -2,19 +2,21 @@ import { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { Button, Card, SegmentedButtons, Snackbar, Text } from 'react-native-paper';
 import { ScreenErrorBoundary } from '../../components/ErrorBoundary';
+import { ScreenState } from '../../components/ScreenState';
 import { AnimatedTab, SectionHeader } from '../../components/AppCard';
 import { useI18n } from '../../lib/i18n';
-import { useMutation, useQuery } from '../../lib/railway-hooks';
+import { useMutation, useQueryState } from '../../lib/railway-hooks';
 import { api } from '../../lib/railway-api';
 import type { Id } from '../../lib/ids';
 import { colors, radius, spacing } from '../../lib/theme';
 import { useDesktopContentStyle } from '../../lib/responsive';
 import { useVenueAuth } from '../../lib/useVenueAuth';
-import { errorMessage } from '../../lib/format';
+import { asArray, errorMessage } from '../../lib/format';
 import { ManagerCalendar } from '../../components/schedule/ManagerCalendar';
 import { MyShifts } from '../../components/schedule/MyShifts';
 import { BlackoutManager } from '../../components/schedule/BlackoutManager';
 import { LaborForecastPanel } from '../../components/schedule/LaborForecastPanel';
+
 
 type StaffRequest = {
   _id: string;
@@ -28,12 +30,12 @@ type SwapRow = { _id: Id<'shiftSwaps'>; status: string; requesterName: string; t
 
 function RequestQueue({ venueId }: { venueId: Id<'venues'> }) {
   const { t } = useI18n();
-  const queueQuery = useQuery(api.app.listStaffRequests, { venueId });
+  const queueQuery = useQueryState<StaffRequest[]>(api.app.listStaffRequests, { venueId });
   const reviewRequest = useMutation(api.app.reviewStaffRequest);
-  const queue = useMemo(() => (queueQuery ?? []) as StaffRequest[], [queueQuery]);
-  const swapsQuery = useQuery(api.scheduling.listShiftSwaps, { venueId });
+  const queue = useMemo(() => asArray<StaffRequest>(queueQuery.data), [queueQuery.data]);
+  const swapsQuery = useQueryState<SwapRow[]>(api.scheduling.listShiftSwaps, { venueId });
   const reviewSwap = useMutation(api.scheduling.reviewShiftSwap);
-  const swaps = useMemo(() => (swapsQuery ?? []) as SwapRow[], [swapsQuery]);
+  const swaps = useMemo(() => asArray<SwapRow>(swapsQuery.data), [swapsQuery.data]);
   const [toast, setToast] = useState<string | null>(null);
 
   const safe = async (action: () => Promise<unknown>, ok?: string) => {
@@ -50,10 +52,15 @@ function RequestQueue({ venueId }: { venueId: Id<'venues'> }) {
     <Card style={{ backgroundColor: colors.surface, borderRadius: radius.sharp, marginBottom: spacing.md }}>
       <Card.Content style={{ gap: spacing.sm }}>
         <Text variant="titleMedium" style={{ fontWeight: '700' }}>{t('schedule.swapsTitle')}</Text>
-        {swaps.length === 0 ? (
-          <Text style={{ color: colors.muted }}>{t('schedule.noSwaps')}</Text>
-        ) : (
-          swaps.map((sw) => (
+        <ScreenState
+          isLoading={swapsQuery.isLoading}
+          error={swapsQuery.error}
+          isEmpty={swaps.length === 0}
+          emptyMessage={t('schedule.noSwaps')}
+          onRetry={() => void swapsQuery.refetch()}
+          skeletonRows={2}
+        >
+          {swaps.map((sw) => (
             <View key={sw._id} style={{ paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border, gap: 6 }}>
               <Text>{sw.requesterName} → {sw.targetName}</Text>
               <Text style={{ color: colors.muted }}>{sw.requesterShift}{sw.targetShift ? ` ⇄ ${sw.targetShift}` : ` ${t('schedule.giveAway')}`} · {sw.status}</Text>
@@ -62,17 +69,22 @@ function RequestQueue({ venueId }: { venueId: Id<'venues'> }) {
                 <Button compact mode="outlined" textColor={colors.danger} onPress={() => void safe(() => reviewSwap({ swapId: sw._id, approve: false }), t('schedule.swapDenied'))}>{t('schedule.deny')}</Button>
               </View>
             </View>
-          ))
-        )}
+          ))}
+        </ScreenState>
       </Card.Content>
     </Card>
     <Card style={{ backgroundColor: colors.surface, borderRadius: radius.sharp }}>
       <Card.Content style={{ gap: spacing.sm }}>
         <Text variant="titleMedium" style={{ fontWeight: '700' }}>{t('schedule.requestQueueTitle')}</Text>
-        {queue.length === 0 ? (
-          <Text style={{ color: colors.muted }}>{t('schedule.noPendingRequests')}</Text>
-        ) : (
-          queue.map((request) => (
+        <ScreenState
+          isLoading={queueQuery.isLoading}
+          error={queueQuery.error}
+          isEmpty={queue.length === 0}
+          emptyMessage={t('schedule.noPendingRequests')}
+          onRetry={() => void queueQuery.refetch()}
+          skeletonRows={2}
+        >
+          {queue.map((request) => (
             <View key={request._id} style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border, gap: 8 }}>
               <Text style={{ fontWeight: '700' }}>{request.title}</Text>
               <Text style={{ color: colors.muted }}>{request.kind.replace('_', ' ')} · {request.status}</Text>
@@ -84,8 +96,8 @@ function RequestQueue({ venueId }: { venueId: Id<'venues'> }) {
                 </View>
               ) : null}
             </View>
-          ))
-        )}
+          ))}
+        </ScreenState>
       </Card.Content>
     </Card>
     <Snackbar visible={Boolean(toast)} onDismiss={() => setToast(null)} duration={3000} action={{ label: t('schedule.dismiss'), onPress: () => setToast(null) }}>
@@ -152,3 +164,8 @@ function ScheduleScreen() {
     </ScrollView>
   );
 }
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

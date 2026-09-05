@@ -47,11 +47,11 @@ describe('SuiteHospitalityGateway sequence numbering', () => {
   it('assigns strictly increasing local sequence numbers with no Redis configured', async () => {
     const gateway = new SuiteHospitalityGateway();
     const seen: number[] = [];
-    gateway.on('facility:facility-1', (event: any) => seen.push(event.seq));
+    gateway.on('org-1:facility-1', (event: any) => seen.push(event.seq));
 
-    await gateway.broadcastBeoUpdate('facility-1', 'zone-1', { beoNumber: 'A' });
-    await gateway.broadcastReplenishment('facility-1', 'zone-1', { itemId: 'B' });
-    await gateway.broadcastBeoUpdate('facility-1', 'zone-1', { beoNumber: 'C' });
+    await gateway.broadcastBeoUpdate('org-1', 'facility-1', 'zone-1', { beoNumber: 'A' });
+    await gateway.broadcastReplenishment('org-1', 'facility-1', 'zone-1', { itemId: 'B' });
+    await gateway.broadcastBeoUpdate('org-1', 'facility-1', 'zone-1', { beoNumber: 'C' });
 
     expect(seen).toEqual([1, 2, 3]);
   });
@@ -59,20 +59,15 @@ describe('SuiteHospitalityGateway sequence numbering', () => {
   it('uses a shared Redis INCR when Redis is configured, instead of the per-instance counter', async () => {
     const gateway = new SuiteHospitalityGateway();
     const incr = vi.fn().mockResolvedValueOnce(501).mockResolvedValueOnce(502);
-    // Inject a fake Redis client — this deliberately reaches past the public
-    // API to exercise the cluster-wide branch without a real Redis server.
     (gateway as any).pubClient = { incr, publish: vi.fn().mockResolvedValue(undefined) };
 
     const seen: number[] = [];
-    gateway.on('facility:facility-1', (event: any) => seen.push(event.seq));
+    gateway.on('org-1:facility-1', (event: any) => seen.push(event.seq));
 
-    await gateway.broadcastBeoUpdate('facility-1', 'zone-1', { beoNumber: 'A' });
-    await gateway.broadcastReplenishment('facility-1', 'zone-1', { itemId: 'B' });
+    await gateway.broadcastBeoUpdate('org-1', 'facility-1', 'zone-1', { beoNumber: 'A' });
+    await gateway.broadcastReplenishment('org-1', 'facility-1', 'zone-1', { itemId: 'B' });
 
     expect(incr).toHaveBeenCalledTimes(2);
-    // Values come straight from the shared counter (501, 502), not a
-    // restarted-at-1 local counter — this is what makes them collision-free
-    // across replicas that each start their own local counter at 0.
     expect(seen).toEqual([501, 502]);
   });
 
@@ -84,10 +79,153 @@ describe('SuiteHospitalityGateway sequence numbering', () => {
     };
 
     const seen: number[] = [];
-    gateway.on('facility:facility-1', (event: any) => seen.push(event.seq));
+    gateway.on('org-1:facility-1', (event: any) => seen.push(event.seq));
 
-    await gateway.broadcastBeoUpdate('facility-1', 'zone-1', { beoNumber: 'A' });
+    await gateway.broadcastBeoUpdate('org-1', 'facility-1', 'zone-1', { beoNumber: 'A' });
 
     expect(seen).toEqual([1]);
+  });
+});
+
+describe('Realtime Gateway Security Isolation Probes (RT-01 through RT-05)', () => {
+  it('RT-01: menu overlay updates do not leak to un-namespaced zone:global or another tenant', async () => {
+    const gateway = new SuiteHospitalityGateway();
+    const receivedTenantA: any[] = [];
+    const receivedTenantB: any[] = [];
+    const receivedBareGlobal: any[] = [];
+    const receivedZoneGlobal: any[] = [];
+
+    gateway.on('org-a:facility-a', (e) => receivedTenantA.push(e));
+    gateway.on('org-b:facility-b', (e) => receivedTenantB.push(e));
+    gateway.on('global', (e) => receivedBareGlobal.push(e));
+    gateway.on('zone:global', (e) => receivedZoneGlobal.push(e));
+
+    await gateway.broadcastBeoUpdate('org-a', 'facility-a', undefined, {
+      type: 'menu_overlay_updated',
+      name: 'Tenant A VIP Menu',
+    });
+
+    expect(receivedTenantA).toHaveLength(1);
+    expect(receivedTenantB).toHaveLength(0);
+    expect(receivedBareGlobal).toHaveLength(0);
+    expect(receivedZoneGlobal).toHaveLength(0);
+  });
+
+  it('RT-02: concourse transfer replenishments do not leak to hardcoded zone:zone-central or other facilities', async () => {
+    const gateway = new SuiteHospitalityGateway();
+    const receivedTenantA: any[] = [];
+    const receivedZoneCentral: any[] = [];
+    const receivedTenantB: any[] = [];
+
+    gateway.on('org-a:facility-a', (e) => receivedTenantA.push(e));
+    gateway.on('zone:zone-central', (e) => receivedZoneCentral.push(e));
+    gateway.on('org-b:facility-b', (e) => receivedTenantB.push(e));
+
+    await gateway.broadcastReplenishment('org-a', 'facility-a', undefined, {
+      transferId: 'tr-100',
+      items: [{ code: 'BEER', quantity: 24 }],
+    });
+
+    expect(receivedTenantA).toHaveLength(1);
+    expect(receivedZoneCentral).toHaveLength(0);
+    expect(receivedTenantB).toHaveLength(0);
+  });
+
+  it('RT-03: zone-less kitchen tickets do not leak to un-namespaced zone:global or another facility', async () => {
+    const gateway = new SuiteHospitalityGateway();
+    const receivedCulinaryA: any[] = [];
+    const receivedZoneGlobal: any[] = [];
+    const receivedFacilityB: any[] = [];
+
+    gateway.on('org-a:facility-a:area:culinary', (e) => receivedCulinaryA.push(e));
+    gateway.on('zone:global', (e) => receivedZoneGlobal.push(e));
+    gateway.on('org-b:facility-b:area:culinary', (e) => receivedFacilityB.push(e));
+
+    await gateway.broadcastDistroPickupUpdate(
+      'org-a',
+      'facility-a',
+      null,
+      {
+        id: 'ticket-99',
+        itemName: 'Steak Tartare',
+        operationalAreaType: 'culinary',
+      },
+      'distro_pickup_updated',
+    );
+
+    expect(receivedCulinaryA).toHaveLength(1);
+    expect(receivedZoneGlobal).toHaveLength(0);
+    expect(receivedFacilityB).toHaveLength(0);
+  });
+
+  it('RT-04: enforces department operational area isolation at the channel level', async () => {
+    const gateway = new SuiteHospitalityGateway();
+    const culinarySubscriber: any[] = [];
+    const concessionSubscriber: any[] = [];
+
+    // Culinary subscriber only listens to culinary and kitchen channels
+    gateway.on('org-1:facility-1:area:culinary', (e) => culinarySubscriber.push(e));
+    gateway.on('org-1:facility-1:area:kitchen', (e) => culinarySubscriber.push(e));
+
+    // Concession subscriber listens to concession channel
+    gateway.on('org-1:facility-1:area:concession', (e) => concessionSubscriber.push(e));
+
+    // Concession ticket update occurs
+    await gateway.broadcastDistroPickupUpdate(
+      'org-1',
+      'facility-1',
+      null,
+      {
+        id: 'ticket-hotdogs',
+        itemName: 'Pretzels and Hotdogs',
+        operationalAreaType: 'concession',
+      },
+      'distro_pickup_updated',
+    );
+
+    // Culinary subscriber must NOT receive concessions event
+    expect(culinarySubscriber).toHaveLength(0);
+    expect(concessionSubscriber).toHaveLength(1);
+    expect(concessionSubscriber[0].data.itemName).toBe('Pretzels and Hotdogs');
+  });
+
+  it('RT-05: bare global channel is completely retired and receives zero broadcasts', async () => {
+    const gateway = new SuiteHospitalityGateway();
+    const globalEvents: any[] = [];
+    gateway.on('global', (e) => globalEvents.push(e));
+
+    await gateway.broadcastBeoUpdate('org-1', 'facility-1', 'zone-1', { beo: 'test' });
+    await gateway.broadcastReplenishment('org-1', 'facility-1', 'zone-1', { rep: 'test' });
+    await gateway.broadcastDistroPickupUpdate('org-1', 'facility-1', 'zone-1', {
+      id: 't-1',
+      operationalAreaType: 'suite',
+    });
+
+    expect(globalEvents).toHaveLength(0);
+  });
+
+  it('Replay isolation: getEventsSince isolates ring buffer replay by tenant, facility, and operational area', async () => {
+    const gateway = new SuiteHospitalityGateway();
+
+    await gateway.broadcastBeoUpdate('org-a', 'facility-a', null, { event: 'beo-a' });
+    await gateway.broadcastBeoUpdate('org-b', 'facility-b', null, { event: 'beo-b' });
+    await gateway.broadcastDistroPickupUpdate('org-a', 'facility-a', null, {
+      id: 'ticket-culinary',
+      operationalAreaType: 'culinary',
+    });
+    await gateway.broadcastDistroPickupUpdate('org-a', 'facility-a', null, {
+      id: 'ticket-concession',
+      operationalAreaType: 'concession',
+    });
+
+    // Tenant A queries without department filter: should only get facility-a events
+    const tenantAEvents = gateway.getEventsSince('org-a', 'facility-a', 0);
+    expect(tenantAEvents.every((e) => e.organizationId === 'org-a' && e.facilityId === 'facility-a')).toBe(true);
+    expect(tenantAEvents).toHaveLength(3);
+
+    // Tenant A queries with culinary-only filter: should not see the concession ticket
+    const culinaryEvents = gateway.getEventsSince('org-a', 'facility-a', 0, null, new Set(['culinary']));
+    expect(culinaryEvents).toHaveLength(2); // beo-a (general) + ticket-culinary
+    expect(culinaryEvents.some((e) => e.data.id === 'ticket-concession')).toBe(false);
   });
 });

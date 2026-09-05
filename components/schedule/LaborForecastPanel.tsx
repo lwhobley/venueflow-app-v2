@@ -7,7 +7,7 @@ import { api } from '../../lib/railway-api';
 import type { Id } from '../../lib/ids';
 import { accents, colors, spacing } from '../../lib/theme';
 import { useAuthenticatedSession } from '../../lib/auth-readiness';
-import { errorMessage } from '../../lib/format';
+import { asArray, errorMessage } from '../../lib/format';
 import { ScheduleMemoryPanel } from './ScheduleMemoryPanel';
 
 type DaypartRow = { key: string; label: string; covers: number; scheduledPeople: number };
@@ -182,7 +182,7 @@ function AiScheduleBuilder() {
     setMessage(null);
     try {
       const result = await previewAiSchedule({});
-      const shifts = (result.shifts ?? []) as ProposedShift[];
+      const shifts = asArray(result.shifts) as ProposedShift[];
       setProposal(shifts);
       setMessage(shifts.length > 0 ? `Proposed ${shifts.length} shift${shifts.length === 1 ? '' : 's'}. Review below, then create.` : 'No gaps to fill — the schedule already covers demand.');
     } catch (e) {

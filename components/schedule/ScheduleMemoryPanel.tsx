@@ -5,7 +5,7 @@ import { useMutation, useQuery } from '../../lib/railway-hooks';
 import { api } from '../../lib/railway-api';
 import type { Id } from '../../lib/ids';
 import { colors, spacing } from '../../lib/theme';
-import { errorMessage } from '../../lib/format';
+import { asArray, errorMessage } from '../../lib/format';
 
 type ScheduleMemoryNote = {
   _id: string;
@@ -18,7 +18,7 @@ type ScheduleMemoryNote = {
 export function ScheduleMemoryPanel({ venueId }: { venueId: Id<'venues'> }) {
   const memoryQuery = useQuery(api.scheduling.listScheduleMemory, { venueId }) as { notes: ScheduleMemoryNote[] } | undefined;
   const addMemoryNote = useMutation(api.scheduling.addScheduleMemoryNote);
-  const notes = useMemo(() => memoryQuery?.notes ?? [], [memoryQuery]);
+  const notes = useMemo(() => asArray(memoryQuery?.notes), [memoryQuery]);
   const [title, setTitle] = useState('');
   const [detail, setDetail] = useState('');
   const [busy, setBusy] = useState(false);

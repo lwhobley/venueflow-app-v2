@@ -8,7 +8,7 @@ import { api } from '../lib/railway-api';
 import { resolveMediaUrl } from '../lib/api-client';
 import { colors, spacing, radius, type } from '../lib/theme';
 import { AppCard, SectionHeader } from '../components/AppCard';
-import { errorMessage } from '../lib/format';
+import { asArray, errorMessage } from '../lib/format';
 import { useVenueAuth } from '../lib/useVenueAuth';
 import { useI18n } from '../lib/i18n';
 
@@ -37,7 +37,7 @@ export default function ChecklistScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const checklistQuery = useQuery(api.operations.getChecklist, isReady && venue?.id ? { kind } : 'skip') as ChecklistResponse | null | undefined;
-  const items = useMemo(() => (checklistQuery?.items ?? []).slice().sort((a, b) => a.sortOrder - b.sortOrder), [checklistQuery]);
+  const items = useMemo(() => asArray(checklistQuery?.items).slice().sort((a, b) => a.sortOrder - b.sortOrder), [checklistQuery]);
 
   const addItem = useMutation(api.operations.addChecklistItem);
   const removeItem = useMutation(api.operations.removeChecklistItem);
@@ -187,3 +187,8 @@ export default function ChecklistScreen() {
     </ScrollView>
   );
 }
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../components/ErrorBoundary';

@@ -1,59 +1,46 @@
-import { describe, expect, it } from 'vitest';
-import { zonedDateBounds, zonedDayBounds, zonedIsoDate } from './venue-time';
+import { describe, it, expect } from 'vitest';
+import { zonedWallClockToUtc, zonedIsoDate } from './venue-time';
 
-describe('zonedIsoDate', () => {
-  it('renders a known instant in venue-local time', () => {
-    // 2026-06-10T03:00:00Z is still June 9 in Los Angeles (UTC-7 in June).
-    const ts = Date.UTC(2026, 5, 10, 3, 0, 0);
-    expect(zonedIsoDate('America/Los_Angeles', ts)).toBe('2026-06-09');
-    expect(zonedIsoDate('UTC', ts)).toBe('2026-06-10');
+describe('zonedWallClockToUtc', () => {
+  it('resolves a local shift time to the correct UTC instant', () => {
+    // 18:00 in Los Angeles on 2026-09-12 is PDT (UTC-7) => 01:00Z the next day.
+    const ts = zonedWallClockToUtc('America/Los_Angeles', '2026-09-12', '18:00');
+    expect(new Date(ts).toISOString()).toBe('2026-09-13T01:00:00.000Z');
   });
 
-  it('falls back to UTC for missing or invalid zones', () => {
-    const ts = Date.UTC(2026, 5, 10, 3, 0, 0);
-    expect(zonedIsoDate(null, ts)).toBe('2026-06-10');
-    expect(zonedIsoDate('Not/AZone', ts)).toBe('2026-06-10');
-  });
-});
-
-describe('zonedDayBounds', () => {
-  it('returns a ~24h window whose start renders as local midnight', () => {
-    const { start, end } = zonedDayBounds('America/New_York', 0);
-    // 23-25h tolerance: DST transition days are legitimately shorter/longer.
-    expect(end - start).toBeGreaterThanOrEqual(23 * 60 * 60 * 1000);
-    expect(end - start).toBeLessThanOrEqual(25 * 60 * 60 * 1000);
-    const local = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York',
-      hour: '2-digit',
-      minute: '2-digit',
-      // h23 forces a 0-23 cycle so midnight is '00:00'. `hour12: false` is
-      // ambiguous (h23 vs h24) and renders midnight as '24:00' under some
-      // Node/ICU builds (e.g. CI), making the assertion environment-dependent.
-      hourCycle: 'h23',
-    }).format(new Date(start));
-    expect(local).toBe('00:00');
+  it('is not the naive UTC reading of the same wall clock', () => {
+    const zoned = zonedWallClockToUtc('America/Los_Angeles', '2026-09-12', '18:00');
+    const naive = Date.parse('2026-09-12T18:00:00Z');
+    // Seven hours apart — the gap that made the no-show sweep fire early.
+    expect(zoned - naive).toBe(7 * 3600 * 1000);
   });
 
-  it("today's window contains now, in the venue zone", () => {
-    const now = Date.now();
-    for (const tz of ['America/Los_Angeles', 'UTC', 'Asia/Tokyo']) {
-      const { start, end } = zonedDayBounds(tz, 0);
-      expect(start).toBeLessThanOrEqual(now);
-      expect(end).toBeGreaterThan(now);
-    }
+  it('handles a zone ahead of UTC', () => {
+    // 09:00 in Tokyo (UTC+9, no DST) => 00:00Z the same day.
+    const ts = zonedWallClockToUtc('Asia/Tokyo', '2026-09-12', '09:00');
+    expect(new Date(ts).toISOString()).toBe('2026-09-12T00:00:00.000Z');
   });
 
-  it('offsetDays shifts the window by whole local days', () => {
-    const today = zonedDayBounds('America/Chicago', 0);
-    const yesterday = zonedDayBounds('America/Chicago', -1);
-    expect(yesterday.end).toBe(today.start);
+  it('stays correct either side of a DST transition', () => {
+    // US DST ended 2026-11-01. 12:00 local is UTC-7 before, UTC-8 after.
+    const before = zonedWallClockToUtc('America/Los_Angeles', '2026-10-31', '12:00');
+    const after = zonedWallClockToUtc('America/Los_Angeles', '2026-11-02', '12:00');
+    expect(new Date(before).toISOString()).toBe('2026-10-31T19:00:00.000Z');
+    expect(new Date(after).toISOString()).toBe('2026-11-02T20:00:00.000Z');
   });
-});
 
-describe('zonedDateBounds', () => {
-  it('maps a Chicago calendar day to UTC across daylight saving time', () => {
-    const spring = zonedDateBounds('America/Chicago', '2026-03-08');
-    expect(new Date(spring.start).toISOString()).toBe('2026-03-08T06:00:00.000Z');
-    expect(new Date(spring.end).toISOString()).toBe('2026-03-09T05:00:00.000Z');
+  it('treats an unknown timezone as UTC rather than throwing', () => {
+    const ts = zonedWallClockToUtc('Not/AZone', '2026-09-12', '18:00');
+    expect(new Date(ts).toISOString()).toBe('2026-09-12T18:00:00.000Z');
+  });
+
+  it('falls back to midnight for an unparseable clock', () => {
+    const ts = zonedWallClockToUtc('UTC', '2026-09-12', 'not-a-time');
+    expect(new Date(ts).toISOString()).toBe('2026-09-12T00:00:00.000Z');
+  });
+
+  it('round-trips back to the same local calendar date', () => {
+    const ts = zonedWallClockToUtc('America/Los_Angeles', '2026-09-12', '23:30');
+    expect(zonedIsoDate('America/Los_Angeles', ts)).toBe('2026-09-12');
   });
 });

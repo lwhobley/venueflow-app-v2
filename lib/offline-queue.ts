@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 import * as SQLite from 'expo-sqlite';
 import { apiRequest, ApiError } from './api-client';
 import { useAuthStore } from './auth-store';
-import { createIdempotencyKey } from './idempotency';
+import { createOperationId } from './idempotency';
 
 export type OfflineMutationStatus = 'queued' | 'retrying' | 'conflict' | 'blocked_scope' | 'failed';
 
@@ -59,10 +59,15 @@ function scope() {
   return { userId, venueId, scopeKey: `${userId}:${venueId}` };
 }
 
+function ownedRows() {
+  const state = useAuthStore.getState();
+  return queue.filter((item) => item.userId === state.user?.id && item.venueId === state.venue?.id);
+}
+
 function snapshot(): OfflineQueueSnapshot {
   return {
-    pending: queue.filter((item) => item.status === 'queued' || item.status === 'retrying').length,
-    conflicts: queue.filter((item) => item.status === 'conflict' || item.status === 'blocked_scope' || item.status === 'failed').length,
+    pending: ownedRows().filter((item) => item.status === 'queued' || item.status === 'retrying').length,
+    conflicts: ownedRows().filter((item) => item.status === 'conflict' || item.status === 'blocked_scope' || item.status === 'failed').length,
   };
 }
 
@@ -222,7 +227,17 @@ export function offlineQueueConflictCount() {
 }
 
 export function offlineQueueConflicts() {
-  return queue.filter((item) => item.status === 'conflict' || item.status === 'blocked_scope' || item.status === 'failed');
+  return ownedRows().filter((item) => item.status === 'conflict' || item.status === 'blocked_scope' || item.status === 'failed');
+}
+
+function sanitizeOfflinePayload(body: any): any {
+  if (!body || typeof body !== 'object') return body;
+  if (Array.isArray(body)) return body.map(sanitizeOfflinePayload);
+  const sanitized: Record<string, any> = { ...body };
+  delete sanitized.pin;
+  delete sanitized.badgeCode;
+  delete sanitized.password;
+  return sanitized;
 }
 
 export async function enqueueOfflineMutation(input: EnqueueInput) {
@@ -230,13 +245,14 @@ export async function enqueueOfflineMutation(input: EnqueueInput) {
   const owner = scope();
   const idempotencyKey = (input.idempotencyKey && input.idempotencyKey.trim().length >= 16)
     ? input.idempotencyKey.trim()
-    : createIdempotencyKey();
+    : await createOperationId();
+  const sanitizedBody = sanitizeOfflinePayload(input.body ?? undefined);
   const row: OfflineMutation = {
     ...input,
-    id: createIdempotencyKey(),
+    id: await createOperationId(),
     ...owner,
     idempotencyKey,
-    body: input.body ?? undefined,
+    body: sanitizedBody,
     headers: { ...(input.headers ?? {}), 'Idempotency-Key': idempotencyKey },
     createdAt: Date.now(),
     attempts: 0,
@@ -253,7 +269,7 @@ export async function enqueueOfflineMutation(input: EnqueueInput) {
 /** Re-queue a conflicted/failed mutation for another attempt. Keeps the same idempotency key. */
 export async function retryOfflineMutation(id: string) {
   await ensureLoaded();
-  const row = queue.find((item) => item.id === id);
+  const row = ownedRows().find((item) => item.id === id);
   if (!row) return false;
   if (row.status !== 'conflict' && row.status !== 'blocked_scope' && row.status !== 'failed' && row.status !== 'retrying') {
     return false;
@@ -272,7 +288,7 @@ export async function retryOfflineMutation(id: string) {
 /** Permanently discard a conflicted mutation after the operator resolves it outside the app. */
 export async function dismissOfflineMutation(id: string) {
   await ensureLoaded();
-  const row = queue.find((item) => item.id === id);
+  const row = ownedRows().find((item) => item.id === id);
   if (!row) return false;
   if (row.status !== 'conflict' && row.status !== 'blocked_scope' && row.status !== 'failed') {
     return false;
@@ -291,14 +307,14 @@ async function flush() {
 
   for (const row of rows) {
     if (row.userId !== owner.userId) {
-      await deleteRow(row.id);
-      queue = queue.filter((item) => item.id !== row.id);
-      notify();
       continue;
     }
     if (row.venueId !== owner.venueId) continue;
-    if (row.status === 'conflict' || row.status === 'blocked_scope' || row.status === 'failed') continue;
-    if (row.nextAttemptAt > Date.now() || blockedEntities.has(row.entityKey)) continue;
+    if (row.status === 'conflict' || row.status === 'blocked_scope' || row.status === 'failed' || row.nextAttemptAt > Date.now()) {
+      blockedEntities.add(row.entityKey);
+      continue;
+    }
+    if (blockedEntities.has(row.entityKey)) continue;
 
     const current = useAuthStore.getState();
     if (!current.user?.id || !current.venue?.id || current.user.id !== owner.userId || current.venue.id !== owner.venueId) break;

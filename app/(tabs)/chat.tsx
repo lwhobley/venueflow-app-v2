@@ -8,9 +8,10 @@ import { api } from '../../lib/railway-api';
 import type { Id } from '../../lib/ids';
 import { accents, colors, radius, spacing } from '../../lib/theme';
 import { useVenueAuth } from '../../lib/useVenueAuth';
-import { formatRelativeTime, errorMessage } from '../../lib/format';
+import { asArray, errorMessage, formatRelativeTime } from '../../lib/format';
 import { SectionHeader } from '../../components/AppCard';
 import { useI18n } from '../../lib/i18n';
+
 
 type MaterialIconName = ComponentProps<typeof MaterialCommunityIcons>['name'];
 type FilterKey = 'all' | 'direct' | 'groups' | 'shifts';
@@ -144,19 +145,19 @@ export default function ChatScreen() {
     });
   }, [ensureSetup, isReady, venue?.id]);
 
-  const groups = (conversations?.groups ?? []) as ConversationRow[];
-  const dms = (conversations?.dms ?? []) as ConversationRow[];
-  const roles = (conversations?.roles ?? []) as ConversationRow[];
-  const shifts = (conversations?.shifts ?? []) as ConversationRow[];
+  const groups = asArray(conversations?.groups) as ConversationRow[];
+  const dms = asArray(conversations?.dms) as ConversationRow[];
+  const roles = asArray(conversations?.roles) as ConversationRow[];
+  const shifts = asArray(conversations?.shifts) as ConversationRow[];
 
   const unreadCount = [...groups, ...dms, ...roles, ...shifts].filter((row) => row.unread).length;
 
   const dmByName = useMemo(() => new Map(dms.map((dm) => [dm.title, dm])), [dms]);
   const byPosition = useMemo(() => {
     const map = new Map<string, DirectoryEntry[]>();
-    for (const person of (directory ?? []) as DirectoryEntry[]) {
+    for (const person of asArray(directory) as DirectoryEntry[]) {
       const key = person.jobTitle?.trim() || t('chat.teamFallback');
-      const list = map.get(key) ?? [];
+      const list = asArray(map.get(key));
       list.push(person);
       map.set(key, list);
     }
@@ -377,3 +378,8 @@ export default function ChatScreen() {
     </ScrollView>
   );
 }
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

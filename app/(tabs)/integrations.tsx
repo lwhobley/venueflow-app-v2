@@ -2,17 +2,19 @@ import { useState } from 'react';
 import { router } from 'expo-router';
 import { ScrollView, View } from 'react-native';
 import { Button, Card, Text, TextInput } from 'react-native-paper';
-import { useMutation, useQuery } from '../../lib/railway-hooks';
+import { useMutation, useQuery, useQueryState } from '../../lib/railway-hooks';
 import { api } from '../../lib/railway-api';
 import { accents, colors, radius, spacing } from '../../lib/theme';
 import { useVenueAuth } from '../../lib/useVenueAuth';
-import { formatMoney, formatShortDateTime, errorMessage } from '../../lib/format';
+import { asArray, errorMessage, formatMoney, formatShortDateTime } from '../../lib/format';
 import { PremiumFeatureGate } from '../../components/PremiumFeatureGate';
 import { ProviderDropdown } from '../../components/ProviderDropdown';
 import { InlineMessage } from '../../components/InlineMessage';
 import { ManagerGate } from '../../components/ManagerGate';
+import { ScreenState } from '../../components/ScreenState';
 import { SectionHeader } from '../../components/AppCard';
 import { useI18n } from '../../lib/i18n';
+
 
 // Must stay in sync with POS_PROVIDERS in packages/api/src/modules/pos/pos.controller.ts
 // and the PosProvider enum in prisma/schema.prisma.
@@ -50,11 +52,13 @@ export default function IntegrationsScreen() {
 function IntegrationsScreenInner() {
   const { t } = useI18n();
   const { venue, isReady, canManage, profileLoading } = useVenueAuth();
-  const overview = useQuery(api.pos.getPosOverview, isReady && canManage && venue?.id ? { venueId: venue.id } : 'skip') as any;
-  const reservationOverview = useQuery(
+  const overviewQuery = useQueryState<any>(api.pos.getPosOverview, isReady && canManage && venue?.id ? { venueId: venue.id } : 'skip');
+  const overview = overviewQuery.data;
+  const reservationQuery = useQueryState<any>(
     api.reservationIntegrations.getReservationIntegrationOverview,
     isReady && canManage && venue?.id ? { venueId: venue.id } : 'skip',
-  ) as any;
+  );
+  const reservationOverview = reservationQuery.data;
   const upsertConnection = useMutation(api.pos.upsertPosConnection);
   const rotatePosSecret = useMutation(api.pos.rotatePosConnectionSecret);
   const upsertReservationConnection = useMutation(api.reservationIntegrations.upsertReservationConnection);
@@ -185,28 +189,26 @@ function IntegrationsScreenInner() {
         ))}
       </View>
 
-      {/* POS Aggregator Command Hub Card */}
-      <Card style={{ backgroundColor: '#EEF5F0', borderRadius: radius.sharp, borderWidth: 1, borderColor: '#17643B' }}>
+      <Card style={{ backgroundColor: colors.surface, borderRadius: radius.sharp, borderWidth: 1, borderColor: colors.border }}>
         <Card.Content style={{ gap: spacing.xs }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={{ fontWeight: '800', color: '#17643B', fontSize: 16 }}>Universal POS Aggregator Core</Text>
-            </View>
-            <View style={{ backgroundColor: '#17643B', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
-              <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 11 }}>ONLINE</Text>
+            <Text style={{ fontWeight: '700', color: colors.charcoal, fontSize: 16 }}>POS aggregator</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: `${colors.success}18`, paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill }}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.success }} />
+              <Text style={{ color: colors.success, fontWeight: '700', fontSize: 12 }}>Online</Text>
             </View>
           </View>
-          <Text style={{ color: '#1D2420', fontSize: 13 }}>
-            Unified live stream aggregating transactions, menus, 86 item broadcasts, and tender reconciliation across Toast, Square, SpotOn, Clover, Shopify POS & In-Seat mobile apps.
+          <Text style={{ color: colors.muted, fontSize: 13 }}>
+            Unified live stream aggregating transactions, menus, 86'd items, and tender reconciliation across Toast, Square, SpotOn, Clover, Shopify POS & in-seat mobile apps.
           </Text>
           <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs }}>
             <Button
               mode="contained"
-              buttonColor="#17643B"
+              buttonColor={colors.primary}
               icon="broadcast"
               onPress={() => router.push('/stadium/pos-aggregator')}
             >
-              Open POS Aggregator Console
+              Open aggregator console
             </Button>
           </View>
         </Card.Content>
@@ -272,10 +274,15 @@ function IntegrationsScreenInner() {
       <Card style={{ backgroundColor: colors.surface, borderRadius: radius.sharp }}>
         <Card.Content style={{ gap: spacing.sm }}>
           <Text variant="titleMedium" style={{ fontWeight: '700' }}>{t('integrations.connections.title')}</Text>
-          {(overview?.connections ?? []).length === 0 ? (
-            <Text style={{ color: colors.muted }}>{t('integrations.connections.empty')}</Text>
-          ) : (
-            overview.connections.map((connection: any) => (
+          <ScreenState
+            isLoading={overviewQuery.isLoading}
+            error={overviewQuery.error}
+            isEmpty={asArray(overview?.connections).length === 0}
+            emptyMessage={t('integrations.connections.empty')}
+            onRetry={() => void overviewQuery.refetch()}
+            skeletonRows={2}
+          >
+            {asArray<any>(overview?.connections).map((connection: any) => (
               <View key={connection._id} style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.sm, gap: 2 }}>
                 <Text style={{ fontWeight: '700' }}>{connection.provider}</Text>
                 <Text style={{ color: colors.muted }}>
@@ -294,18 +301,23 @@ function IntegrationsScreenInner() {
                   {t('integrations.connections.rotateSecret')}
                 </Button>
               </View>
-            ))
-          )}
+            ))}
+          </ScreenState>
         </Card.Content>
       </Card>
 
       <Card style={{ backgroundColor: colors.surface, borderRadius: radius.sharp }}>
         <Card.Content style={{ gap: spacing.sm }}>
           <Text variant="titleMedium" style={{ fontWeight: '700' }}>{t('integrations.reservationConnections.title')}</Text>
-          {(reservationOverview?.connections ?? []).length === 0 ? (
-            <Text style={{ color: colors.muted }}>{t('integrations.reservationConnections.empty')}</Text>
-          ) : (
-            reservationOverview.connections.map((connection: any) => (
+          <ScreenState
+            isLoading={reservationQuery.isLoading}
+            error={reservationQuery.error}
+            isEmpty={asArray(reservationOverview?.connections).length === 0}
+            emptyMessage={t('integrations.reservationConnections.empty')}
+            onRetry={() => void reservationQuery.refetch()}
+            skeletonRows={2}
+          >
+            {asArray<any>(reservationOverview?.connections).map((connection: any) => (
               <View key={connection._id} style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.sm, gap: 2 }}>
                 <Text style={{ fontWeight: '700' }}>{connection.provider}</Text>
                 <Text style={{ color: colors.muted }}>
@@ -315,9 +327,9 @@ function IntegrationsScreenInner() {
                   {t('integrations.reservationConnections.lastSync', { value: connection.lastSyncAt ? formatShortDateTime(connection.lastSyncAt) : t('integrations.metrics.never') })}
                 </Text>
               </View>
-            ))
-          )}
-          {(reservationOverview?.recentEvents ?? []).length > 0 ? (
+            ))}
+          </ScreenState>
+          {asArray(reservationOverview?.recentEvents).length > 0 ? (
             <View style={{ gap: 4 }}>
               <Text style={{ fontWeight: '700' }}>{t('integrations.reservationConnections.recentEvents')}</Text>
               {reservationOverview.recentEvents.slice(0, 5).map((event: any) => (
@@ -333,10 +345,15 @@ function IntegrationsScreenInner() {
       <Card style={{ backgroundColor: colors.surface, borderRadius: radius.sharp }}>
         <Card.Content style={{ gap: spacing.sm }}>
           <Text variant="titleMedium" style={{ fontWeight: '700' }}>{t('integrations.recentChecks.title')}</Text>
-          {(overview?.recentChecks ?? []).length === 0 ? (
-            <Text style={{ color: colors.muted }}>{t('integrations.recentChecks.empty')}</Text>
-          ) : (
-            overview.recentChecks.map((check: any) => (
+          <ScreenState
+            isLoading={overviewQuery.isLoading}
+            error={overviewQuery.error}
+            isEmpty={asArray(overview?.recentChecks).length === 0}
+            emptyMessage={t('integrations.recentChecks.empty')}
+            onRetry={() => void overviewQuery.refetch()}
+            skeletonRows={2}
+          >
+            {asArray<any>(overview?.recentChecks).map((check: any) => (
               <View key={check._id} style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.sm, gap: 2 }}>
                 <Text style={{ fontWeight: '700' }}>{check.provider} · {formatMoney(check.totalCents)}</Text>
                 <Text style={{ color: colors.muted }}>
@@ -348,11 +365,16 @@ function IntegrationsScreenInner() {
                 </Text>
                 <Text style={{ color: colors.muted }}>{formatShortDateTime(check.openedAt)}</Text>
               </View>
-            ))
-          )}
+            ))}
+          </ScreenState>
         </Card.Content>
       </Card>
     </ScrollView>
     </ManagerGate>
   );
 }
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

@@ -12,6 +12,7 @@ import {
   Query,
   Req,
   UnauthorizedException,
+  UseInterceptors,
 } from '@nestjs/common';
 import type { ReservationStatus } from '@prisma/client';
 import { IsArray, IsBoolean, IsOptional, IsString, ValidateNested } from 'class-validator';
@@ -24,6 +25,8 @@ import { getClientIp } from '../../common/http';
 import { assertWithinSharedRateLimit } from '../../common/rate-limit';
 import { generateWebhookSecret, secretsMatch } from '../../common/webhook-auth';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
+import { withTenantTransaction } from '../../prisma/tenant-transaction';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 
@@ -167,6 +170,12 @@ const EMPTY_GUEST_STATS: GuestStats = {
 // upcoming/cancelled/no-show reservations aren't "visits" yet.
 const VISITED_STATUSES: ReservationStatus[] = ['checked_in', 'seated', 'completed'];
 
+// First real-controller slice of the RLS cutover's universal GUC binding (see
+// docs/rls-cutover-runbook.md and prisma/tenant-request-transaction.interceptor.ts).
+// Chosen for this first slice because it makes no external calls mid-handler
+// (no AI/S3/Stripe) — the leads webhook route is @Public(), so it never has a
+// tenant context bound and the interceptor is a no-op there.
+@UseInterceptors(TenantRequestTransactionInterceptor)
 @Controller('v1/guests')
 export class GuestsController {
   constructor(private readonly prisma: PrismaService) {}
@@ -520,7 +529,14 @@ export class GuestsController {
     const byEmail = new Map(existingGuests.filter((g) => g.email).map((g) => [g.email!.toLowerCase(), g]));
     const byPhone = new Map(existingGuests.filter((g) => g.phone).map((g) => [g.phone!, g]));
 
-    await this.prisma.$transaction(async (tx) => {
+    // This method is called both from the authenticated ingestLeads route
+    // (which has TenantRequestTransactionInterceptor's outer wrap) and the
+    // @Public() leadsWebhook route (no tenant context at all — the venueId
+    // comes from the URL, verified by webhook secret). An explicit nested
+    // $transaction isn't redirected by that outer wrap in either case, so
+    // bind GUCs directly from the venueId parameter, which is correct for
+    // both callers.
+    await withTenantTransaction(this.prisma, async (tx) => {
       for (const lead of normalized) {
         const { fullName, phone, email, tags: incomingTags, source } = lead;
         if (seen.has(lead.key)) { skipped++; continue; }
@@ -566,7 +582,7 @@ export class GuestsController {
           created++;
         }
       }
-    });
+    }, { venueId });
 
     return { created, updated, skipped, guestIds };
   }

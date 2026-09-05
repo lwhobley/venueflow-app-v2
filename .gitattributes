@@ -1,0 +1,7 @@
+# Shell scripts and SQL run on Linux (CI / Cloud Run); keep them LF regardless
+# of a contributor's core.autocrlf so they don't break with CR line endings.
+*.sh text eol=lf
+*.sql text eol=lf
+# Preserve the legacy map's checked-in CRLF instead of normalizing its entire
+# contents as a side effect of a surgical functional edit.
+components/StadiumVenueMap.tsx -text

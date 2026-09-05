@@ -1,10 +1,11 @@
-import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Query, UseInterceptors } from '@nestjs/common';
 import { SuiteHospitalityService, CreateSuiteBeoDto, CompleteDeliveryDto, CreateReplenishmentDto } from './suite-hospitality.service';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 import { SuiteBeoStatus } from '@prisma/client';
 import { canManageVenue } from '../../auth/roles';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
 import { RequireSubscription } from '../../billing/require-subscription.decorator';
 import { IsIn, IsOptional, IsString } from 'class-validator';
 
@@ -20,6 +21,7 @@ class SeedSuitesDto {
   @IsString() zoneId!: string;
 }
 
+@UseInterceptors(TenantRequestTransactionInterceptor)
 @Controller('v1/stadium/suite-beos')
 @RequireSubscription()
 export class SuiteHospitalityController {

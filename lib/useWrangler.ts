@@ -1,4 +1,6 @@
+import { useMemo } from 'react';
 import { apiRequest, useApiMutation, useApiQuery } from './api-client';
+import { asArray } from './format';
 
 export type WranglerSeverity = 'info' | 'watch' | 'warning' | 'critical';
 export type WranglerStatus = 'clear' | 'watch' | 'attention' | 'critical';
@@ -40,7 +42,46 @@ export type WranglerAiUsage = {
   }>;
 };
 
-export function useWrangler(enabled = true) { return useApiQuery<WranglerSnapshot>(['operations', 'wrangler'], '/v1/operations/wrangler', enabled); }
+const EMPTY_WRANGLER_SUMMARY: WranglerSummary = {
+  covers: 0, reservations: 0, vipArrivals: 0, scheduledStaff: 0, openShifts: 0,
+  lowStockItems: 0, eightySixItems: 0, pendingStaffRequests: 0, seatedTables: 0,
+};
+
+/**
+ * Home, the Wrangler screen, and the shift story all read this snapshot
+ * field-by-field without runtime validation, so a partial payload used to
+ * throw and take those screens down. Fill the shape in once, here, so a
+ * degraded response renders as an empty service picture instead.
+ */
+function normalizeWranglerSnapshot(raw: WranglerSnapshot | undefined): WranglerSnapshot | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  return {
+    ...raw,
+    venue: raw.venue ?? { _id: '', name: '' },
+    status: raw.status ?? 'clear',
+    servicePhase: raw.servicePhase ?? 'pre_service',
+    servicePhaseLabel: raw.servicePhaseLabel ?? '',
+    summary: { ...EMPTY_WRANGLER_SUMMARY, ...(raw.summary ?? {}) },
+    priorities: asArray<WranglerPriority>(raw.priorities).map((priority) => ({
+      ...priority,
+      actions: asArray<WranglerAction>(priority?.actions),
+    })),
+    recap: {
+      ...(raw.recap ?? {}),
+      headline: raw.recap?.headline ?? '',
+      metrics: asArray(raw.recap?.metrics),
+      unresolved: asArray(raw.recap?.unresolved),
+      tomorrow: asArray(raw.recap?.tomorrow),
+    },
+    patterns: asArray(raw.patterns),
+  };
+}
+
+export function useWrangler(enabled = true) {
+  const query = useApiQuery<WranglerSnapshot>(['operations', 'wrangler'], '/v1/operations/wrangler', enabled);
+  const data = useMemo(() => normalizeWranglerSnapshot(query.data), [query.data]);
+  return { ...query, data };
+}
 export function useWranglerAiUsage(enabled = true) { return useApiQuery<WranglerAiUsage>(['operations', 'wrangler', 'ai-usage'], '/v1/operations/wrangler/ai-usage', enabled); }
 export function useAskWrangler() { return useApiMutation<{ question: string }, { answer: string; sources: string[] }>((body) => apiRequest('/v1/operations/wrangler/ask', { method: 'POST', body }), []); }
 export function useWranglerOperatorPlan() { return useApiMutation<{ command: string }, WranglerOperatorResponse>((body) => apiRequest('/v1/operations/wrangler/operator/plan', { method: 'POST', body }), []); }

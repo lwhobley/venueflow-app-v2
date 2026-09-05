@@ -7,12 +7,14 @@ import {
   Header,
   Post,
   Query,
+  UseInterceptors,
 } from '@nestjs/common';
 import { IsInt, IsNumber, IsOptional, IsString } from 'class-validator';
 import { canManageVenue } from '../../auth/roles';
 import { RequireSubscription } from '../../billing/require-subscription.decorator';
 import { csvCell } from '../../common/csv';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 
@@ -136,6 +138,7 @@ async function buildPayrollRows(
   return rows;
 }
 
+@UseInterceptors(TenantRequestTransactionInterceptor)
 @Controller('v1/payroll')
 export class PayrollController {
   constructor(private readonly prisma: PrismaService) {}
