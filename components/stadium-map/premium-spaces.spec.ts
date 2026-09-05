@@ -167,6 +167,64 @@ describe('Premium Spaces Pure Grouping Logic', () => {
     // Suite 302 (incident) and Suite 303 (replenishmentPending) = 2 alerts
     expect(suiteGroup?.alertCount).toBe(2);
   });
+
+  it('classifies premium units from explicit metadata rather than hardcoded ids', () => {
+    const foundersUnit: StadiumZoneItem = {
+      id: 'unit-founders-metadata',
+      code: 'S-350',
+      name: 'Founders Skybox',
+      department: 'premium_hospitality',
+      type: 'premium_suite',
+      capacity: 24,
+      stadiumZone: 'West Suite Tower',
+      level: '3',
+      stadiumLevel: '300',
+      premiumCategory: 'founders_suites',
+      status: 'open',
+    };
+
+    // No `tier` string to match on: metadata alone must drive the grouping.
+    const founders = classifyPremiumSpace(foundersUnit);
+    expect(founders?.groupId).toBe('owner-founders-suites');
+    expect(founders?.level).toBe('300');
+
+    const fieldUnit: StadiumZoneItem = {
+      id: 'unit-field-metadata',
+      code: 'GREEN-A',
+      name: 'Field-Level Green Room',
+      department: 'entertainment_hospitality',
+      type: 'aux_performer_room',
+      capacity: 25,
+      stadiumZone: 'Tunnel Level Backstage',
+      level: '0',
+      stadiumLevel: 'Field',
+      premiumCategory: 'field_suites',
+      status: 'restricted',
+    };
+
+    const field = classifyPremiumSpace(fieldUnit);
+    expect(field?.groupId).toBe('field-level-suites');
+  });
+
+  it('derives founders suite level from the suite number when metadata is absent', () => {
+    const legacyFounders: StadiumZoneItem = {
+      id: 'unit-legacy-founders',
+      code: 'S-425',
+      name: 'Suite 425',
+      department: 'premium_hospitality',
+      type: 'premium_suite',
+      capacity: 18,
+      stadiumZone: 'Upper Suite Tower',
+      level: '4',
+      status: 'open',
+      suiteDetails: { suiteNumber: '425', tier: 'Founders Suite' },
+    };
+
+    const result = classifyPremiumSpace(legacyFounders);
+    expect(result?.groupId).toBe('owner-founders-suites');
+    // Level comes from the 400-series suite number, not a hardcoded '300'.
+    expect(result?.level).toBe('400');
+  });
 });
 
 describe('resolveUnitStatus helper', () => {

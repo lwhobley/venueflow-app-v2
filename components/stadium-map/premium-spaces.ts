@@ -88,6 +88,20 @@ export function resolveUnitStatus(unit: StadiumZoneItem): UnitStatusInfo {
 }
 
 /**
+ * Resolves the stadium level a premium unit sits on, preferring explicit
+ * `stadiumLevel` metadata and falling back to the unit's suite number or
+ * its raw `level` value so records without metadata still group sensibly.
+ */
+function resolveSuiteLevel(unit: StadiumZoneItem, suiteNumber: number): string {
+  if (unit.stadiumLevel) return unit.stadiumLevel;
+  if (suiteNumber >= 100 && suiteNumber < 600) {
+    return `${Math.floor(suiteNumber / 100)}00`;
+  }
+  if (unit.level && unit.level !== '0') return `${unit.level}00`;
+  return 'Field';
+}
+
+/**
  * Categorizes an individual unit into a premium space group identifier.
  */
 export function classifyPremiumSpace(
@@ -118,6 +132,8 @@ export function classifyPremiumSpace(
     };
   }
 
+  const suiteNumber = parseInt(unit.suiteDetails?.suiteNumber ?? '0', 10);
+
   // 1. Owner / Founders Suites
   const isFounders =
     unit.premiumCategory === 'founders_suites' ||
@@ -130,12 +146,10 @@ export function classifyPremiumSpace(
     return {
       groupId: 'owner-founders-suites',
       groupTitle: 'Owner / Founders Suites',
-      level: '300',
+      level: resolveSuiteLevel(unit, suiteNumber),
       icon: 'crown',
     };
   }
-
-  const suiteNumber = parseInt(unit.suiteDetails?.suiteNumber ?? '0', 10);
 
   // 2. 300 Level Suites
   const is300Suite =
@@ -202,7 +216,6 @@ export function classifyPremiumSpace(
   const isFieldSuite =
     unit.premiumCategory === 'field_suites' ||
     unit.type === 'endzone_lounge' ||
-    unit.id === 'u-aux-headliner' ||
     (unit.type === 'premium_suite' && (unit.level === '0' || unit.stadiumLevel === 'Field'));
 
   if (isFieldSuite) {
