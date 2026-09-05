@@ -1,11 +1,15 @@
+import type { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { StadiumZoneItem } from '../StadiumUnitDetailModal';
 import type { StadiumZoneData } from './zone-data';
+
+/** Icon glyph names accepted by MaterialCommunityIcons, the icon set already used by the stadium map. */
+export type PremiumGroupIconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
 export interface PremiumSpaceGroup {
   id: string;
   title: string;
   level: string;
-  icon: string;
+  icon: PremiumGroupIconName;
   units: StadiumZoneItem[];
   alertCount: number;
 }
@@ -83,134 +87,116 @@ export function resolveUnitStatus(unit: StadiumZoneItem): UnitStatusInfo {
   };
 }
 
-/**
- * Categorizes an individual unit into a premium space group identifier.
- */
-export function classifyPremiumSpace(
-  unit: StadiumZoneItem,
-  zoneId?: string,
-): {
+export interface PremiumGroupDescriptor {
   groupId: string;
   groupTitle: string;
   level: string;
-  icon: string;
-} | null {
-  // Explicit override takes precedence
-  if (unit.displayGroup === 'event_spaces' || unit.type === 'party_suite') {
-    return {
-      groupId: 'party-suites-event-spaces',
-      groupTitle: 'Party Suites & Event Spaces',
-      level: unit.level ?? '3',
-      icon: 'party-popper',
-    };
-  }
+  icon: PremiumGroupIconName;
+}
 
-  if (unit.displayGroup === 'premium' || unit.type === 'premium_lounge') {
-    return {
-      groupId: 'private-clubs-premium-lounges',
-      groupTitle: 'Private Clubs & Premium Lounges',
-      level: unit.level ?? '2',
-      icon: 'shield-crown',
-    };
-  }
+type PremiumCategory = NonNullable<StadiumZoneItem['premiumCategory']>;
 
-  // 1. Owner / Founders Suites
-  const isFounders =
-    unit.premiumCategory === 'founders_suites' ||
-    Boolean(
-      unit.suiteDetails?.tier?.toLowerCase().includes('founder') ||
-        unit.suiteDetails?.tier?.toLowerCase().includes('commissioner'),
-    );
+/**
+ * The authoritative category -> display group mapping. A unit tagged with
+ * `premiumCategory` is classified from this table alone; the heuristics below
+ * exist only for records that predate the metadata.
+ */
+const GROUP_BY_CATEGORY: Record<
+  PremiumCategory,
+  { groupId: string; groupTitle: string; icon: PremiumGroupIconName }
+> = {
+  founders_suites: {
+    groupId: 'owner-founders-suites',
+    groupTitle: 'Owner / Founders Suites',
+    icon: 'crown',
+  },
+  '300_suites': {
+    groupId: '300-level-suites',
+    groupTitle: '300 Level Suites',
+    icon: 'glass-cocktail',
+  },
+  '400_suites': {
+    groupId: '400-level-suites',
+    groupTitle: '400 Level Suites',
+    icon: 'seat-individual-suite',
+  },
+  '200_clubs': {
+    groupId: '200-level-clubs',
+    groupTitle: 'Club Level',
+    icon: 'trophy-award',
+  },
+  '100_clubs': {
+    groupId: '100-level-clubs',
+    groupTitle: '100 Level Clubs',
+    icon: 'shield-star-outline',
+  },
+  field_suites: {
+    groupId: 'field-level-suites',
+    groupTitle: 'Field-Level Suites',
+    icon: 'stadium-variant',
+  },
+  party_suites: {
+    groupId: 'party-suites-event-spaces',
+    groupTitle: 'Party Suites & Event Spaces',
+    icon: 'party-popper',
+  },
+  premium_lounges: {
+    groupId: 'private-clubs-premium-lounges',
+    groupTitle: 'Private Clubs & Premium Lounges',
+    icon: 'shield-crown',
+  },
+};
 
-  if (isFounders) {
-    return {
-      groupId: 'owner-founders-suites',
-      groupTitle: 'Owner / Founders Suites',
-      level: '300',
-      icon: 'crown',
-    };
+/**
+ * Unit types that represent a premium hospitality space.
+ *
+ * Not used for classification — that is driven entirely by `premiumCategory`.
+ * This is exported so data-integrity checks can assert that every premium
+ * record actually carries the metadata the directory depends on.
+ */
+export const PREMIUM_UNIT_TYPES = new Set([
+  'premium_suite',
+  'club_lounge',
+  'premium_lounge',
+  'party_suite',
+  'endzone_lounge',
+  'concourse_bunker',
+]);
+
+export function isPremiumUnitType(unit: StadiumZoneItem): boolean {
+  return PREMIUM_UNIT_TYPES.has(unit.type);
+}
+
+/**
+ * Resolves the stadium level a premium unit sits on, preferring explicit
+ * `stadiumLevel` metadata and falling back to the unit's suite number or its
+ * raw `level` value, so a tagged unit still reports a level when the optional
+ * `stadiumLevel` field is absent.
+ */
+function resolveSuiteLevel(unit: StadiumZoneItem, suiteNumber: number): string {
+  if (unit.stadiumLevel) return unit.stadiumLevel;
+  if (suiteNumber >= 100 && suiteNumber < 600) {
+    return `${Math.floor(suiteNumber / 100)}00`;
   }
+  if (unit.level && unit.level !== '0') return `${unit.level}00`;
+  return 'Field';
+}
+
+/**
+ * Categorizes an individual unit into a premium space group.
+ *
+ * Classification is driven solely by the unit's `premiumCategory` metadata: a
+ * unit without it is not a premium space and belongs to no group. Units must
+ * therefore be tagged in the zone data to appear in the directory.
+ */
+export function classifyPremiumSpace(unit: StadiumZoneItem): PremiumGroupDescriptor | null {
+  if (!unit.premiumCategory) return null;
 
   const suiteNumber = parseInt(unit.suiteDetails?.suiteNumber ?? '0', 10);
-
-  // 2. 300 Level Suites
-  const is300Suite =
-    unit.premiumCategory === '300_suites' ||
-    (unit.type === 'premium_suite' && (unit.level === '3' || unit.stadiumLevel === '300' || (suiteNumber >= 300 && suiteNumber < 400)));
-
-  if (is300Suite) {
-    return {
-      groupId: '300-level-suites',
-      groupTitle: '300 Level Suites',
-      level: '300',
-      icon: 'glass-cocktail',
-    };
-  }
-
-  // 3. 400 Level Suites
-  const is400Suite =
-    unit.premiumCategory === '400_suites' ||
-    (unit.type === 'premium_suite' && (unit.level === '4' || unit.stadiumLevel === '400' || (suiteNumber >= 400 && suiteNumber < 500)));
-
-  if (is400Suite) {
-    return {
-      groupId: '400-level-suites',
-      groupTitle: '400 Level Suites',
-      level: '400',
-      icon: 'seat-individual-suite',
-    };
-  }
-
-  // 4. 200 Level Clubs / Club Level
-  const is200Club =
-    unit.premiumCategory === '200_clubs' ||
-    zoneId === 'zone-200-club' ||
-    unit.type === 'club_lounge' ||
-    unit.level === '2' ||
-    unit.stadiumLevel === '200';
-
-  if (is200Club) {
-    return {
-      groupId: '200-level-clubs',
-      groupTitle: 'Club Level',
-      level: '200',
-      icon: 'trophy-award',
-    };
-  }
-
-  // 5. 100 Level Clubs
-  const is100Club =
-    unit.premiumCategory === '100_clubs' ||
-    zoneId === 'zone-concourse-bunkers' ||
-    unit.type === 'concourse_bunker' ||
-    (unit.level === '1' && unit.type.includes('club'));
-
-  if (is100Club) {
-    return {
-      groupId: '100-level-clubs',
-      groupTitle: '100 Level Clubs',
-      level: '100',
-      icon: 'shield-star-outline',
-    };
-  }
-
-  // 6. Field-Level Suites / Field VIP Lounges
-  const isFieldSuite =
-    unit.premiumCategory === 'field_suites' ||
-    unit.type === 'endzone_lounge' ||
-    unit.id === 'u-aux-headliner' ||
-    (unit.type === 'premium_suite' && (unit.level === '0' || unit.stadiumLevel === 'Field'));
-
-  if (isFieldSuite) {
-    return {
-      groupId: 'field-level-suites',
-      groupTitle: 'Field-Level Suites',
-      level: 'Field',
-      icon: 'stadium-variant',
-    };
-  }
-
-  return null;
+  return {
+    ...GROUP_BY_CATEGORY[unit.premiumCategory],
+    level: resolveSuiteLevel(unit, suiteNumber),
+  };
 }
 
 /**
@@ -229,7 +215,7 @@ export function groupPremiumSpaces(zones: StadiumZoneData[]): PremiumSpaceGroup[
       id: string;
       title: string;
       level: string;
-      icon: string;
+      icon: PremiumGroupIconName;
       units: StadiumZoneItem[];
       alertCount: number;
     }
@@ -249,7 +235,7 @@ export function groupPremiumSpaces(zones: StadiumZoneData[]): PremiumSpaceGroup[
 
   for (const zone of zones) {
     for (const unit of zone.units) {
-      const classification = classifyPremiumSpace(unit, zone.id);
+      const classification = classifyPremiumSpace(unit);
       if (!classification) continue;
 
       let existing = groupMap.get(classification.groupId);
