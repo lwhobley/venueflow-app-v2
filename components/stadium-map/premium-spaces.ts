@@ -147,8 +147,14 @@ const GROUP_BY_CATEGORY: Record<
   },
 };
 
-/** Unit types that represent a premium hospitality space rather than a general one. */
-const PREMIUM_UNIT_TYPES = new Set([
+/**
+ * Unit types that represent a premium hospitality space.
+ *
+ * Not used for classification — that is driven entirely by `premiumCategory`.
+ * This is exported so data-integrity checks can assert that every premium
+ * record actually carries the metadata the directory depends on.
+ */
+export const PREMIUM_UNIT_TYPES = new Set([
   'premium_suite',
   'club_lounge',
   'premium_lounge',
@@ -157,14 +163,15 @@ const PREMIUM_UNIT_TYPES = new Set([
   'concourse_bunker',
 ]);
 
-function isPremiumUnitType(unit: StadiumZoneItem): boolean {
-  return PREMIUM_UNIT_TYPES.has(unit.type) || unit.type.includes('club');
+export function isPremiumUnitType(unit: StadiumZoneItem): boolean {
+  return PREMIUM_UNIT_TYPES.has(unit.type);
 }
 
 /**
  * Resolves the stadium level a premium unit sits on, preferring explicit
- * `stadiumLevel` metadata and falling back to the unit's suite number or
- * its raw `level` value so records without metadata still group sensibly.
+ * `stadiumLevel` metadata and falling back to the unit's suite number or its
+ * raw `level` value, so a tagged unit still reports a level when the optional
+ * `stadiumLevel` field is absent.
  */
 function resolveSuiteLevel(unit: StadiumZoneItem, suiteNumber: number): string {
   if (unit.stadiumLevel) return unit.stadiumLevel;
@@ -176,96 +183,20 @@ function resolveSuiteLevel(unit: StadiumZoneItem, suiteNumber: number): string {
 }
 
 /**
- * Categorizes an individual unit into a premium space group identifier.
+ * Categorizes an individual unit into a premium space group.
  *
- * Explicit `premiumCategory` metadata is authoritative. Everything after it is
- * a compatibility fallback for units that carry no grouping metadata, and is
- * deliberately conservative: a unit must look like a premium space by type or
- * sit in a known premium zone before a level alone will place it in a group.
+ * Classification is driven solely by the unit's `premiumCategory` metadata: a
+ * unit without it is not a premium space and belongs to no group. Units must
+ * therefore be tagged in the zone data to appear in the directory.
  */
-export function classifyPremiumSpace(
-  unit: StadiumZoneItem,
-  zoneId?: string,
-): PremiumGroupDescriptor | null {
+export function classifyPremiumSpace(unit: StadiumZoneItem): PremiumGroupDescriptor | null {
+  if (!unit.premiumCategory) return null;
+
   const suiteNumber = parseInt(unit.suiteDetails?.suiteNumber ?? '0', 10);
-
-  // 1. Explicit metadata wins outright.
-  if (unit.premiumCategory) {
-    const group = GROUP_BY_CATEGORY[unit.premiumCategory];
-    return { ...group, level: resolveSuiteLevel(unit, suiteNumber) };
-  }
-
-  // ── Fallbacks for untagged records ──────────────────────────────────────
-  if (unit.displayGroup === 'event_spaces' || unit.type === 'party_suite') {
-    return {
-      ...GROUP_BY_CATEGORY.party_suites,
-      level: resolveSuiteLevel(unit, suiteNumber),
-    };
-  }
-
-  if (unit.displayGroup === 'premium' || unit.type === 'premium_lounge') {
-    return {
-      ...GROUP_BY_CATEGORY.premium_lounges,
-      level: resolveSuiteLevel(unit, suiteNumber),
-    };
-  }
-
-  const isFounders = Boolean(
-    unit.suiteDetails?.tier?.toLowerCase().includes('founder') ||
-      unit.suiteDetails?.tier?.toLowerCase().includes('commissioner'),
-  );
-
-  if (isFounders) {
-    return {
-      ...GROUP_BY_CATEGORY.founders_suites,
-      level: resolveSuiteLevel(unit, suiteNumber),
-    };
-  }
-
-  const is300Suite =
-    unit.type === 'premium_suite' &&
-    (unit.level === '3' || unit.stadiumLevel === '300' || (suiteNumber >= 300 && suiteNumber < 400));
-
-  if (is300Suite) {
-    return { ...GROUP_BY_CATEGORY['300_suites'], level: '300' };
-  }
-
-  const is400Suite =
-    unit.type === 'premium_suite' &&
-    (unit.level === '4' || unit.stadiumLevel === '400' || (suiteNumber >= 400 && suiteNumber < 500));
-
-  if (is400Suite) {
-    return { ...GROUP_BY_CATEGORY['400_suites'], level: '400' };
-  }
-
-  // Level alone is not enough: the unit must also look like a premium space.
-  const is200Club =
-    zoneId === 'zone-200-club' ||
-    unit.type === 'club_lounge' ||
-    ((unit.level === '2' || unit.stadiumLevel === '200') && isPremiumUnitType(unit));
-
-  if (is200Club) {
-    return { ...GROUP_BY_CATEGORY['200_clubs'], level: '200' };
-  }
-
-  const is100Club =
-    zoneId === 'zone-concourse-bunkers' ||
-    unit.type === 'concourse_bunker' ||
-    ((unit.level === '1' || unit.stadiumLevel === '100') && isPremiumUnitType(unit));
-
-  if (is100Club) {
-    return { ...GROUP_BY_CATEGORY['100_clubs'], level: '100' };
-  }
-
-  const isFieldSuite =
-    unit.type === 'endzone_lounge' ||
-    (unit.type === 'premium_suite' && (unit.level === '0' || unit.stadiumLevel === 'Field'));
-
-  if (isFieldSuite) {
-    return { ...GROUP_BY_CATEGORY.field_suites, level: 'Field' };
-  }
-
-  return null;
+  return {
+    ...GROUP_BY_CATEGORY[unit.premiumCategory],
+    level: resolveSuiteLevel(unit, suiteNumber),
+  };
 }
 
 /**
@@ -304,7 +235,7 @@ export function groupPremiumSpaces(zones: StadiumZoneData[]): PremiumSpaceGroup[
 
   for (const zone of zones) {
     for (const unit of zone.units) {
-      const classification = classifyPremiumSpace(unit, zone.id);
+      const classification = classifyPremiumSpace(unit);
       if (!classification) continue;
 
       let existing = groupMap.get(classification.groupId);
