@@ -4,11 +4,9 @@ import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import {
-  CAMERA_PRESETS,
-  findZoneByMeshName,
-} from './stadium-model-bindings';
+import { findZoneByMeshName } from './stadium-model-bindings';
 import { applyHighlights, disposeScene, isolateMaterials } from './scene-resources';
+import { computeCameraFraming, type ModelBounds } from './camera-framing';
 import type { CameraPresetId, OperationalHighlightStatus, Stadium3DCanvasProps } from './stadium-3d.types';
 
 /** Structural volumes whose shadows read at stadium scale. */
@@ -44,6 +42,13 @@ function StadiumScene({
   const targetCamPosRef = useRef<THREE.Vector3>(new THREE.Vector3(28, 24, 36));
   const targetCamLookRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 2, 0));
 
+  // Real bounds of the loaded model, filled once geometry exists. Framing is
+  // derived from these rather than from hardcoded preset coordinates.
+  const modelBoundsRef = useRef<ModelBounds | null>(null);
+  const presetRef = useRef<CameraPresetId>(cameraPreset);
+  presetRef.current = cameraPreset;
+  const frameToPresetRef = useRef<() => void>(() => undefined);
+
   const transitioning = useRef(true);
   const needsRender = useRef(true);
   const activeRef = useRef(active);
@@ -66,12 +71,9 @@ function StadiumScene({
   // Track pointer for tap vs drag detection
   const pointerDownPosRef = useRef<{ x: number; y: number; time: number }>({ x: 0, y: 0, time: 0 });
 
-  // Update target camera based on preset changes
+  // Re-frame whenever the preset changes or the user resets the camera.
   useEffect(() => {
-    const preset = CAMERA_PRESETS[cameraPreset] || CAMERA_PRESETS.overview;
-    targetCamPosRef.current.set(preset.position[0], preset.position[1], preset.position[2]);
-    targetCamLookRef.current.set(preset.target[0], preset.target[1], preset.target[2]);
-    transitioning.current = true;
+    frameToPresetRef.current();
   }, [cameraPreset, resetToken]);
 
   // Main Scene Setup
@@ -141,6 +143,40 @@ function StadiumScene({
     controls.target.set(0, 2, 0);
     controlsRef.current = controls;
 
+    // Derives camera placement from the model's real bounds and the current
+    // aspect. Until geometry exists there is nothing to frame, so this no-ops
+    // and is re-run by captureModelBounds() once the model is in the scene.
+    const frameToPreset = () => {
+      const bounds = modelBoundsRef.current;
+      if (!bounds) return;
+      const framing = computeCameraFraming(presetRef.current, bounds, camera.fov, camera.aspect);
+      targetCamPosRef.current.set(...framing.position);
+      targetCamLookRef.current.set(...framing.target);
+      controls.minDistance = framing.minDistance;
+      controls.maxDistance = framing.maxDistance;
+      transitioning.current = true;
+      needsRender.current = true;
+    };
+    frameToPresetRef.current = frameToPreset;
+
+    const captureModelBounds = (root: THREE.Object3D) => {
+      const box = new THREE.Box3().setFromObject(root);
+      if (box.isEmpty()) return;
+      const sphere = box.getBoundingSphere(new THREE.Sphere());
+      modelBoundsRef.current = {
+        center: [sphere.center.x, sphere.center.y, sphere.center.z],
+        radius: sphere.radius,
+        minY: box.min.y,
+        height: box.max.y - box.min.y,
+      };
+      // A fixed 48-unit plaza dwarfed the auto-fitted model and filled the
+      // frame with empty ground; keep it just wider than the model footprint.
+      const plazaRadius = Math.max(sphere.radius * 1.25, 1);
+      groundRing.scale.set(plazaRadius, 1, plazaRadius);
+      groundRing.position.set(sphere.center.x, box.min.y, sphere.center.z);
+      frameToPreset();
+    };
+
     // 5. Lighting Setup (Cinematic Nighttime Operations Rig)
     const hemiLight = new THREE.HemisphereLight('#E3F2FD', '#0A1A10', 2.5);
     scene.add(hemiLight);
@@ -162,8 +198,10 @@ function StadiumScene({
     scene.add(goldAccent);
 
     // Ground Plaza Base Slab
+    const groundRing = new THREE.Group();
+    scene.add(groundRing);
     const ground = new THREE.Mesh(
-      new THREE.CircleGeometry(48, 96),
+      new THREE.CircleGeometry(1, 96),
       new THREE.MeshStandardMaterial({
         color: '#08121E',
         roughness: 0.95,
@@ -173,17 +211,17 @@ function StadiumScene({
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.05;
     ground.receiveShadow = true;
-    scene.add(ground);
+    groundRing.add(ground);
 
-    // Concentric Plaza Rings
-    [24, 34, 44].forEach((r) => {
+    // Concentric Plaza Rings, sized as fractions of the plaza radius.
+    [0.5, 0.71, 0.92].forEach((r) => {
       const ring = new THREE.Mesh(
-        new THREE.RingGeometry(r, r + 0.15, 64),
+        new THREE.RingGeometry(r, r + 0.0032, 64),
         new THREE.MeshBasicMaterial({ color: '#10253A', side: THREE.DoubleSide })
       );
       ring.rotation.x = -Math.PI / 2;
       ring.position.y = 0.01;
-      scene.add(ring);
+      groundRing.add(ring);
     });
 
     // 6. GLB Model Loading with Fallback Procedural Bowl
@@ -203,6 +241,7 @@ function StadiumScene({
       try {
         buildProceduralStadium(modelGroup);
         isolateMaterials(modelGroup);
+        captureModelBounds(modelGroup);
         applyHighlights(modelGroup, selectedZoneIdRef.current, highlightedZonesRef.current);
         needsRender.current = true;
         hasModelLoaded = true;
@@ -249,6 +288,7 @@ function StadiumScene({
 
           isolateMaterials(gltf.scene);
           modelGroup.add(gltf.scene);
+          captureModelBounds(modelGroup);
           applyHighlights(modelGroup, selectedZoneIdRef.current, highlightedZonesRef.current);
           needsRender.current = true;
           onLoadProgress?.(100);
@@ -338,6 +378,8 @@ function StadiumScene({
       needsRender.current = true;
       cameraRef.current.aspect = w / h;
       cameraRef.current.updateProjectionMatrix();
+      // Aspect changes what fits, so re-derive the framing.
+      frameToPresetRef.current();
     };
 
     const resizeObserver = new ResizeObserver(handleResize);
