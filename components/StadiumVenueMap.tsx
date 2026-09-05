@@ -6,7 +6,7 @@ import { CommandButton, CommandText, StatusPill } from './FutureUI';
 import { spacing, useDesignTheme } from '../lib/theme';
 import { useResponsive } from '../lib/responsive';
 import { StadiumUnitDetailModal, type StadiumZoneItem } from './StadiumUnitDetailModal';
-import Stadium3DModel from './Stadium3DModel';
+import { Stadium3DViewer } from './stadium-3d/Stadium3DViewer';
 import { COMPREHENSIVE_STADIUM_ZONES, type StadiumZoneData } from './stadium-map/zone-data';
 import { styles } from './stadium-map/StadiumVenueMap.styles';
 import { asArray } from '../lib/format';
@@ -22,10 +22,12 @@ export { COMPREHENSIVE_STADIUM_ZONES, type StadiumZoneData };
 export function StadiumVenueMap({
   initialZoneId,
   initialSelectedUnitId,
+  initialViewMode = 'operations',
   onSelectUnit,
 }: {
   initialZoneId?: string;
   initialSelectedUnitId?: string;
+  initialViewMode?: 'operations' | '3d';
   onSelectUnit?: (unit: StadiumZoneItem) => void;
 }) {
   const palette = useDesignTheme();
@@ -36,7 +38,9 @@ export function StadiumVenueMap({
   const [selectedZoneId, setSelectedZoneId] = useState<string>(initialZoneId ?? 'ALL');
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(initialSelectedUnitId ?? 'u-302');
   const [activeModalUnit, setActiveModalUnit] = useState<StadiumZoneItem | null>(null);
-  const [viewPerspective, setViewPerspective] = useState<'3d_isometric' | '2d_plan'>('3d_isometric');
+  const [viewPerspective, setViewPerspective] = useState<'3d_isometric' | '2d_plan'>(
+    initialViewMode === '3d' ? '3d_isometric' : '2d_plan'
+  );
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
     stadium_gates: true,
     field_sidelines: false,
@@ -191,31 +195,14 @@ export function StadiumVenueMap({
           />
           <View style={styles.viewModeToggle}>
             <Pressable
-              onPress={() => setViewPerspective('3d_isometric')}
-              style={[
-                styles.perspectiveBtn,
-                { backgroundColor: viewPerspective === '3d_isometric' ? '#013369' : '#FFFFFF' },
-              ]}
-            >
-              <MaterialCommunityIcons
-                name="cube-outline"
-                size={16}
-                color={viewPerspective === '3d_isometric' ? '#FFFFFF' : '#013369'}
-              />
-              <CommandText
-                palette={palette}
-                variant="caption"
-                style={{ color: viewPerspective === '3d_isometric' ? '#FFFFFF' : '#013369', fontWeight: '800' }}
-              >
-                3D SPATIAL
-              </CommandText>
-            </Pressable>
-            <Pressable
               onPress={() => setViewPerspective('2d_plan')}
               style={[
                 styles.perspectiveBtn,
                 { backgroundColor: viewPerspective === '2d_plan' ? '#013369' : '#FFFFFF' },
               ]}
+              accessibilityRole="button"
+              accessibilityLabel="Show 2D Operations Map"
+              accessibilityState={{ selected: viewPerspective === '2d_plan' }}
             >
               <MaterialCommunityIcons
                 name="floor-plan"
@@ -227,7 +214,30 @@ export function StadiumVenueMap({
                 variant="caption"
                 style={{ color: viewPerspective === '2d_plan' ? '#FFFFFF' : '#013369', fontWeight: '800' }}
               >
-                PLAN
+                OPERATIONS
+              </CommandText>
+            </Pressable>
+            <Pressable
+              onPress={() => setViewPerspective('3d_isometric')}
+              style={[
+                styles.perspectiveBtn,
+                { backgroundColor: viewPerspective === '3d_isometric' ? '#013369' : '#FFFFFF' },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Show Cinematic 3D Stadium View"
+              accessibilityState={{ selected: viewPerspective === '3d_isometric' }}
+            >
+              <MaterialCommunityIcons
+                name="cube-outline"
+                size={16}
+                color={viewPerspective === '3d_isometric' ? '#FFFFFF' : '#013369'}
+              />
+              <CommandText
+                palette={palette}
+                variant="caption"
+                style={{ color: viewPerspective === '3d_isometric' ? '#FFFFFF' : '#013369', fontWeight: '800' }}
+              >
+                3D VIEW
               </CommandText>
             </Pressable>
           </View>
@@ -562,12 +572,16 @@ export function StadiumVenueMap({
             {/* Actual GLB renderer in 3D mode; the architectural plan remains available in 2D mode. */}
             {viewPerspective === '3d_isometric' ? (
               <View style={[styles.interactiveModelFrame, { height: isMobile ? 440 : 540 }]}>
-                <Stadium3DModel
-                  dom={{
-                    scrollEnabled: false,
-                    contentInsetAdjustmentBehavior: 'never',
-                    style: { width: '100%', height: '100%' },
+                <Stadium3DViewer
+                  zones={zonesState}
+                  selectedZoneId={selectedZoneId !== 'ALL' ? selectedZoneId : null}
+                  selectedUnitId={selectedUnitId}
+                  onSelectZone={(zoneId) => setSelectedZoneId(zoneId)}
+                  onSelectUnit={(unit) => {
+                    handleUnitPress(unit);
+                    setActiveModalUnit(unit);
                   }}
+                  onOpenOperationsMap={() => setViewPerspective('2d_plan')}
                 />
               </View>
             ) : (
