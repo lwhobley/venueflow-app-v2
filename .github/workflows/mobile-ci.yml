@@ -16,7 +16,7 @@ on:
       - 'vitest.config.ts'
       - '.github/workflows/mobile-ci.yml'
   pull_request:
-    branches: [main]
+    branches: [main, desktop-web]
     paths:
       - 'app/**'
       - 'components/**'
