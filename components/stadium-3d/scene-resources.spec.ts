@@ -11,6 +11,9 @@ async function loadModel() {
   return new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, '');
 }
 
+/** Zones the bundled asset has no geometry for; reachable via the Operations Map. */
+const ZONES_WITHOUT_GEOMETRY = ['zone-concourse-bunkers', 'zone-locker-rooms-aux'];
+
 describe('bundled stadium asset contract', () => {
   it('has globally unique operational unit identities', () => {
     const ids = COMPREHENSIVE_STADIUM_ZONES.flatMap((zone) => zone.units.map((unit) => unit.id));
@@ -23,9 +26,44 @@ describe('bundled stadium asset contract', () => {
     for (const binding of STADIUM_ZONE_MODEL_BINDINGS) {
       expect(COMPREHENSIVE_STADIUM_ZONES.some((zone) => zone.id === binding.zoneId)).toBe(true);
       if (binding.meshNames.length) expect(bound.has(binding.zoneId)).toBe(true);
-      else expect(binding.zoneId).toBe('zone-concourse-bunkers');
+      else expect(ZONES_WITHOUT_GEOMETRY).toContain(binding.zoneId);
     }
     disposeScene(scene);
+  });
+
+  it('routes each mesh in the asset to at most one zone', async () => {
+    const { scene } = await loadModel();
+    const claims = new Map<string, Set<string>>();
+    scene.traverse((object) => {
+      const binding = findZoneByMeshName(object.name);
+      if (!binding) return;
+      const owners = claims.get(object.name) ?? new Set<string>();
+      owners.add(binding.zoneId);
+      claims.set(object.name, owners);
+    });
+    const contested = [...claims.entries()].filter(([, owners]) => owners.size > 1);
+    expect(contested).toEqual([]);
+    disposeScene(scene);
+  });
+
+  it('selects the 400 level zone from 400 level suite geometry', async () => {
+    const { scene } = await loadModel();
+    // Regression: the 400 suite meshes were bound to zone-300-suites, so tapping
+    // them opened the 300 level's units, BEOs and staffing.
+    for (const meshName of ['Node_Suites_400_Balcony', 'Node_Suites_400_Glass']) {
+      expect(scene.getObjectByName(meshName)).toBeDefined();
+      expect(findZoneByMeshName(meshName)?.zoneId).toBe('zone-400-upper');
+    }
+    expect(findZoneByMeshName('Node_Suites_300_Balcony')?.zoneId).toBe('zone-300-suites');
+    disposeScene(scene);
+  });
+
+  it('keeps binding level and name aligned with the operational zone record', () => {
+    for (const binding of STADIUM_ZONE_MODEL_BINDINGS) {
+      const zone = COMPREHENSIVE_STADIUM_ZONES.find((candidate) => candidate.id === binding.zoneId);
+      expect(zone).toBeDefined();
+      expect(binding.level).toBe(zone!.level);
+    }
   });
 
   it('applies initial selection without lighting other zones sharing the original material', async () => {

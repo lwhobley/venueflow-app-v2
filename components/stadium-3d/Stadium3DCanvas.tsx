@@ -11,6 +11,9 @@ import {
 import { applyHighlights, disposeScene, isolateMaterials } from './scene-resources';
 import type { CameraPresetId, OperationalHighlightStatus, Stadium3DCanvasProps } from './stadium-3d.types';
 
+/** Structural volumes whose shadows read at stadium scale. */
+const SHADOW_CASTING_MESH = /^(Node_)?(Bowl_|Suites_|Upper_|Gate_|Roof_|Exterior_|Jumbotron_|Ext_)/;
+
 // Asset reference bundled by Metro
 // @ts-ignore
 import nrgStadiumGlbAsset from '../../assets/nrg-stadium.glb';
@@ -110,7 +113,9 @@ function StadiumScene({
       return;
     }
 
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    // Capped below the device ratio: 2x on a 3x phone already quadruples the
+    // fragment cost, and this scene is read at arm's length on a handset.
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     renderer.setSize(width, height, false);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -231,12 +236,14 @@ function StadiumScene({
           gltf.scene.position.set(-center.x * targetScale, -bbox.min.y * targetScale, -center.z * targetScale);
 
           // Traverse meshes, enable shadows, store original materials
+          // Shadow-casting every mesh doubles the draw calls for yard lines and
+          // endzone lettering that cast nothing legible. Restrict casting to the
+          // large structural volumes; everything still receives.
           gltf.scene.traverse((obj) => {
             if ((obj as THREE.Mesh).isMesh) {
               const mesh = obj as THREE.Mesh;
-              mesh.castShadow = true;
+              mesh.castShadow = SHADOW_CASTING_MESH.test(mesh.name);
               mesh.receiveShadow = true;
-
             }
           });
 
@@ -310,8 +317,17 @@ function StadiumScene({
     controls.addEventListener('start', stopTransition);
     const contextLost = (event: Event) => { event.preventDefault(); fail(); };
     renderer.domElement.addEventListener('webglcontextlost', contextLost);
-    window.addEventListener('error', fail);
-    window.addEventListener('unhandledrejection', fail);
+    // Only treat an error as a renderer failure when it actually originates in
+    // the 3D stack. A global handler tore the scene down for unrelated errors
+    // elsewhere in the WebView, turning a working view into a false failure.
+    const isRendererError = (value: unknown): boolean => {
+      const message = value instanceof Error ? `${value.name}: ${value.message}` : String(value ?? '');
+      return /webgl|three|gltf|glb|context lost|out of memory/i.test(message);
+    };
+    const onWindowError = (event: ErrorEvent) => { if (isRendererError(event.error ?? event.message)) fail(); };
+    const onRejection = (event: PromiseRejectionEvent) => { if (isRendererError(event.reason)) fail(); };
+    window.addEventListener('error', onWindowError);
+    window.addEventListener('unhandledrejection', onRejection);
 
     // 8. Resize Observer
     const handleResize = () => {
@@ -380,8 +396,8 @@ function StadiumScene({
       renderer.domElement.removeEventListener('pointerdown', handlePointerDown);
       renderer.domElement.removeEventListener('pointerup', handlePointerUp);
       renderer.domElement.removeEventListener('webglcontextlost', contextLost);
-      window.removeEventListener('error', fail);
-      window.removeEventListener('unhandledrejection', fail);
+      window.removeEventListener('error', onWindowError);
+      window.removeEventListener('unhandledrejection', onRejection);
       controls.removeEventListener('start', stopTransition);
       controls.dispose();
 

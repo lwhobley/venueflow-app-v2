@@ -64,6 +64,8 @@ export const STADIUM_ZONE_MODEL_BINDINGS: StadiumZoneModelBinding[] = [
       'Field_Sideline_E',
       'Bench_Texans_Home',
       'Bench_Visiting_Away',
+      'Node_Bench_Home',
+      'Node_Bench_Away',
       'Node_Field_GrassTurf',
       'Node_Endzone_North',
       'Node_Endzone_South',
@@ -126,8 +128,6 @@ export const STADIUM_ZONE_MODEL_BINDINGS: StadiumZoneModelBinding[] = [
     meshNames: [
       'Suites_300_Balcony',
       'Suites_300_Glass',
-      'Suites_400_Balcony',
-      'Suites_400_Glass',
       'Node_Suites_300_Balcony',
       'Node_Suites_300_Glass',
       'ZONE_suites_300',
@@ -138,10 +138,14 @@ export const STADIUM_ZONE_MODEL_BINDINGS: StadiumZoneModelBinding[] = [
   },
   {
     zoneId: 'zone-400-upper',
-    name: 'Upper Deck 500/600',
-    level: '5',
+    name: '400 Upper Deck Concourse & Skyline Bars',
+    level: '4',
     category: 'upper_deck',
     meshNames: [
+      'Suites_400_Balcony',
+      'Suites_400_Glass',
+      'Node_Suites_400_Balcony',
+      'Node_Suites_400_Glass',
       'Bowl_500_UpperRed',
       'Upper_Concourse_Rim',
       'Node_Bowl_500_UpperRed',
@@ -176,10 +180,8 @@ export const STADIUM_ZONE_MODEL_BINDINGS: StadiumZoneModelBinding[] = [
     name: 'Team Lockers & Auxiliary Suites',
     level: '0',
     category: 'locker_rooms_aux',
-    meshNames: [
-      'Node_Bench_Home',
-      'Node_Bench_Away',
-    ],
+    // This asset has no locker-room geometry. Use the Operations Map/directory.
+    meshNames: [],
     anchor: [-7, 0.4, -6],
     cameraPreset: 'field',
     colorHex: '#7B1FA2',

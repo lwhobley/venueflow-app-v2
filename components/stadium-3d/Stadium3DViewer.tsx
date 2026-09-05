@@ -9,6 +9,7 @@ import { StadiumZoneOverlay } from './StadiumZoneOverlay';
 import {
   buildZoneHighlightStates,
   findZoneBinding,
+  getHighlightColor,
 } from './stadium-model-bindings';
 import type {
   CameraPresetId,
@@ -233,6 +234,39 @@ export function Stadium3DViewer({
             ) : null}
           </>
         ) : null}
+      </View>
+
+      {/*
+        The WebGL canvas is a single opaque element to a screen reader, and some
+        zones have no geometry in the bundled asset at all. This list is the
+        accessible, non-visual route to every zone without leaving 3D mode.
+      */}
+      <View style={styles.zoneListBar} accessibilityRole="list">
+        {zones.map((zone) => {
+          const status = highlightStates[zone.id]?.status ?? 'normal';
+          const isActive = selectedZoneId === zone.id;
+          return (
+            <Pressable
+              key={zone.id}
+              onPress={() => onSelectZone(zone.id)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isActive }}
+              accessibilityLabel={`${zone.name}, status ${status}, ${zone.units.length} units`}
+              style={({ pressed }) => [
+                styles.zoneListChip,
+                isActive ? styles.zoneListChipActive : null,
+                { opacity: pressed ? 0.75 : 1 },
+              ]}
+            >
+              <View
+                style={[styles.zoneListStatusDot, { backgroundColor: getHighlightColor(status).colorHex }]}
+              />
+              <Text style={[styles.zoneListChipText, isActive ? styles.zoneListChipTextActive : null]}>
+                {zone.code ?? zone.name}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
     </View>
   );
