@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   IsArray,
@@ -31,6 +32,9 @@ import { zonedDateBounds, zonedIsoDate } from '../../common/venue-time';
 import { EmailService } from '../../email/email.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
+import { SkipTenantTransaction } from '../../prisma/skip-tenant-transaction.decorator';
+import { withTenantTransaction } from '../../prisma/tenant-transaction';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 
@@ -172,6 +176,7 @@ class ReviewStaffRequestDto {
   responseNotes?: string;
 }
 
+@UseInterceptors(TenantRequestTransactionInterceptor)
 @Controller('v1/staff-requests')
 export class StaffRequestsController {
   constructor(
@@ -195,32 +200,12 @@ export class StaffRequestsController {
   }
 
   @RequireSubscription()
+  // Awaits NotificationsService.notifyManagers, which awaits a blocking Expo
+  // push fetch — must not hold the request transaction open for that call.
+  @SkipTenantTransaction()
   @Post()
   async createStaffRequest(@VenueScope() scope: Scope, @Body() body: CreateStaffRequestDto) {
     if (!scope) throw new ForbiddenException('Profile does not belong to a venue');
-
-    // Block time-off requests that overlap a manager-defined blackout window.
-    if (body.kind === 'time_off') {
-      const reqStart = body.requestedRangeStart || body.requestedForDate;
-      const reqEnd = body.requestedRangeEnd || body.requestedForDate || reqStart;
-      if (reqStart && reqEnd) {
-        const blackouts = await this.prisma.blackoutDate.findMany({
-          where: { venueId: scope.venueId },
-        });
-        const hit = blackouts.find((b) => {
-          const bStart = b.startDate.toISOString().split('T')[0];
-          const bEnd = b.endDate.toISOString().split('T')[0];
-          return reqStart <= bEnd && bStart <= reqEnd;
-        });
-        if (hit) {
-          const bStartStr = hit.startDate.toISOString().split('T')[0];
-          const bEndStr = hit.endDate.toISOString().split('T')[0];
-          throw new BadRequestException(
-            `Time off is blacked out ${bStartStr}${bEndStr !== bStartStr ? ` – ${bEndStr}` : ''} (${hit.reason}). Please choose other dates.`,
-          );
-        }
-      }
-    }
 
     // Time corrections carry a single correction object (stored in the same
     // `availability` JSON column the reviewer reads). Validate it here so an
@@ -236,24 +221,53 @@ export class StaffRequestsController {
     }
     const requestPayload = body.kind === 'time_correction' ? body.timeCorrection : body.availability;
 
-    const profile = await this.prisma.profile.findUniqueOrThrow({ where: { id: scope.profileId } });
-    const request = await this.prisma.staffRequest.create({
-      data: {
-        venueId: scope.venueId,
-        profileId: scope.profileId,
-        kind: body.kind,
-        status: 'pending',
-        title: body.title,
-        details: body.details,
-        requestedForDate: body.requestedForDate,
-        requestedShiftId: body.requestedShiftId,
-        requestedRangeStart: body.requestedRangeStart,
-        requestedRangeEnd: body.requestedRangeEnd,
-        availability: requestPayload
-          ? (requestPayload as unknown as Prisma.InputJsonValue)
-          : undefined,
-      },
-    });
+    // This route is @SkipTenantTransaction() (the notifications/email calls
+    // below await a blocking Expo push fetch), so these writes need their own
+    // GUC binding rather than relying on the request-scoped interceptor.
+    const { profile, request } = await withTenantTransaction(this.prisma, async (tx) => {
+      // Block time-off requests that overlap a manager-defined blackout window.
+      if (body.kind === 'time_off') {
+        const reqStart = body.requestedRangeStart || body.requestedForDate;
+        const reqEnd = body.requestedRangeEnd || body.requestedForDate || reqStart;
+        if (reqStart && reqEnd) {
+          const blackouts = await tx.blackoutDate.findMany({
+            where: { venueId: scope.venueId },
+          });
+          const hit = blackouts.find((b) => {
+            const bStart = b.startDate.toISOString().split('T')[0];
+            const bEnd = b.endDate.toISOString().split('T')[0];
+            return reqStart <= bEnd && bStart <= reqEnd;
+          });
+          if (hit) {
+            const bStartStr = hit.startDate.toISOString().split('T')[0];
+            const bEndStr = hit.endDate.toISOString().split('T')[0];
+            throw new BadRequestException(
+              `Time off is blacked out ${bStartStr}${bEndStr !== bStartStr ? ` – ${bEndStr}` : ''} (${hit.reason}). Please choose other dates.`,
+            );
+          }
+        }
+      }
+
+      const profile = await tx.profile.findUniqueOrThrow({ where: { id: scope.profileId } });
+      const request = await tx.staffRequest.create({
+        data: {
+          venueId: scope.venueId,
+          profileId: scope.profileId,
+          kind: body.kind,
+          status: 'pending',
+          title: body.title,
+          details: body.details,
+          requestedForDate: body.requestedForDate,
+          requestedShiftId: body.requestedShiftId,
+          requestedRangeStart: body.requestedRangeStart,
+          requestedRangeEnd: body.requestedRangeEnd,
+          availability: requestPayload
+            ? (requestPayload as unknown as Prisma.InputJsonValue)
+            : undefined,
+        },
+      });
+      return { profile, request };
+    }, { venueId: scope.venueId });
 
     await this.notifications.notifyManagers({
       venueId: scope.venueId,
@@ -292,6 +306,9 @@ export class StaffRequestsController {
   }
 
   @RequireSubscription()
+  // Awaits NotificationsService.notifyProfile, which awaits a blocking Expo
+  // push fetch — must not hold the request transaction open for that call.
+  @SkipTenantTransaction()
   @Patch(':id')
   async reviewStaffRequest(
     @VenueScope() scope: Scope,
@@ -302,7 +319,10 @@ export class StaffRequestsController {
       throw new ForbiddenException('Not authorized');
     }
 
-    const result = await this.prisma.$transaction(async (tx) => {
+    // This route is @SkipTenantTransaction() (the notifyProfile/email calls
+    // below await a blocking Expo push fetch), so this write needs its own
+    // GUC binding rather than relying on the request-scoped interceptor.
+    const result = await withTenantTransaction(this.prisma, async (tx) => {
     await tx.$executeRaw`SELECT 1 FROM "StaffRequest" WHERE "id" = ${id} FOR UPDATE`;
     const request = await tx.staffRequest.findUnique({ where: { id } });
     if (!request) throw new NotFoundException('Request not found');
@@ -483,7 +503,7 @@ export class StaffRequestsController {
       },
     });
     return { request, reviewer, updated };
-    });
+    }, { venueId: scope.venueId });
     const { request, reviewer, updated } = result;
 
     await this.notifications.notifyProfile({

@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { AppModule } from '../app.module';
 import { AllExceptionsFilter } from '../common/all-exceptions.filter';
 import { PrismaService } from '../prisma/prisma.service';
+import { runWithoutTenant } from '../prisma/tenant-context';
 import { setupTestDb } from './setup-test-db';
 
 /**
@@ -53,6 +54,7 @@ export async function bootstrapE2eApp(): Promise<{
   // Mirrors main.ts's request-shaping (minus helmet/CORS/body-size tuning,
   // which don't affect the auth/billing/route behavior these smoke tests
   // exercise).
+  app.use((_req: any, _res: any, next: any) => runWithoutTenant(() => next()));
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
   app.setGlobalPrefix('api', { exclude: ['/'] });

@@ -8,6 +8,7 @@ import { spacing, type, useDesignTheme } from '../lib/theme';
 import { AppCard } from '../components/AppCard';
 import { useAuthStore, type AuthState } from '../lib/auth-store';
 import { useI18n } from '../lib/i18n';
+import { asArray } from '../lib/format';
 
 type JoinRequest = {
   id: string;
@@ -71,7 +72,7 @@ export default function JoinRequestsScreen() {
     );
   }, [queryClient, t]);
 
-  const requests: JoinRequest[] = data?.requests ?? [];
+  const requests: JoinRequest[] = asArray(data?.requests);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }}>
@@ -196,3 +197,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
 });
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../components/ErrorBoundary';

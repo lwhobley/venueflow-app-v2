@@ -8,6 +8,7 @@ import { api } from '../lib/railway-api';
 import { CommandButton, CommandSurface, CommandText, StatusPill } from '../components/FutureUI';
 import { colors, spacing, useDesignTheme, radius } from '../lib/theme';
 import { useResponsive } from '../lib/responsive';
+import { asArray } from '../lib/format';
 
 export default function EventCommandCenterScreen() {
   const params = useLocalSearchParams<{ eventId?: string }>();
@@ -105,7 +106,7 @@ export default function EventCommandCenterScreen() {
           <Card style={{ backgroundColor: '#FFFFFF', borderColor: '#D9E2DC', borderWidth: 1, borderRadius: radius.sharp }}>
             <Card.Content style={{ gap: spacing.sm }}>
               <Text variant="titleMedium" style={{ fontWeight: '800', color: '#1D2420' }}>Execution Tasks ({workspace.tasks?.length ?? 0})</Text>
-              {(workspace.tasks ?? []).map((task: any) => {
+              {asArray(workspace.tasks).map((task: any) => {
                 const done = task.status === 'done';
                 return (
                   <View key={task._id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xs, borderTopWidth: 1, borderTopColor: '#EEF5F0' }}>
@@ -129,8 +130,8 @@ export default function EventCommandCenterScreen() {
   }
 
   const readiness = masterData?.readiness;
-  const events = masterData?.events ?? [];
-  const blockers = masterData?.blockers ?? [];
+  const events = asArray(masterData?.events);
+  const blockers = asArray(masterData?.blockers);
   const staffing = masterData?.staffing ?? { scheduled: 0, open: 0, covered: 0 };
   const setup = masterData?.setup ?? { prepOpen: 0, checklistOpen: 0 };
   const floor = masterData?.floor ?? { tableCount: 0, unassignedReservations: 0 };
@@ -221,3 +222,8 @@ export default function EventCommandCenterScreen() {
     </ScrollView>
   );
 }
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../components/ErrorBoundary';

@@ -5,6 +5,7 @@ import { useMutation, useQuery } from '../../lib/railway-hooks';
 import { api } from '../../lib/railway-api';
 import type { Id } from '../../lib/ids';
 import { accents, colors, spacing } from '../../lib/theme';
+import { asArray } from '../../lib/format';
 
 const isoDate = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -20,7 +21,7 @@ export function BlackoutManager({ venueId }: { venueId: Id<'venues'> }) {
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const blackouts = useMemo(() => (data ?? []) as Blackout[], [data]);
+  const blackouts = useMemo(() => asArray(data) as Blackout[], [data]);
 
   const onAdd = async () => {
     setError(null);

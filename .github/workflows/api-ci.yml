@@ -11,7 +11,7 @@ on:
       - 'vitest.config.ts'
       - '.github/workflows/api-ci.yml'
   pull_request:
-    branches: [main]
+    branches: [main, desktop-web]
     paths:
       - 'packages/api/**'
       - 'package.json'
@@ -126,6 +126,7 @@ jobs:
             WorkplaceJoinRequest_one_pending_per_user_venue_idx
             Invite_phone_idx
             Profile_unclaimed_venue_email_key
+            VmsTimeAttendance_facility_staff_open_key
           )
           for index in "${required_indexes[@]}"; do
             found="$(psql -h localhost -U postgres -d venuetest -Atc \

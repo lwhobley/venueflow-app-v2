@@ -158,7 +158,7 @@ export class SuiteHospitalityService {
     });
 
     // Broadcast WebSocket event
-    await this.wsGateway.broadcastBeoUpdate(order.facilityId, order.zoneId, order as any);
+    await this.wsGateway.broadcastBeoUpdate(order.organizationId, order.facilityId, order.zoneId, order as any);
 
     // Emit Outbound Enterprise Webhook for Confirmed BEO
     await this.webhooks.emitSuiteBeoWebhook({
@@ -219,7 +219,7 @@ export class SuiteHospitalityService {
       return order;
     });
 
-    await this.wsGateway.broadcastBeoUpdate(updated.facilityId, updated.zoneId, updated as any);
+    await this.wsGateway.broadcastBeoUpdate(updated.organizationId, updated.facilityId, updated.zoneId, updated as any);
 
     if (toStatus === 'closed_invoiced') {
       await this.webhooks.emitSuiteBeoWebhook({
@@ -273,7 +273,7 @@ export class SuiteHospitalityService {
       return order;
     });
 
-    await this.wsGateway.broadcastBeoUpdate(updated.facilityId, updated.zoneId, updated as any);
+    await this.wsGateway.broadcastBeoUpdate(updated.organizationId, updated.facilityId, updated.zoneId, updated as any);
     return updated;
   }
 
@@ -293,7 +293,7 @@ export class SuiteHospitalityService {
       },
     });
 
-    await this.wsGateway.broadcastReplenishment(beo.facilityId, beo.zoneId, req as any);
+    await this.wsGateway.broadcastReplenishment(beo.organizationId, beo.facilityId, beo.zoneId, req as any);
     return req;
   }
 

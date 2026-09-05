@@ -4,16 +4,18 @@ import { Card, Chip, SegmentedButtons, Text } from 'react-native-paper';
 import { ScreenErrorBoundary } from '../../components/ErrorBoundary';
 import { AnimatedTab, SectionHeader } from '../../components/AppCard';
 import { useI18n } from '../../lib/i18n';
-import { useQuery } from '../../lib/railway-hooks';
+import { useQueryState } from '../../lib/railway-hooks';
 import { api } from '../../lib/railway-api';
 import type { Id } from '../../lib/ids';
 import { accents, colors, radius, spacing } from '../../lib/theme';
 import { useVenueAuth } from '../../lib/useVenueAuth';
-import { formatMoney, formatPct, formatDuration } from '../../lib/format';
+import { asArray, formatDuration, formatMoney, formatPct } from '../../lib/format';
 import { ScheduleSkeleton } from '../../components/schedule/ScheduleSkeleton';
 import { PremiumFeatureGate } from '../../components/PremiumFeatureGate';
 import { ManagerGate } from '../../components/ManagerGate';
+import { ScreenState } from '../../components/ScreenState';
 import { DateRangeBar, useDateRange } from '../../components/DateRangeBar';
+
 
 
 
@@ -43,11 +45,13 @@ type SalesTabProps = { venueId: Id<'venues'>; days: number; startTs: number; end
 
 function SummaryTab({ venueId, days, startTs, endTs }: SalesTabProps) {
   const { t } = useI18n();
-  const dashboard = useQuery(api.pos.getSalesSummaryDashboard, { venueId, windowDays: days, startTs, endTs }) as any;
+  const dashboardQuery = useQueryState<any>(api.pos.getSalesSummaryDashboard, { venueId, windowDays: days, startTs, endTs });
+  const dashboard = dashboardQuery.data;
 
-  if (dashboard === undefined) return <ScheduleSkeleton rows={5} />;
+  if (dashboardQuery.isLoading) return <ScheduleSkeleton rows={5} />;
+  if (dashboardQuery.error) return <ScreenState isLoading={false} error={dashboardQuery.error} onRetry={() => void dashboardQuery.refetch()}>{null}</ScreenState>;
 
-  if (!dashboard || dashboard.summary.checkCount === 0) {
+  if (!dashboard?.summary || dashboard.summary.checkCount === 0) {
     return (
       <Card style={{ backgroundColor: colors.surface, borderRadius: radius.sharp }}>
         <Card.Content>
@@ -57,7 +61,10 @@ function SummaryTab({ venueId, days, startTs, endTs }: SalesTabProps) {
     );
   }
 
-  const { summary, byDay, byTender, byRevenueCenter } = dashboard as { summary: any; byDay: any[]; byTender: any[]; byRevenueCenter: any[] };
+  const summary = dashboard.summary as any;
+  const byDay = asArray<any>(dashboard.byDay);
+  const byTender = asArray<any>(dashboard.byTender);
+  const byRevenueCenter = asArray<any>(dashboard.byRevenueCenter);
   const netSales = summary.salesCents - (summary.discountCents + summary.compCents + summary.promoCents);
   const maxDay = Math.max(...byDay.map((d) => d.salesCents), 1);
 
@@ -166,10 +173,13 @@ function SummaryTab({ venueId, days, startTs, endTs }: SalesTabProps) {
 
 function ServersTab({ venueId, days, startTs, endTs }: SalesTabProps) {
   const { t } = useI18n();
-  const data = useQuery(api.pos.getSalesByServer, { venueId, windowDays: days, startTs, endTs }) as any[] | undefined;
+  const serverQuery = useQueryState<any>(api.pos.getSalesByServer, { venueId, windowDays: days, startTs, endTs });
+  const result = serverQuery.data;
 
-  if (data === undefined) return <ScheduleSkeleton rows={4} />;
-  if (!data || data.length === 0) {
+  if (serverQuery.isLoading) return <ScheduleSkeleton rows={4} />;
+  if (serverQuery.error) return <ScreenState isLoading={false} error={serverQuery.error} onRetry={() => void serverQuery.refetch()}>{null}</ScreenState>;
+  const data = asArray<any>(result);
+  if (data.length === 0) {
     return (
       <Card style={{ backgroundColor: colors.surface, borderRadius: radius.sharp }}>
         <Card.Content><Text style={{ color: colors.muted }}>{t('sales.servers.empty')}</Text></Card.Content>
@@ -220,10 +230,13 @@ function ServersTab({ venueId, days, startTs, endTs }: SalesTabProps) {
 
 function ItemsTab({ venueId, days, startTs, endTs }: SalesTabProps) {
   const { t } = useI18n();
-  const data = useQuery(api.pos.getTopMenuItems, { venueId, windowDays: days, limit: 30, startTs, endTs }) as any[] | undefined;
+  const itemsQuery = useQueryState<any>(api.pos.getTopMenuItems, { venueId, windowDays: days, limit: 30, startTs, endTs });
+  const result = itemsQuery.data;
 
-  if (data === undefined) return <ScheduleSkeleton rows={4} />;
-  if (!data || data.length === 0) {
+  if (itemsQuery.isLoading) return <ScheduleSkeleton rows={4} />;
+  if (itemsQuery.error) return <ScreenState isLoading={false} error={itemsQuery.error} onRetry={() => void itemsQuery.refetch()}>{null}</ScreenState>;
+  const data = asArray<any>(result);
+  if (data.length === 0) {
     return (
       <Card style={{ backgroundColor: colors.surface, borderRadius: radius.sharp }}>
         <Card.Content><Text style={{ color: colors.muted }}>{t('sales.items.empty')}</Text></Card.Content>
@@ -270,10 +283,13 @@ function ItemRow({ r, i, maxSales }: { r: { name: string; category: string | nul
 
 function LaborTab({ venueId, days, startTs, endTs }: SalesTabProps) {
   const { t } = useI18n();
-  const data = useQuery(api.pos.getLaborSummary, { venueId, windowDays: days, startTs, endTs }) as any;
+  const laborQuery = useQueryState<any>(api.pos.getLaborSummary, { venueId, windowDays: days, startTs, endTs });
+  const data = laborQuery.data;
 
-  if (data === undefined) return <ScheduleSkeleton rows={4} />;
-  if (!data || data.byEmployee.length === 0) {
+  if (laborQuery.isLoading) return <ScheduleSkeleton rows={4} />;
+  if (laborQuery.error) return <ScreenState isLoading={false} error={laborQuery.error} onRetry={() => void laborQuery.refetch()}>{null}</ScreenState>;
+  const byEmployee = asArray<any>(data?.byEmployee);
+  if (byEmployee.length === 0) {
     return (
       <Card style={{ backgroundColor: colors.surface, borderRadius: radius.sharp }}>
         <Card.Content><Text style={{ color: colors.muted }}>{t('sales.labor.empty')}</Text></Card.Content>
@@ -293,8 +309,8 @@ function LaborTab({ venueId, days, startTs, endTs }: SalesTabProps) {
       <Card style={{ backgroundColor: colors.surface, borderRadius: radius.sharp }}>
         <Card.Content style={{ gap: spacing.md }}>
           <Text variant="titleMedium" style={{ fontWeight: '700' }}>{t('sales.labor.byEmployee')}</Text>
-          {((data.byEmployee ?? []) as any[]).map((emp, i) => (
-            <View key={emp.employeeName + i} style={{ gap: 6, paddingBottom: spacing.sm, borderBottomWidth: i < data.byEmployee.length - 1 ? 1 : 0, borderBottomColor: colors.border }}>
+          {byEmployee.map((emp: any, i: number) => (
+            <View key={emp.employeeName + i} style={{ gap: 6, paddingBottom: spacing.sm, borderBottomWidth: i < byEmployee.length - 1 ? 1 : 0, borderBottomColor: colors.border }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontWeight: '700' }} numberOfLines={1}>{emp.employeeName}</Text>
@@ -393,3 +409,8 @@ function SalesScreen() {
     </ManagerGate>
   );
 }
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

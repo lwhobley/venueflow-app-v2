@@ -16,6 +16,19 @@ function makeContext(token: string, venueId?: string) {
   } as any;
 }
 
+const DEFAULT_PROFILE_ROW = {
+  id: 'profile-live',
+  email: 'live@example.com',
+  fullName: 'Live User',
+  role: 'staff',
+  allAccess: false,
+  trialEndsAt: new Date('2026-01-01T00:00:00Z'),
+  venueId: 'venue-live',
+  venueName: 'Live Venue',
+  venueSubscriptionStatus: 'active',
+  venueOrganizationId: 'org-live',
+};
+
 function makeGuard(options?: {
   payload?: any;
   session?: any;
@@ -39,45 +52,52 @@ function makeGuard(options?: {
   const reflector = {
     getAllAndOverride: vi.fn().mockReturnValue(options?.isPublic ?? false),
   } as any;
-  const prisma = {
-    session: {
-      findUnique: vi.fn().mockResolvedValue(
-        options?.session ?? {
-          userId: 'user-1',
-          expiresAt: new Date(Date.now() + 60_000),
-          tokenHash: TOKEN_HASH,
-        },
-      ),
-    },
-    profile: {
-      findUnique: vi.fn().mockResolvedValue(
-        options && 'profile' in options
-          ? options.profile
-          : {
-              id: 'profile-live',
-              email: 'live@example.com',
-              fullName: 'Live User',
-              role: 'staff',
-              allAccess: false,
-              trialEndsAt: new Date('2026-01-01T00:00:00Z'),
-              venueId: 'venue-live',
-              venue: { name: 'Live Venue', subscriptionStatus: 'active' },
-            },
-      ),
-      findFirst: vi.fn().mockImplementation((args: any) => prisma.profile.findUnique(args)),
-    },
-  } as any;
-  return { guard: new AuthGuard(jwt, reflector, prisma), prisma, jwt };
+  // AuthGuard reads its two pre-tenant-context lookups via
+  // `this.prisma.$queryRaw` against the app_private.auth_lookup_* SECURITY
+  // DEFINER functions (see auth.guard.ts and migration 20260903140000), not
+  // plain model calls — mock at that boundary and dispatch on which RPC the
+  // tagged-template SQL text names.
+  const sessionCall = vi.fn();
+  const profileCall = vi.fn();
+  const queryRaw = vi.fn().mockImplementation((strings: TemplateStringsArray, ...values: any[]) => {
+    const sql = strings.join('');
+    if (sql.includes('auth_lookup_session')) {
+      sessionCall(...values);
+      const session = 'session' in (options ?? {}) ? options!.session : {
+        userId: 'user-1',
+        expiresAt: new Date(Date.now() + 60_000),
+        tokenHash: TOKEN_HASH,
+      };
+      return Promise.resolve(session ? [session] : []);
+    }
+    if (sql.includes('auth_lookup_profiles')) {
+      profileCall(...values);
+      const [, venueId] = values;
+      const profile = options && 'profile' in options ? options.profile : DEFAULT_PROFILE_ROW;
+      if (!profile) return Promise.resolve([]);
+      if (venueId && profile.venueId !== venueId) return Promise.resolve([]);
+      return Promise.resolve([profile]);
+    }
+    throw new Error(`Unexpected $queryRaw call in AuthGuard test: ${sql}`);
+  });
+  const prisma = { $queryRaw: queryRaw } as any;
+  return { guard: new AuthGuard(jwt, reflector, prisma), prisma, jwt, sessionCall, profileCall };
 }
 
 describe('AuthGuard', () => {
   it('refreshes request claims from the live profile before controllers run', async () => {
-    const { guard, prisma } = makeGuard();
+    const { guard, sessionCall, profileCall } = makeGuard();
     const context = makeContext('token-1');
 
     await expect(guard.canActivate(context)).resolves.toBe(true);
-    expect(prisma.session.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'session-1' } }));
-    expect(prisma.profile.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ userId: 'user-1' }) }));
+    expect(sessionCall).toHaveBeenCalledWith('session-1');
+    // The default JWT payload carries a stale venueId ('venue-stale') that
+    // doesn't match DEFAULT_PROFILE_ROW's venue ('venue-live'), so the first
+    // profile lookup misses and AuthGuard's own stale-JWT fallback (no venue
+    // filter) finds it on the second call — exercising that fallback path is
+    // the point, not a specific call count.
+    expect(profileCall).toHaveBeenCalledWith('user-1', 'venue-stale');
+    expect(profileCall).toHaveBeenCalledWith('user-1', null);
     expect(context.switchToHttp().getRequest().user).toMatchObject({
       email: 'live@example.com',
       name: 'Live User',

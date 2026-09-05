@@ -69,3 +69,11 @@ export function getTenantVenueId(): string | undefined {
 export function getTenantContext(): TenantContext {
   return storage.getStore() ?? {};
 }
+
+/**
+ * Clear the tenant context from the current async execution.
+ * Prevents AsyncLocalStorage leaks across requests, keep-alive connections, or tests.
+ */
+export function exitTenant(): void {
+  storage.enterWith({});
+}

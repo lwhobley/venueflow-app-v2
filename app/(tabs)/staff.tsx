@@ -21,6 +21,8 @@ import type { Role } from "../../lib/types";
 import { SectionHeader } from "../../components/AppCard";
 import { useI18n } from "../../lib/i18n";
 import { readPickedFileText } from "../../lib/picked-file";
+import { asArray } from '../../lib/format';
+
 
 type VenueRole = { _id: string; name: string };
 type ParsedStaffImportRow = {
@@ -211,7 +213,7 @@ function StaffScreen() {
     isReady && venue?.id && canManage ? { venueId: venue.id } : "skip",
   );
   const staff = useMemo(
-    () => (staffQuery ?? []) as StaffMember[],
+    () => asArray(staffQuery) as StaffMember[],
     [staffQuery],
   );
   const onboardingQuery = useQuery(
@@ -232,7 +234,7 @@ function StaffScreen() {
     isReady && venue?.id && canManage ? { venueId: venue.id } : "skip",
   );
   const customRoles = useMemo(
-    () => (rolesQuery ?? []) as VenueRole[],
+    () => asArray(rolesQuery) as VenueRole[],
     [rolesQuery],
   );
   // Dropdown options: the standard job titles plus any custom roles the venue added.
@@ -298,7 +300,7 @@ function StaffScreen() {
     setImportBusy(true);
     try {
       const result = await parseStaffImport({ text: importText });
-      const items = (result.items ?? []) as ParsedStaffImportRow[];
+      const items = asArray(result.items) as ParsedStaffImportRow[];
       setImportRows(items);
       setImportMsg(
         items.length > 0
@@ -388,11 +390,11 @@ function StaffScreen() {
 
   const selectedStaff =
     staff.find((member: StaffMember) => member._id === selectedStaffId) ?? null;
-  const onboardingRows = onboardingQuery?.staff ?? [];
+  const onboardingRows = asArray(onboardingQuery?.staff);
   const selectedOnboarding = selectedStaffId
     ? (onboardingRows.find((row) => row._id === selectedStaffId) ?? null)
     : null;
-  const auditEntries = auditLogQuery?.entries ?? [];
+  const auditEntries = asArray(auditLogQuery?.entries);
   const onboardingProgress =
     selectedOnboarding && selectedOnboarding.totalCount > 0
       ? Math.round(
@@ -411,7 +413,7 @@ function StaffScreen() {
     setAltPhone(member.altPhone ?? "");
     setAddress(member.address ?? "");
     setDateOfBirth(member.dateOfBirth ?? "");
-    setCertifications(member.certifications ?? []);
+    setCertifications(asArray(member.certifications));
     setOnboardingPin("");
   };
 
@@ -444,8 +446,7 @@ function StaffScreen() {
         address: address.trim() || undefined,
         dateOfBirth: dateOfBirth.trim() || undefined,
         certifications: certifications.length > 0 ? certifications : undefined,
-        onboardingPin:
-          role === "admin" ? onboardingPin || undefined : undefined,
+        onboardingPin: onboardingPin || undefined,
       });
       clearForm();
     } catch (e) {
@@ -597,6 +598,40 @@ function StaffScreen() {
             </Card.Content>
           </Card>
 
+          {/* Vendor Management System (VMS) Command Tile */}
+          <Card
+            style={{
+              backgroundColor: '#1E2430',
+              borderRadius: radius.sharp,
+              borderWidth: 1,
+              borderColor: '#3B82F6',
+            }}
+          >
+            <Card.Content style={{ gap: spacing.xs }}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Text style={{ fontWeight: "800", color: "#60A5FA", fontSize: 16 }}>
+                  Vendor Management System (VMS)
+                </Text>
+                <View style={{ backgroundColor: "#2563EB", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
+                  <Text style={{ color: "#FFFFFF", fontWeight: "800", fontSize: 11 }}>ENTERPRISE VMS</Text>
+                </View>
+              </View>
+              <Text style={{ color: "#D1D5DB", fontSize: 13 }}>
+                Unified platform for internal workforces, staffing agencies, and local suppliers. Gemini 3.8 smart matching, Yellow Dog inventory sync, and ADP/Gusto payroll integration.
+              </Text>
+              <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs }}>
+                <Button
+                  mode="contained"
+                  buttonColor="#2563EB"
+                  icon="domain"
+                  onPress={() => router.push("/stadium/vms")}
+                >
+                  Open VMS Dashboard
+                </Button>
+              </View>
+            </Card.Content>
+          </Card>
+
           {/* Roles / positions */}
           <Card
             style={{
@@ -724,20 +759,21 @@ function StaffScreen() {
                 mode="outlined"
                 style={{ backgroundColor: colors.surface }}
               />
-              {role === "admin" ? (
-                <PaperTextInput
-                  placeholder="Six-digit administrator PIN (optional)"
-                  value={onboardingPin}
-                  onChangeText={(value) =>
-                    setOnboardingPin(value.replace(/\D/g, "").slice(0, 6))
-                  }
-                  keyboardType="number-pad"
-                  secureTextEntry
-                  maxLength={6}
-                  mode="outlined"
-                  style={{ backgroundColor: colors.surface }}
-                />
-              ) : null}
+              <PaperTextInput
+                placeholder={t("staff.pinPlaceholder")}
+                value={onboardingPin}
+                onChangeText={(value) =>
+                  setOnboardingPin(value.replace(/\D/g, "").slice(0, 6))
+                }
+                keyboardType="number-pad"
+                secureTextEntry
+                maxLength={6}
+                mode="outlined"
+                style={{ backgroundColor: colors.surface }}
+              />
+              <Text style={{ color: colors.muted, fontSize: 12, marginTop: -4 }}>
+                {t("staff.pinHelp")}
+              </Text>
               <Dropdown
                 label={t("staff.accessLevel")}
                 value={role}
@@ -1230,3 +1266,8 @@ function StaffScreen() {
     />
   );
 }
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

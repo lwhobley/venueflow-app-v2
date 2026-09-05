@@ -7,11 +7,12 @@ import { api } from '../../lib/railway-api';
 import type { Id } from '../../lib/ids';
 import { accents, colors, radius, spacing } from '../../lib/theme';
 import { useVenueAuth } from '../../lib/useVenueAuth';
-import { formatMoney, formatShortDate, formatShortDateTime, formatFullDateTime, splitTags, errorMessage } from '../../lib/format';
+import { asArray, errorMessage, formatFullDateTime, formatMoney, formatShortDate, formatShortDateTime, splitTags } from '../../lib/format';
 import { PremiumFeatureGate } from '../../components/PremiumFeatureGate';
 import { SectionHeader } from '../../components/AppCard';
 import { CrmSalesWorkspace } from '../../components/CrmSalesWorkspace';
 import { useI18n } from '../../lib/i18n';
+
 
 type LifecycleStage = 'lead' | 'regular' | 'vip' | 'lapsed';
 type Segment = 'all' | LifecycleStage | 'upcoming' | 'needs_follow_up';
@@ -117,7 +118,7 @@ function scoreGuest(guest: GuestRow) {
 
 
 function latestEventReservation(profile: GuestProfile | null | undefined) {
-  return [...(profile?.reservations ?? [])]
+  return [...asArray(profile?.reservations)]
     .filter((reservation) => reservation.isPrivateEvent || reservation.tags.includes('private_event'))
     .sort((a, b) => b.reservationTime - a.reservationTime)[0] ?? profile?.reservations?.[0] ?? null;
 }
@@ -125,7 +126,7 @@ function latestEventReservation(profile: GuestProfile | null | undefined) {
 function generateBeo(guest: GuestRow, profile: GuestProfile | null | undefined, t: I18nT) {
   const event = latestEventReservation(profile);
   const topItems = new Map<string, number>();
-  for (const check of profile?.checks ?? []) {
+  for (const check of asArray(profile?.checks)) {
     for (const item of check.menuItems) topItems.set(item.name, (topItems.get(item.name) ?? 0) + item.quantity);
   }
   const tbd = t('guests.documents.common.tbd');
@@ -289,7 +290,7 @@ function GuestsScreenInner() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const rows = guests ?? [];
+    const rows = asArray(guests);
     return rows.filter((guest) => {
       const matchesSearch = !q || [guest.fullName, guest.phone ?? '', guest.email ?? '', guest.company ?? '', guest.tags.join(' ')].some((value) => value.toLowerCase().includes(q));
       const matchesSegment =
@@ -302,7 +303,7 @@ function GuestsScreenInner() {
   }, [guests, query, segment]);
 
   const crmStats = useMemo(() => {
-    const rows = guests ?? [];
+    const rows = asArray(guests);
     return {
       totalGuests: rows.length,
       vipGuests: rows.filter((guest) => guest.lifecycleStage === 'vip').length,
@@ -648,7 +649,7 @@ function GuestProfilePanel({ guest, profile, onEdit, onDelete }: { guest: GuestR
   const { t } = useI18n();
   const [generatedDocument, setGeneratedDocument] = useState('');
   const timeline = useMemo(() => {
-    const reservations = (profile?.reservations ?? []).map((reservation) => ({
+    const reservations = asArray(profile?.reservations).map((reservation) => ({
       id: reservation._id,
       at: reservation.reservationTime,
       title: t('guests.timeline.reservationTitle', { status: reservation.status }),
@@ -657,7 +658,7 @@ function GuestProfilePanel({ guest, profile, onEdit, onDelete }: { guest: GuestR
         : t('guests.timeline.partyOf', { party: reservation.partySize }),
       tags: reservation.tags,
     }));
-    const checks = (profile?.checks ?? []).map((check) => {
+    const checks = asArray(profile?.checks).map((check) => {
       let body = check.revenueCenter ?? check.provider;
       if (check.guestCount) body += ` · ${t('guests.timeline.guestsCount', { count: check.guestCount })}`;
       if (check.tenderType) body += ` · ${check.tenderType}`;
@@ -674,7 +675,7 @@ function GuestProfilePanel({ guest, profile, onEdit, onDelete }: { guest: GuestR
 
   const topItems = useMemo(() => {
     const byName = new Map<string, { name: string; quantity: number; spendCents: number }>();
-    for (const check of profile?.checks ?? []) {
+    for (const check of asArray(profile?.checks)) {
       for (const item of check.menuItems) {
         const row = byName.get(item.name) ?? { name: item.name, quantity: 0, spendCents: 0 };
         row.quantity += item.quantity;
@@ -803,3 +804,8 @@ function Preference({ label, value }: { label: string; value: string | null }) {
     </View>
   );
 }
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

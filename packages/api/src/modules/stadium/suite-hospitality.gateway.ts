@@ -8,8 +8,10 @@ const REDIS_SEQUENCE_KEY = 'stadium:realtime:seq';
 
 export interface BufferedStadiumEvent {
   seq: number;
+  organizationId: string;
   facilityId: string;
-  zoneId: string;
+  zoneId?: string | null;
+  operationalAreaType?: string | null;
   event: string;
   data: Record<string, unknown>;
   timestamp: string;
@@ -20,8 +22,39 @@ export interface StreamTicketPayload {
   role: string;
   allAccess: boolean;
   facilityId: string;
+  organizationId?: string;
   zoneId?: string;
+  allowedAreas?: string[];
   expiresAt: number;
+}
+
+export function getChannelKeys(params: {
+  organizationId: string;
+  facilityId: string;
+  zoneId?: string | null;
+  allowedAreas?: Set<string> | string[] | null;
+}): string[] {
+  const { organizationId, facilityId, zoneId, allowedAreas } = params;
+  const cleanZone = zoneId && zoneId !== 'global' ? zoneId : null;
+  const channels: string[] = [];
+
+  if (cleanZone) {
+    channels.push(`${organizationId}:${facilityId}:zone:${cleanZone}`);
+    if (allowedAreas) {
+      for (const area of allowedAreas) {
+        channels.push(`${organizationId}:${facilityId}:zone:${cleanZone}:area:${area.toLowerCase()}`);
+      }
+    }
+  } else {
+    channels.push(`${organizationId}:${facilityId}`);
+    if (allowedAreas) {
+      for (const area of allowedAreas) {
+        channels.push(`${organizationId}:${facilityId}:area:${area.toLowerCase()}`);
+      }
+    }
+  }
+
+  return channels;
 }
 
 @Injectable()
@@ -54,16 +87,29 @@ export class SuiteHospitalityGateway implements OnModuleDestroy {
       });
       this.subClient.on('message', (_channel, message) => {
         try {
-          const parsed = JSON.parse(message) as { instanceId: string; facilityId: string; zoneId: string; payload: Record<string, unknown> };
+          const parsed = JSON.parse(message) as {
+            instanceId: string;
+            organizationId?: string;
+            facilityId: string;
+            zoneId?: string | null;
+            operationalAreaType?: string | null;
+            payload: Record<string, unknown>;
+          };
           if (parsed.instanceId === this.instanceId) return; // Already emitted locally
+
+          const orgId = parsed.organizationId || 'default-org';
+          const cleanZone = parsed.zoneId && parsed.zoneId !== 'global' ? parsed.zoneId : null;
+          const areaType = parsed.operationalAreaType || null;
 
           // Replicate into local ring buffer for cross-replica gap recovery
           const eventSeq = typeof parsed.payload.seq === 'number' ? parsed.payload.seq : ++this.sequence;
           this.sequence = Math.max(this.sequence, eventSeq);
           const bufferedItem: BufferedStadiumEvent = {
             seq: eventSeq,
+            organizationId: orgId,
             facilityId: parsed.facilityId,
-            zoneId: parsed.zoneId,
+            zoneId: cleanZone,
+            operationalAreaType: areaType,
             event: typeof parsed.payload.event === 'string' ? parsed.payload.event : 'message',
             data: typeof parsed.payload.data === 'object' && parsed.payload.data !== null ? (parsed.payload.data as Record<string, unknown>) : {},
             timestamp: typeof parsed.payload.timestamp === 'string' ? parsed.payload.timestamp : new Date().toISOString(),
@@ -73,7 +119,7 @@ export class SuiteHospitalityGateway implements OnModuleDestroy {
             this.eventBuffer.shift();
           }
 
-          this.emitLocal(parsed.facilityId, parsed.zoneId, parsed.payload);
+          this.emitLocal(orgId, parsed.facilityId, cleanZone, parsed.payload, areaType);
         } catch {
           // ignore malformed pub/sub message
         }
@@ -84,10 +130,6 @@ export class SuiteHospitalityGateway implements OnModuleDestroy {
   }
 
   async createTicket(payload: StreamTicketPayload): Promise<string> {
-    // A ticket that is issued but never consumed (client backgrounds, loses
-    // connectivity, or never connects) previously stayed in this Map forever
-    // — only the Redis copy had a TTL. Sweep expired entries on every write
-    // so the in-process map cannot grow unbounded over a long-lived instance.
     this.evictExpiredTickets();
     const ticketId = randomUUID();
     this.tickets.set(ticketId, payload);
@@ -104,15 +146,6 @@ export class SuiteHospitalityGateway implements OnModuleDestroy {
     }
   }
 
-  /**
-   * Assigns the next sequence number. With Redis configured (multi-replica
-   * deployments), this is a shared INCR — a per-instance counter would let
-   * two replicas broadcasting concurrently assign the same seq to different
-   * events, and getEventsSince's `seq <= lastSeq` gap-recovery filter would
-   * then silently skip whichever event a reconnecting client saw as "already
-   * delivered". Falls back to the local counter if Redis is unavailable or
-   * the INCR fails, so a broadcast never blocks on a Redis outage.
-   */
   private async nextSequence(): Promise<number> {
     if (this.pubClient) {
       try {
@@ -128,7 +161,6 @@ export class SuiteHospitalityGateway implements OnModuleDestroy {
   }
 
   async verifyAndConsumeTicket(ticketId: string): Promise<StreamTicketPayload | null> {
-    // 1. Check local memory
     const local = this.tickets.get(ticketId);
     if (local) {
       this.tickets.delete(ticketId);
@@ -139,7 +171,6 @@ export class SuiteHospitalityGateway implements OnModuleDestroy {
       return local;
     }
 
-    // 2. Check Redis for cross-replica ticket consumption
     if (this.pubClient) {
       try {
         const redisKey = `stadium:ticket:${ticketId}`;
@@ -158,25 +189,99 @@ export class SuiteHospitalityGateway implements OnModuleDestroy {
     return null;
   }
 
-  getEventsSince(facilityId: string, lastSeq: number, zoneId?: string): BufferedStadiumEvent[] {
+  getEventsSince(
+    organizationId: string,
+    facilityId: string,
+    lastSeq: number,
+    zoneId?: string | null,
+    allowedAreas?: Set<string> | string[] | null,
+  ): BufferedStadiumEvent[];
+  getEventsSince(
+    facilityId: string,
+    lastSeq: number,
+    zoneId?: string | null,
+  ): BufferedStadiumEvent[];
+  getEventsSince(
+    arg1: string,
+    arg2: string | number,
+    arg3?: number | string | null,
+    arg4?: string | null | Set<string> | string[],
+    arg5?: Set<string> | string[] | null,
+  ): BufferedStadiumEvent[] {
+    let organizationId: string | null = null;
+    let facilityId: string;
+    let lastSeq: number;
+    let zoneId: string | null = null;
+    let allowedAreas: Set<string> | string[] | null = null;
+
+    if (typeof arg2 === 'number') {
+      facilityId = arg1;
+      lastSeq = arg2;
+      zoneId = typeof arg3 === 'string' ? arg3 : null;
+    } else {
+      organizationId = arg1;
+      facilityId = arg2 as string;
+      lastSeq = typeof arg3 === 'number' ? arg3 : 0;
+      zoneId = typeof arg4 === 'string' ? arg4 : null;
+      allowedAreas = (arg5 || (arg4 instanceof Set || Array.isArray(arg4) ? arg4 : null)) as any;
+    }
+
+    const cleanZone = zoneId && zoneId !== 'global' ? zoneId : null;
+    const areaSet = allowedAreas ? new Set(Array.from(allowedAreas).map((a) => a.toLowerCase())) : null;
+
     return this.eventBuffer.filter((item) => {
       if (item.seq <= lastSeq) return false;
+      if (organizationId && item.organizationId && item.organizationId !== organizationId) return false;
       if (item.facilityId !== facilityId) return false;
-      if (zoneId && item.zoneId !== zoneId) return false;
+      if (cleanZone && item.zoneId && item.zoneId !== cleanZone) return false;
+      if (item.operationalAreaType && areaSet && !areaSet.has(item.operationalAreaType.toLowerCase())) {
+        return false;
+      }
       return true;
     });
   }
 
-  private emitLocal(facilityId: string, zoneId: string, payload: Record<string, unknown>) {
-    this.emitter.emit(`zone:${zoneId}`, payload);
-    this.emitter.emit(`facility:${facilityId}`, payload);
-    this.emitter.emit('global', payload);
+  private emitLocal(
+    organizationId: string,
+    facilityId: string,
+    zoneId: string | null | undefined,
+    payload: Record<string, unknown>,
+    operationalAreaType?: string | null,
+  ) {
+    const cleanZone = zoneId && zoneId !== 'global' ? zoneId : null;
+    const cleanArea = operationalAreaType ? operationalAreaType.toLowerCase() : null;
+
+    if (cleanArea) {
+      this.emitter.emit(`${organizationId}:${facilityId}:area:${cleanArea}`, payload);
+      if (cleanZone) {
+        this.emitter.emit(`${organizationId}:${facilityId}:zone:${cleanZone}:area:${cleanArea}`, payload);
+      }
+    } else {
+      this.emitter.emit(`${organizationId}:${facilityId}`, payload);
+      if (cleanZone) {
+        this.emitter.emit(`${organizationId}:${facilityId}:zone:${cleanZone}`, payload);
+      }
+    }
   }
 
-  private publishCrossReplica(facilityId: string, zoneId: string, payload: Record<string, unknown>) {
-    this.emitLocal(facilityId, zoneId, payload);
+  private publishCrossReplica(
+    organizationId: string,
+    facilityId: string,
+    zoneId: string | null | undefined,
+    payload: Record<string, unknown>,
+    operationalAreaType?: string | null,
+  ) {
+    this.emitLocal(organizationId, facilityId, zoneId, payload, operationalAreaType);
     if (this.pubClient) {
-      const message = JSON.stringify({ instanceId: this.instanceId, facilityId, zoneId, payload });
+      const cleanZone = zoneId && zoneId !== 'global' ? zoneId : null;
+      const message = JSON.stringify({
+        instanceId: this.instanceId,
+        organizationId,
+        facilityId,
+        zoneId: cleanZone,
+        operationalAreaType,
+        payload,
+      });
       this.pubClient.publish(REDIS_CHANNEL, message).catch(() => undefined);
     }
   }
@@ -189,13 +294,47 @@ export class SuiteHospitalityGateway implements OnModuleDestroy {
     this.emitter.off(event, listener);
   }
 
-  async broadcastBeoUpdate(facilityId: string, zoneId: string, beoOrder: Record<string, unknown>) {
+  async broadcastBeoUpdate(
+    organizationId: string,
+    facilityId: string,
+    zoneId: string | null | undefined,
+    beoOrder: Record<string, unknown>,
+  ): Promise<void>;
+  async broadcastBeoUpdate(
+    facilityId: string,
+    zoneId: string | null | undefined,
+    beoOrder: Record<string, unknown>,
+  ): Promise<void>;
+  async broadcastBeoUpdate(
+    arg1: string,
+    arg2: string,
+    arg3: string | null | undefined | Record<string, unknown>,
+    arg4?: Record<string, unknown>,
+  ): Promise<void> {
+    let organizationId = 'default-org';
+    let facilityId: string;
+    let zoneId: string | null | undefined;
+    let beoOrder: Record<string, unknown>;
+
+    if (typeof arg3 === 'object' && arg3 !== null && arg4 === undefined) {
+      facilityId = arg1;
+      zoneId = arg2;
+      beoOrder = arg3 as Record<string, unknown>;
+    } else {
+      organizationId = arg1;
+      facilityId = arg2;
+      zoneId = typeof arg3 === 'string' ? arg3 : null;
+      beoOrder = arg4 ?? {};
+    }
+
+    const cleanZone = zoneId && zoneId !== 'global' ? zoneId : null;
     const seq = await this.nextSequence();
     const timestamp = new Date().toISOString();
     const item: BufferedStadiumEvent = {
       seq,
+      organizationId,
       facilityId,
-      zoneId,
+      zoneId: cleanZone,
       event: 'suite_beo_updated',
       data: beoOrder,
       timestamp,
@@ -205,17 +344,51 @@ export class SuiteHospitalityGateway implements OnModuleDestroy {
       this.eventBuffer.shift();
     }
     const payload = { event: 'suite_beo_updated', data: beoOrder, seq, timestamp };
-    this.publishCrossReplica(facilityId, zoneId, payload);
-    this.logger.log(`Broadcasted suite_beo_updated for BEO ${(beoOrder as any).beoNumber} (seq: ${seq}) to zone:${zoneId}`);
+    this.publishCrossReplica(organizationId, facilityId, cleanZone, payload);
+    this.logger.log(`Broadcasted suite_beo_updated for BEO ${(beoOrder as any).beoNumber} (seq: ${seq}) to ${organizationId}:${facilityId}${cleanZone ? `:zone:${cleanZone}` : ''}`);
   }
 
-  async broadcastReplenishment(facilityId: string, zoneId: string, replenishment: Record<string, unknown>) {
+  async broadcastReplenishment(
+    organizationId: string,
+    facilityId: string,
+    zoneId: string | null | undefined,
+    replenishment: Record<string, unknown>,
+  ): Promise<void>;
+  async broadcastReplenishment(
+    facilityId: string,
+    zoneId: string | null | undefined,
+    replenishment: Record<string, unknown>,
+  ): Promise<void>;
+  async broadcastReplenishment(
+    arg1: string,
+    arg2: string,
+    arg3: string | null | undefined | Record<string, unknown>,
+    arg4?: Record<string, unknown>,
+  ): Promise<void> {
+    let organizationId = 'default-org';
+    let facilityId: string;
+    let zoneId: string | null | undefined;
+    let replenishment: Record<string, unknown>;
+
+    if (typeof arg3 === 'object' && arg3 !== null && arg4 === undefined) {
+      facilityId = arg1;
+      zoneId = arg2;
+      replenishment = arg3 as Record<string, unknown>;
+    } else {
+      organizationId = arg1;
+      facilityId = arg2;
+      zoneId = typeof arg3 === 'string' ? arg3 : null;
+      replenishment = arg4 ?? {};
+    }
+
+    const cleanZone = zoneId && zoneId !== 'global' ? zoneId : null;
     const seq = await this.nextSequence();
     const timestamp = new Date().toISOString();
     const item: BufferedStadiumEvent = {
       seq,
+      organizationId,
       facilityId,
-      zoneId,
+      zoneId: cleanZone,
       event: 'replenishment_requested',
       data: replenishment,
       timestamp,
@@ -225,12 +398,77 @@ export class SuiteHospitalityGateway implements OnModuleDestroy {
       this.eventBuffer.shift();
     }
     const payload = { event: 'replenishment_requested', data: replenishment, seq, timestamp };
-    this.publishCrossReplica(facilityId, zoneId, payload);
-    this.logger.log(`Broadcasted replenishment_requested (seq: ${seq}) to zone:${zoneId}`);
+    this.publishCrossReplica(organizationId, facilityId, cleanZone, payload);
+    this.logger.log(`Broadcasted replenishment_requested (seq: ${seq}) to ${organizationId}:${facilityId}${cleanZone ? `:zone:${cleanZone}` : ''}`);
+  }
+
+  async broadcastDistroPickupUpdate(
+    organizationId: string,
+    facilityId: string,
+    zoneId: string | null | undefined,
+    ticket: Record<string, unknown>,
+    eventName?: string,
+  ): Promise<void>;
+  async broadcastDistroPickupUpdate(
+    facilityId: string,
+    zoneId: string | null | undefined,
+    ticket: Record<string, unknown>,
+    eventName?: string,
+  ): Promise<void>;
+  async broadcastDistroPickupUpdate(
+    arg1: string,
+    arg2: string,
+    arg3: string | null | undefined | Record<string, unknown>,
+    arg4?: Record<string, unknown> | string,
+    arg5?: string,
+  ): Promise<void> {
+    let organizationId = 'default-org';
+    let facilityId: string;
+    let zoneId: string | null | undefined;
+    let ticket: Record<string, unknown>;
+    let eventName = 'distro_pickup_updated';
+
+    if (typeof arg3 === 'object' && arg3 !== null) {
+      facilityId = arg1;
+      zoneId = arg2;
+      ticket = arg3 as Record<string, unknown>;
+      if (typeof arg4 === 'string') eventName = arg4;
+    } else {
+      organizationId = arg1;
+      facilityId = arg2;
+      zoneId = typeof arg3 === 'string' ? arg3 : null;
+      ticket = (arg4 && typeof arg4 === 'object' ? arg4 : {}) as Record<string, unknown>;
+      if (typeof arg5 === 'string') eventName = arg5;
+    }
+
+    const cleanZone = zoneId && zoneId !== 'global' ? zoneId : null;
+    const operationalAreaType =
+      (ticket.operationalAreaType as string) || (ticket['operationalAreaType'] as string) || null;
+
+    const seq = await this.nextSequence();
+    const timestamp = new Date().toISOString();
+    const item: BufferedStadiumEvent = {
+      seq,
+      organizationId,
+      facilityId,
+      zoneId: cleanZone,
+      operationalAreaType,
+      event: eventName,
+      data: ticket,
+      timestamp,
+    };
+    this.eventBuffer.push(item);
+    if (this.eventBuffer.length > this.MAX_BUFFER) {
+      this.eventBuffer.shift();
+    }
+    const payload = { event: eventName, data: ticket, seq, timestamp };
+    this.publishCrossReplica(organizationId, facilityId, cleanZone, payload, operationalAreaType);
+    this.logger.log(
+      `Broadcasted ${eventName} for ticket ${(ticket as any).id ?? 'item'} (seq: ${seq}) to ${organizationId}:${facilityId}${cleanZone ? `:zone:${cleanZone}` : ''}${operationalAreaType ? `:area:${operationalAreaType}` : ''}`,
+    );
   }
 
   async onModuleDestroy() {
     await Promise.allSettled([this.pubClient?.quit(), this.subClient?.quit()]);
   }
 }
-

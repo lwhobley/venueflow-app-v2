@@ -11,7 +11,7 @@ import type { Id } from '../../lib/ids';
 import { accents, colors, radius, spacing, type } from '../../lib/theme';
 import { Kicker } from '../../components/AppCard';
 import { useAuthenticatedSession } from '../../lib/auth-readiness';
-import { formatTime, errorMessage } from '../../lib/format';
+import { asArray, errorMessage, formatTime } from '../../lib/format';
 import { useI18n, type TranslationKey } from '../../lib/i18n';
 
 type ChatMessage = {
@@ -204,11 +204,11 @@ export default function ConversationScreen() {
 
   const scrollRef = useRef<ScrollView>(null);
   const messagesRef = useRef<ChatMessage[]>([]);
-  const messages = (data?.messages ?? []) as ChatMessage[];
+  const messages = asArray(data?.messages) as ChatMessage[];
   messagesRef.current = messages;
-  const readReceipts = (data?.readReceipts ?? []) as Array<{ name: string; readAt: number }>;
-  const mineShifts = myScheduleData?.mine ?? [];
-  const openShifts = myScheduleData?.open ?? [];
+  const readReceipts = asArray(data?.readReceipts) as Array<{ name: string; readAt: number }>;
+  const mineShifts = asArray(myScheduleData?.mine);
+  const openShifts = asArray(myScheduleData?.open);
   const renderItems = useMemo(() => groupMessages(messages, t), [messages, t]);
 
   useEffect(() => {
@@ -618,3 +618,8 @@ function ShiftShareRow({ title, subtitle, onPress }: { title: string; subtitle: 
     </Pressable>
   );
 }
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

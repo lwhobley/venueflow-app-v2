@@ -4,6 +4,8 @@ import type { Observable } from 'rxjs';
 import type { AuthenticatedRequest } from '../auth/auth.guard';
 import { resolveVenueSubscriptionStatus } from '../billing/subscription-status';
 import { bindAiUsageContext } from '../common/ai-usage-context';
+import { enterTenant } from '../prisma/tenant-context';
+import { tenantIsolationEnforced } from '../prisma/tenant-isolation-config';
 import { SKIP_VENUE_SCOPE_KEY } from './skip-venue-scope.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -35,6 +37,14 @@ export class VenueScopeInterceptor implements NestInterceptor {
     // (e.g. hardcoded allAccess: true) would flow into role gates in handlers.
     const user = request.user;
     if (!user?.sub || !user.profileId || !user.venueId) return next.handle();
+    if (tenantIsolationEnforced()) {
+      enterTenant({
+        venueId: user.venueId,
+        facilityId: user.venueId,
+        organizationId: user.organizationId ?? undefined,
+        userId: user.sub,
+      });
+    }
     // AuthGuard already resolved this profile from the verified active
     // membership. Never select a second venue here; doing so can authorize one
     // venue while Prisma is scoped to another.

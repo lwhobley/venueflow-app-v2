@@ -36,6 +36,9 @@ const zustandCjs = {
 
 const defaultResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName === 'decode-uri-component') {
+    return { type: 'sourceFile', filePath: path.resolve(__dirname, 'scripts/safe-uri-decode.cjs') };
+  }
   const cjsTarget = zustandCjs[moduleName];
   if (cjsTarget) {
     return { type: 'sourceFile', filePath: cjsTarget };

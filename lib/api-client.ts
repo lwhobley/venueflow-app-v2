@@ -171,6 +171,13 @@ export function useApiQuery<T>(
   queryKey: QueryKey,
   path: string,
   enabled = true,
+  /**
+   * Poll interval in ms for live event-day boards (KDS, runner queues). Prefer
+   * this over a `setInterval` that refetches by hand: React Query pauses it
+   * when the screen is unmounted and while a fetch is already in flight, and
+   * it shares one cache entry with every other observer of the same path.
+   */
+  refetchIntervalMs?: number,
 ) {
   const authEpoch = useAuthStore((state) => state.authEpoch);
   const userId = useAuthStore((state) => state.user?.id ?? null);
@@ -180,6 +187,7 @@ export function useApiQuery<T>(
     queryKey: [...queryKey, authEpoch, userId, venueId],
     queryFn: ({ signal }) => apiRequest<T>(path, { signal }),
     enabled: enabled && Boolean(token),
+    ...(refetchIntervalMs ? { refetchInterval: refetchIntervalMs, staleTime: 0 } : {}),
   });
 }
 

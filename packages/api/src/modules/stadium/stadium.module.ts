@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { NotificationsModule } from '../../notifications/notifications.module';
 import { StadiumController } from './stadium.controller';
 import { SuiteHospitalityController } from './suite-hospitality.controller';
 import { SuiteHospitalityService } from './suite-hospitality.service';
@@ -14,9 +15,13 @@ import { TempStaffingService } from './temp-staffing.service';
 import { UnionComplianceController } from './union-compliance.controller';
 import { UnionComplianceService } from './union-compliance.service';
 import { StadiumRealtimeController } from './stadium-realtime.controller';
+import { KitchenDistroFulfillmentController } from './kitchen-distro-fulfillment.controller';
+import { KitchenDistroFulfillmentService } from './kitchen-distro-fulfillment.service';
+import { DailyRosterController } from './daily-roster.controller';
+import { DailyRosterService } from './daily-roster.service';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, NotificationsModule],
   controllers: [
     StadiumController,
     StadiumRealtimeController,
@@ -25,6 +30,8 @@ import { StadiumRealtimeController } from './stadium-realtime.controller';
     EventMenuController,
     TempStaffingController,
     UnionComplianceController,
+    KitchenDistroFulfillmentController,
+    DailyRosterController,
   ],
   providers: [
     SuiteHospitalityService,
@@ -34,6 +41,8 @@ import { StadiumRealtimeController } from './stadium-realtime.controller';
     EventMenuService,
     TempStaffingService,
     UnionComplianceService,
+    KitchenDistroFulfillmentService,
+    DailyRosterService,
   ],
   exports: [
     SuiteHospitalityService,
@@ -43,6 +52,8 @@ import { StadiumRealtimeController } from './stadium-realtime.controller';
     EventMenuService,
     TempStaffingService,
     UnionComplianceService,
+    KitchenDistroFulfillmentService,
+    DailyRosterService,
   ],
 })
 export class StadiumModule {}

@@ -1,10 +1,11 @@
-import { Body, Controller, ForbiddenException, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Post, Query, UseInterceptors } from '@nestjs/common';
 import { UnionComplianceService } from './union-compliance.service';
 import { PunchType, PunchVerification } from '@prisma/client';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 import { canManageVenue } from '../../auth/roles';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
 import { RequireSubscription } from '../../billing/require-subscription.decorator';
 import { IsIn, IsOptional, IsString, Matches } from 'class-validator';
 
@@ -18,6 +19,7 @@ class RecordPunchDto {
   @IsOptional() @IsString() overrideReason?: string;
 }
 
+@UseInterceptors(TenantRequestTransactionInterceptor)
 @Controller('v1/stadium/union-compliance')
 @RequireSubscription()
 export class UnionComplianceController {

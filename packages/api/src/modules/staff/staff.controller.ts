@@ -7,6 +7,7 @@ import {
   NotFoundException,
   Param,
   Post,
+  UseInterceptors,
 } from '@nestjs/common';
 import { IsArray, IsDateString, IsEmail, IsIn, IsOptional, IsString } from 'class-validator';
 import { Prisma, Role } from '@prisma/client';
@@ -15,6 +16,8 @@ import { RequireSubscription } from '../../billing/require-subscription.decorato
 import { mapProfile } from '../../common/mappers';
 import { EmailService } from '../../email/email.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
+import { withTenantTransaction } from '../../prisma/tenant-transaction';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 import { syncTeamMemberCount } from '../../common/team-sync';
@@ -60,6 +63,7 @@ class UpsertStaffDto {
   certifications?: string[];
 }
 
+@UseInterceptors(TenantRequestTransactionInterceptor)
 @Controller('v1/staff')
 export class StaffController {
   constructor(
@@ -107,7 +111,7 @@ export class StaffController {
       // Only apply the last-owner guard when the role is actually being
       // changed to a non-owner/admin value (i.e. a demotion).
       const isDemoting = isOwnerOrAdminRole(member.role) && !isOwnerOrAdminRole(body.role);
-      const updated = await this.prisma.$transaction(async (tx) => {
+      const updated = await withTenantTransaction(this.prisma, async (tx) => {
         await this.assertCanManageTarget(scope, member, isDemoting, tx);
         const u = await tx.profile.update({
           where: { id: member.id },
@@ -128,7 +132,7 @@ export class StaffController {
           await tx.session.deleteMany({ where: { userId: member.userId } });
         }
         return u;
-      });
+      }, { venueId: scope.venueId });
       void this.email.send({
         to: updated.email,
         subject: 'Your Venue Wrangler Profile Has Been Updated',
@@ -147,7 +151,7 @@ export class StaffController {
       return mapProfile(updated);
     }
 
-    const created = await this.prisma.$transaction(async (tx) => {
+    const created = await withTenantTransaction(this.prisma, async (tx) => {
       const c = await tx.profile.create({
         data: {
           tokenIdentifier: `${body.email.toLowerCase()}:invited:${Date.now()}`,
@@ -165,7 +169,7 @@ export class StaffController {
       });
       await syncTeamMemberCount(tx, scope.venueId);
       return c;
-    });
+    }, { venueId: scope.venueId });
     void this.email.send({
       to: created.email,
       subject: `Invitation: Join the Team at ${scope.venueName} on Venue Wrangler`,
@@ -195,7 +199,7 @@ export class StaffController {
       throw new ForbiddenException('Staff member does not belong to this venue');
     }
 
-    const updated = await this.prisma.$transaction(async (tx) => {
+    const updated = await withTenantTransaction(this.prisma, async (tx) => {
       await this.assertCanManageTarget(scope, staff, true, tx);
       const u = await tx.profile.update({
         where: { id: staff.id },
@@ -206,7 +210,7 @@ export class StaffController {
       }
       await syncTeamMemberCount(tx, scope.venueId);
       return u;
-    });
+    }, { venueId: scope.venueId });
     return mapProfile(updated);
   }
 

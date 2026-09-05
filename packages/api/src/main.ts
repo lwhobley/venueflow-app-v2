@@ -10,6 +10,7 @@ import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { jsonBodyLimitForPath } from './common/body-limit';
 import { initSentry } from './observability/sentry';
 import { isAllowedOrigin } from './common/cors-origin';
+import { runWithoutTenant } from './prisma/tenant-context';
 
 async function bootstrap() {
   // Error tracking — no-op unless SENTRY_DSN is set.
@@ -35,6 +36,7 @@ async function bootstrap() {
   
   const isProduction = process.env.NODE_ENV === 'production';
 
+  app.use((_req: Request, _res: Response, next: NextFunction) => runWithoutTenant(() => next()));
   app.use(helmet());
   const STRIPE_WEBHOOK_PATH = '/api/v1/billing/stripe/webhook';
   app.use((req: Request, res: Response, next: NextFunction) => {

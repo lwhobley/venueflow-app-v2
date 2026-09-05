@@ -2,13 +2,15 @@ import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { router } from 'expo-router';
 import { Button, Card, Chip, Snackbar, Text, TextInput } from 'react-native-paper';
-import { useMutation, useQuery } from '../../lib/railway-hooks';
+import { useMutation, useQuery, useQueryState } from '../../lib/railway-hooks';
 import { api } from '../../lib/railway-api';
 import type { Id } from '../../lib/ids';
 import { accents, colors, spacing } from '../../lib/theme';
 import { useAuthStore, type AuthState } from '../../lib/auth-store';
 import { useAuthenticatedSession } from '../../lib/auth-readiness';
 import { ScheduleSkeleton } from './ScheduleSkeleton';
+import { ScreenState } from '../ScreenState';
+import { asArray } from '../../lib/format';
 
 type Shift = {
   _id: Id<'scheduleShifts'>;
@@ -44,7 +46,8 @@ type RosterDay = { dayIndex: number; dayLabel: string; coworkers: Coworker[] };
 export function MyShifts() {
   const venue = useAuthStore((state: AuthState) => state.venue);
   const { isReady } = useAuthenticatedSession();
-  const data = useQuery(api.scheduling.getMySchedule, isReady ? {} : 'skip');
+  const scheduleQuery = useQueryState<any>(api.scheduling.getMySchedule, isReady ? {} : 'skip');
+  const data = scheduleQuery.data;
   const blackoutData = useQuery(api.scheduling.listBlackouts, isReady && venue?.id ? { venueId: venue.id } : 'skip');
   const claimOpenShift = useMutation(api.scheduling.claimOpenShift);
   const requestDropShift = useMutation(api.scheduling.requestDropShift);
@@ -82,15 +85,15 @@ export function MyShifts() {
       router.push(`/chat/${result?.conversationId ?? result}`);
     });
 
-  const teammates = useMemo(() => (directory ?? []) as { _id: Id<'profiles'>; fullName: string; jobTitle: string }[], [directory]);
+  const teammates = useMemo(() => asArray(directory) as { _id: Id<'profiles'>; fullName: string; jobTitle: string }[], [directory]);
   const coworkersPerDay = useMemo(() => {
     const map = new Map<number, number>();
-    for (const day of (data?.roster ?? []) as RosterDay[]) {
+    for (const day of asArray(data?.roster) as RosterDay[]) {
       map.set(day.dayIndex, day.coworkers.length);
     }
     return map;
   }, [data?.roster]);
-  const mySwaps = useMemo(() => (swaps ?? []) as Array<{ _id: Id<'shiftSwaps'>; status: string; requesterName: string; targetName: string; requesterShift: string; targetShift: string | null; direction: string }>, [swaps]);
+  const mySwaps = useMemo(() => asArray(swaps) as Array<{ _id: Id<'shiftSwaps'>; status: string; requesterName: string; targetName: string; requesterShift: string; targetShift: string | null; direction: string }>, [swaps]);
   const incomingSwaps = mySwaps.filter((s) => s.direction === 'incoming' && s.status === 'proposed');
   const otherSwaps = mySwaps.filter((s) => !(s.direction === 'incoming' && s.status === 'proposed'));
 
@@ -102,10 +105,10 @@ export function MyShifts() {
       setSwapTargetShiftId(null);
     }, targetShiftId ? 'Swap offered.' : 'Coverage offer sent.');
 
-  const mine = useMemo(() => (data?.mine ?? []) as Shift[], [data]);
-  const open = useMemo(() => (data?.open ?? []) as Shift[], [data]);
-  const roster = useMemo(() => (data?.roster ?? []) as RosterDay[], [data]);
-  const blackouts = useMemo(() => (blackoutData ?? []) as Blackout[], [blackoutData]);
+  const mine = useMemo(() => asArray(data?.mine) as Shift[], [data]);
+  const open = useMemo(() => asArray(data?.open) as Shift[], [data]);
+  const roster = useMemo(() => asArray(data?.roster) as RosterDay[], [data]);
+  const blackouts = useMemo(() => asArray(blackoutData) as Blackout[], [blackoutData]);
   const coworkerShiftOptions = useMemo(
     () => roster.flatMap((day) => day.coworkers.map((coworker) => ({ ...coworker, dayLabel: day.dayLabel }))),
     [roster],
@@ -160,7 +163,20 @@ export function MyShifts() {
     }
   };
 
-  if (data === undefined) return <ScheduleSkeleton rows={3} />;
+  if (scheduleQuery.isLoading) return <ScheduleSkeleton rows={3} />;
+
+  // Distinguish "your shifts haven't loaded yet" from "we couldn't load them".
+  if (scheduleQuery.error || data === undefined) {
+    return (
+      <ScreenState
+        isLoading={false}
+        error={scheduleQuery.error ?? new Error('Your shifts could not be loaded.')}
+        onRetry={() => void scheduleQuery.refetch()}
+      >
+        {null}
+      </ScreenState>
+    );
+  }
 
   return (
     <View style={{ gap: spacing.md }}>

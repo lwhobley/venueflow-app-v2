@@ -191,18 +191,10 @@ export class EnterpriseSsoAdminController {
   async provisionIdentity(@CurrentUser() user: AuthUser, @Param('providerId') providerId: string, @Body() body: ProvisionIdentityDto) {
     const provider = await this.prisma.enterpriseSsoProvider.findUniqueOrThrow({ where: { id: providerId } });
     await this.sso.assertOrganizationAdministrator(user.sub, provider.organizationId);
-    const email = body.email.trim().toLowerCase();
-    const domain = email.includes('@') ? email.split('@')[1] ?? '' : '';
-    if (!domain || !provider.allowedEmailDomains.some((allowed) => domain === allowed || domain.endsWith(`.${allowed}`))) {
-      throw new BadRequestException(`Email domain must match one of the allowed domains for this provider.`);
-    }
-    const account = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
-    if (!account) throw new BadRequestException('Create the Stadium Wrangler user before linking its enterprise identity.');
-    return this.prisma.enterpriseSsoIdentity.upsert({
-      where: { providerId_subject: { providerId, subject: body.subject.trim() } },
-      create: { providerId, userId: account.id, subject: body.subject.trim(), email },
-      update: { userId: account.id, email },
-    });
+    // An organization administrator does not own a user's global identity.
+    // Keep linking closed until both the existing user and the IdP subject
+    // can prove possession in a dedicated, audited account-link flow.
+    throw new BadRequestException('Existing-account SSO linking is disabled pending verified user consent. New users may use provider-scoped JIT provisioning.');
   }
 
   @Patch('group-role-mappings/:mappingId')

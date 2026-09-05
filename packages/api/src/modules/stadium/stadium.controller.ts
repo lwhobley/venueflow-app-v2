@@ -1,10 +1,12 @@
-import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, NotFoundException, Param, Patch, Post, Query, UseInterceptors } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { PartialType } from '@nestjs/mapped-types';
 import { IsBoolean, IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 import { canFinalizeCloseout, canManageAssignedScope, canManageVenue, canOverrideEventState, canViewPilotHealth } from '../../auth/roles';
 import { RequireSubscription } from '../../billing/require-subscription.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
+import { withTenantTransaction } from '../../prisma/tenant-transaction';
 import { Prisma } from '@prisma/client';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
@@ -139,6 +141,7 @@ class UpsertPartnerDto {
   @IsOptional() @IsString() brandStandardsNotes?: string;
 }
 
+@UseInterceptors(TenantRequestTransactionInterceptor)
 @Controller('v1/stadium')
 @RequireSubscription()
 export class StadiumController {
@@ -279,7 +282,7 @@ export class StadiumController {
   @Post('events')
   async createEvent(@VenueScope() scope: Scope, @Body() body: CreateEventDto) {
     this.assertManager(scope);
-    return this.prisma.$transaction(async (tx) => {
+    return withTenantTransaction(this.prisma, async (tx) => {
       const venue = await tx.venue.findUniqueOrThrow({ where: { id: scope.venueId }, select: { organizationId: true } });
       const event = await tx.venueEvent.create({
         data: {
@@ -305,7 +308,7 @@ export class StadiumController {
       }
       await tx.eventAuditLog.create({ data: { organizationId: venue.organizationId, venueId: scope.venueId, eventId: event.id, actorProfileId: scope.profileId, entityType: 'event', entityId: event.id, action: 'event_created', metadata: { eventType: event.eventType, expectedAttendance: event.expectedGuests } } });
       return event;
-    });
+    }, { venueId: scope.venueId });
   }
 
   @Patch('events/:id/status')
@@ -328,7 +331,7 @@ export class StadiumController {
       canOverride: canOverrideEventState(scope.role, scope.allAccess),
     });
     const organizationId = await this.organizationIdFor(scope.venueId);
-    return this.prisma.$transaction(async (tx) => {
+    return withTenantTransaction(this.prisma, async (tx) => {
       const cas = await tx.venueEvent.updateMany({
         where: { id, venueId: scope.venueId, operationalState: event.operationalState },
         data: {
@@ -344,7 +347,7 @@ export class StadiumController {
       const updated = await tx.venueEvent.findUniqueOrThrow({ where: { id } });
       await tx.eventAuditLog.create({ data: { organizationId, venueId: scope.venueId, eventId: id, actorProfileId: scope.profileId, entityType: 'event', entityId: id, action: 'event_state_changed', reason: reason?.trim() || null, metadata: { from: event.operationalState, to: target } } });
       return updated;
-    });
+    }, { venueId: scope.venueId });
   }
 
   @Get('events/:id/issues')
@@ -373,7 +376,7 @@ export class StadiumController {
     if (body.outletId && !outlet) throw new NotFoundException('F&B outlet not found.');
     if (['closed', 'archived'].includes(event.operationalState)) throw new ForbiddenException('Issues cannot be opened after event closeout. Use an authorized adjustment workflow.');
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      return await withTenantTransaction(this.prisma, async (tx) => {
         if (body.clientMutationId) {
           const existing = await tx.eventIssue.findFirst({ where: { organizationId, clientMutationId: body.clientMutationId } });
           if (existing) return existing;
@@ -381,7 +384,7 @@ export class StadiumController {
         const issue = await tx.eventIssue.create({ data: { organizationId, venueId: scope.venueId, eventId, outletId: body.outletId ?? null, issueType: body.issueType.trim(), severity: body.severity, title: body.title.trim(), description: body.description.trim(), reportedByUserId: scope.profileId, ownerUserId: body.ownerUserId?.trim() || null, clientMutationId: body.clientMutationId ?? null } });
         await tx.eventAuditLog.create({ data: { organizationId, venueId: scope.venueId, eventId, issueId: issue.id, actorProfileId: scope.profileId, entityType: 'event_issue', entityId: issue.id, action: 'issue_created', metadata: { issueType: issue.issueType, severity: issue.severity, outletId: issue.outletId } } });
         return issue;
-      });
+      }, { venueId: scope.venueId });
     } catch (error) {
       if ((error as { code?: string }).code === 'P2002' && body.clientMutationId) {
         const existing = await this.prisma.eventIssue.findFirst({ where: { organizationId, clientMutationId: body.clientMutationId } });
@@ -401,13 +404,13 @@ export class StadiumController {
     const issue = await this.prisma.eventIssue.findFirst({ where: { id, venueId: scope.venueId }, select: { id: true, eventId: true, organizationId: true, status: true } });
     if (!issue) throw new NotFoundException('Event issue not found.');
     if (issue.status === 'resolved') throw new BadRequestException('A resolved issue cannot be acknowledged.');
-    return this.prisma.$transaction(async (tx) => {
+    return withTenantTransaction(this.prisma, async (tx) => {
       const transition = await tx.eventIssue.updateMany({ where: { id, venueId: scope.venueId, status: 'open' }, data: { status: 'acknowledged', acknowledgedAt: new Date(), ownerUserId: scope.profileId } });
       if (transition.count !== 1) throw new ConflictException('Issue state changed. Refresh and try again.');
       const updated = await tx.eventIssue.findUniqueOrThrow({ where: { id } });
       await tx.eventAuditLog.create({ data: { organizationId: issue.organizationId, venueId: scope.venueId, eventId: issue.eventId, issueId: id, actorProfileId: scope.profileId, entityType: 'event_issue', entityId: id, action: 'issue_acknowledged' } });
       return updated;
-    });
+    }, { venueId: scope.venueId });
   }
 
   @Patch('issues/:id/resolve')
@@ -416,13 +419,13 @@ export class StadiumController {
     const issue = await this.prisma.eventIssue.findFirst({ where: { id, venueId: scope.venueId }, select: { id: true, eventId: true, organizationId: true, status: true } });
     if (!issue) throw new NotFoundException('Event issue not found.');
     if (issue.status === 'resolved') throw new BadRequestException('Event issue is already resolved.');
-    return this.prisma.$transaction(async (tx) => {
+    return withTenantTransaction(this.prisma, async (tx) => {
       const transition = await tx.eventIssue.updateMany({ where: { id, venueId: scope.venueId, status: { in: ['open', 'acknowledged'] } }, data: { status: 'resolved', resolvedAt: new Date(), resolutionNotes: body.resolutionNotes.trim(), ownerUserId: scope.profileId } });
       if (transition.count !== 1) throw new ConflictException('Issue state changed. Refresh and try again.');
       const updated = await tx.eventIssue.findUniqueOrThrow({ where: { id } });
       await tx.eventAuditLog.create({ data: { organizationId: issue.organizationId, venueId: scope.venueId, eventId: issue.eventId, issueId: id, actorProfileId: scope.profileId, entityType: 'event_issue', entityId: id, action: 'issue_resolved', metadata: { resolutionNotes: body.resolutionNotes.trim() } } });
       return updated;
-    });
+    }, { venueId: scope.venueId });
   }
 
   @Post('event-plan')
@@ -458,10 +461,10 @@ export class StadiumController {
       checklists: options.include_checklists === false ? [] : outlets.map((outlet) => ({ outletId: outlet.id, outletName: outlet.name, tasks: ['Confirm outlet activation and POS readiness.', 'Verify product transfer, cold/hot holding controls, and allergen information.', ...(outlet.type === 'bar' || outlet.type === 'beer_cart' ? ['Confirm alcohol inventory, ID-check process, and responsible-service staffing.'] : [])] })),
       dataGaps,
     };
-    await this.prisma.$transaction(async (tx) => {
+    await withTenantTransaction(this.prisma, async (tx) => {
       await tx.eventPlanSnapshot.upsert({ where: { eventId: event.id }, create: { id: `plan_${event.id}`, organizationId: venue.organizationId, venueId: scope.venueId, eventId: event.id, generatedBy: scope.profileId, attendance, estimatedSalesCents, plan: plan as unknown as Prisma.InputJsonValue, dataGaps }, update: { generatedBy: scope.profileId, generatedAt: new Date(), attendance, estimatedSalesCents, plan: plan as unknown as Prisma.InputJsonValue, dataGaps } });
       await tx.eventAuditLog.create({ data: { organizationId: venue.organizationId, venueId: scope.venueId, eventId: event.id, actorProfileId: scope.profileId, entityType: 'event_plan', entityId: event.id, action: 'plan_generated', metadata: { options: options as unknown as Prisma.InputJsonValue } } });
-    });
+    }, { venueId: scope.venueId });
     return plan;
   }
 
@@ -479,7 +482,7 @@ export class StadiumController {
     ]);
     if (!event || !zone) throw new NotFoundException('Event or facility zone not found.');
     const organizationId = await this.organizationIdFor(scope.venueId);
-    return this.prisma.$transaction(async (tx) => {
+    return withTenantTransaction(this.prisma, async (tx) => {
       const readiness = await tx.eventFnbReadiness.upsert({
         where: { eventId_zoneId: { eventId, zoneId } },
         create: { organizationId: organizationId, venueId: scope.venueId, eventId, zoneId, status: body.status, notes: body.notes?.trim() || null, checkedBy: scope.profileId, checkedAt: new Date() },
@@ -487,7 +490,7 @@ export class StadiumController {
       });
       await tx.eventAuditLog.create({ data: { organizationId, venueId: scope.venueId, eventId, actorProfileId: scope.profileId, entityType: 'event_readiness', entityId: readiness.id, action: 'outlet_readiness_updated', metadata: { zoneId, status: body.status } } });
       return readiness;
-    });
+    }, { venueId: scope.venueId });
   }
 
   @Post('partners')
@@ -522,6 +525,9 @@ export class StadiumController {
 
   @Post('events/:id/closeout')
   async upsertEventCloseout(@VenueScope() scope: Scope, @Param('id') eventId: string, @Body() body: UpsertEventCloseoutDto) {
+    if (!canManageVenue(scope.role, scope.allAccess) && !canFinalizeCloseout(scope.role, scope.allAccess)) {
+      throw new ForbiddenException('Closeout modifications require manager or financial authority.');
+    }
     const isFinalizing = body.status === 'finalized';
     if (isFinalizing && !canFinalizeCloseout(scope.role, scope.allAccess)) {
       throw new ForbiddenException('Closeout finalization requires financial director or administrative authority.');
@@ -530,13 +536,19 @@ export class StadiumController {
     if (!event) throw new NotFoundException('Stadium event not found.');
     const organizationId = await this.organizationIdFor(scope.venueId);
 
-    return this.prisma.$transaction(async (tx) => {
+    return withTenantTransaction(this.prisma, async (tx) => {
+      // Serialize drafts/finalization, including the first closeout creation.
+      await tx.$queryRaw`SELECT "id" FROM "VenueEvent" WHERE "id" = ${eventId} FOR UPDATE`;
       const existing = await tx.eventCloseout.findUnique({ where: { eventId } });
-      if (existing && existing.status !== 'draft' && !isFinalizing) {
+      if (existing && existing.status !== 'draft') {
         throw new ConflictException('Finalized or adjusted closeouts must be modified via immutable revisions.');
       }
 
       const status = isFinalizing ? ('finalized' as const) : (existing?.status ?? ('draft' as const));
+      const parent = existing ? await tx.eventCloseoutRevision.findFirst({
+        where: { closeoutId: existing.id }, orderBy: { version: 'desc' },
+      }) : null;
+      const version = (parent?.version ?? 0) + 1;
       const closeout = await tx.eventCloseout.upsert({
         where: { eventId },
         create: {
@@ -544,25 +556,32 @@ export class StadiumController {
           venueId: scope.venueId,
           eventId,
           status,
-          currentVersion: 1,
+          currentVersion: version,
           actualAttendance: body.actualAttendance ?? null,
           actualSalesCents: body.actualSalesCents ?? null,
           forecastSalesCents: body.forecastSalesCents ?? null,
           laborHours: body.laborHours ?? null,
           laborCostCents: body.laborCostCents ?? null,
           inventoryVarianceCents: body.inventoryVarianceCents ?? null,
+          outletResults: (body.outletResults as Prisma.InputJsonValue) ?? null,
+          inventoryResults: (body.inventoryResults as Prisma.InputJsonValue) ?? null,
+          laborResults: (body.laborResults as Prisma.InputJsonValue) ?? null,
           notes: body.notes?.trim() || null,
           finalizedAt: isFinalizing ? new Date() : null,
           finalizedBy: isFinalizing ? scope.profileId : null,
         },
         update: {
           status,
+          currentVersion: version,
           actualAttendance: body.actualAttendance ?? undefined,
           actualSalesCents: body.actualSalesCents ?? undefined,
           forecastSalesCents: body.forecastSalesCents ?? undefined,
           laborHours: body.laborHours ?? undefined,
           laborCostCents: body.laborCostCents ?? undefined,
           inventoryVarianceCents: body.inventoryVarianceCents ?? undefined,
+          outletResults: (body.outletResults as Prisma.InputJsonValue) ?? undefined,
+          inventoryResults: (body.inventoryResults as Prisma.InputJsonValue) ?? undefined,
+          laborResults: (body.laborResults as Prisma.InputJsonValue) ?? undefined,
           notes: body.notes?.trim() || undefined,
           ...(isFinalizing ? { finalizedAt: new Date(), finalizedBy: scope.profileId } : {}),
         },
@@ -575,16 +594,19 @@ export class StadiumController {
         laborHours: closeout.laborHours,
         laborCostCents: closeout.laborCostCents,
         inventoryVarianceCents: closeout.inventoryVarianceCents,
+        outletResults: closeout.outletResults,
+        inventoryResults: closeout.inventoryResults,
+        laborResults: closeout.laborResults,
       };
-      const revisionHash = computeRevisionHash(null, 1, payload);
+      const revisionHash = computeRevisionHash(parent?.revisionHash ?? null, version, payload);
 
-      await tx.eventCloseoutRevision.upsert({
-        where: { closeoutId_version: { closeoutId: closeout.id, version: 1 } },
-        create: {
+      await tx.eventCloseoutRevision.create({
+        data: {
           organizationId,
           venueId: scope.venueId,
           closeoutId: closeout.id,
-          version: 1,
+          version,
+          parentRevisionId: parent?.id ?? null,
           revisionHash,
           actualAttendance: closeout.actualAttendance,
           actualSalesCents: closeout.actualSalesCents,
@@ -592,20 +614,12 @@ export class StadiumController {
           laborHours: closeout.laborHours,
           laborCostCents: closeout.laborCostCents,
           inventoryVarianceCents: closeout.inventoryVarianceCents,
+          outletResults: (closeout.outletResults as Prisma.InputJsonValue) ?? null,
+          inventoryResults: (closeout.inventoryResults as Prisma.InputJsonValue) ?? null,
+          laborResults: (closeout.laborResults as Prisma.InputJsonValue) ?? null,
           createdBy: scope.profileId,
           approvedBy: isFinalizing ? scope.profileId : null,
           approvedAt: isFinalizing ? new Date() : null,
-        },
-        update: {
-          revisionHash,
-          actualAttendance: closeout.actualAttendance,
-          actualSalesCents: closeout.actualSalesCents,
-          forecastSalesCents: closeout.forecastSalesCents,
-          laborHours: closeout.laborHours,
-          laborCostCents: closeout.laborCostCents,
-          inventoryVarianceCents: closeout.inventoryVarianceCents,
-          approvedBy: isFinalizing ? scope.profileId : undefined,
-          approvedAt: isFinalizing ? new Date() : undefined,
         },
       });
 
@@ -618,7 +632,7 @@ export class StadiumController {
           entityType: 'event_closeout',
           entityId: closeout.id,
           action: isFinalizing ? 'closeout_finalized' : 'closeout_saved',
-          metadata: { version: 1, status },
+          metadata: { version, status },
         },
       });
 
@@ -626,7 +640,7 @@ export class StadiumController {
         where: { id: closeout.id },
         include: { revisions: { orderBy: { version: 'desc' } } },
       });
-    });
+    }, { venueId: scope.venueId });
   }
 
   @Post('events/:id/closeout/revisions')
@@ -638,18 +652,18 @@ export class StadiumController {
       throw new BadRequestException('A reason is required to submit a closeout revision.');
     }
 
-    const closeout = await this.prisma.eventCloseout.findUnique({
-      where: { eventId },
-      include: { revisions: { orderBy: { version: 'desc' }, take: 1 } },
-    });
-    if (!closeout) throw new NotFoundException('Event closeout not found.');
-
     const organizationId = await this.organizationIdFor(scope.venueId);
-    const nextVersion = closeout.currentVersion + 1;
-    const latestRevision = closeout.revisions[0];
-    const parentHash = latestRevision?.revisionHash ?? null;
-
-    return this.prisma.$transaction(async (tx) => {
+    return withTenantTransaction(this.prisma, async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "VenueEvent" WHERE "id" = ${eventId} AND "venueId" = ${scope.venueId} FOR UPDATE`;
+      const closeout = await tx.eventCloseout.findFirst({
+        where: { eventId, venueId: scope.venueId },
+        include: { revisions: { orderBy: { version: 'desc' }, take: 1 } },
+      });
+      if (!closeout) throw new NotFoundException('Event closeout not found.');
+      if (closeout.status === 'draft') throw new ConflictException('Finalize the draft before submitting an adjustment.');
+      const nextVersion = closeout.currentVersion + 1;
+      const latestRevision = closeout.revisions[0];
+      const parentHash = latestRevision?.revisionHash ?? null;
       const payload = {
         actualAttendance: body.actualAttendance ?? closeout.actualAttendance,
         actualSalesCents: body.actualSalesCents ?? closeout.actualSalesCents,
@@ -657,6 +671,9 @@ export class StadiumController {
         laborHours: body.laborHours ?? closeout.laborHours,
         laborCostCents: body.laborCostCents ?? closeout.laborCostCents,
         inventoryVarianceCents: body.inventoryVarianceCents ?? closeout.inventoryVarianceCents,
+        outletResults: body.outletResults !== undefined ? body.outletResults : closeout.outletResults,
+        inventoryResults: body.inventoryResults !== undefined ? body.inventoryResults : closeout.inventoryResults,
+        laborResults: body.laborResults !== undefined ? body.laborResults : closeout.laborResults,
         adjustmentReason: body.adjustmentReason.trim(),
       };
       const revisionHash = computeRevisionHash(parentHash, nextVersion, payload);
@@ -675,6 +692,9 @@ export class StadiumController {
           laborHours: payload.laborHours,
           laborCostCents: payload.laborCostCents,
           inventoryVarianceCents: payload.inventoryVarianceCents,
+          outletResults: (payload.outletResults as Prisma.InputJsonValue) ?? null,
+          inventoryResults: (payload.inventoryResults as Prisma.InputJsonValue) ?? null,
+          laborResults: (payload.laborResults as Prisma.InputJsonValue) ?? null,
           adjustmentReason: payload.adjustmentReason,
           createdBy: scope.profileId,
           approvedBy: scope.allAccess ? scope.profileId : null,
@@ -693,6 +713,9 @@ export class StadiumController {
           laborHours: payload.laborHours,
           laborCostCents: payload.laborCostCents,
           inventoryVarianceCents: payload.inventoryVarianceCents,
+          outletResults: (payload.outletResults as Prisma.InputJsonValue) ?? undefined,
+          inventoryResults: (payload.inventoryResults as Prisma.InputJsonValue) ?? undefined,
+          laborResults: (payload.laborResults as Prisma.InputJsonValue) ?? undefined,
           adjustmentReason: payload.adjustmentReason,
         },
       });
@@ -715,7 +738,7 @@ export class StadiumController {
         where: { id: closeout.id },
         include: { revisions: { orderBy: { version: 'desc' } } },
       });
-    });
+    }, { venueId: scope.venueId });
   }
 }
 

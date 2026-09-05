@@ -16,6 +16,7 @@ import { authColors, spacing, type } from "../../lib/theme";
 import { Kicker } from "../../components/AppCard";
 import { useAuthStore, type AuthState } from "../../lib/auth-store";
 
+
 const logoSource = require("../../assets/stadium-wrangler-logo.png");
 
 export default function SignInScreen() {
@@ -201,3 +202,8 @@ const styles = StyleSheet.create({
   error: { color: authColors.danger, textAlign: "center" },
   help: { color: authColors.muted, fontSize: 13, textAlign: "center" },
 });
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

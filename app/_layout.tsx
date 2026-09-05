@@ -12,14 +12,17 @@ import {
   Fraunces_600SemiBold,
   Fraunces_600SemiBold_Italic,
 } from '@expo-google-fonts/fraunces';
+import { A0PurchaseProvider } from '../lib/a0-purchases-stub';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { makePaperTheme, useAppearanceStore, designPalettes } from '../lib/theme';
 import { SubscriptionGate } from '../components/SubscriptionGate';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { useAuthStore, type AuthState } from '../lib/auth-store';
+import { configurePurchases, logoutPurchases } from '../lib/purchases';
 import { queryClient } from '../lib/query-client';
 import { flushOfflineQueue } from '../lib/offline-queue';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { DataErrorBanner } from '../components/DataErrorBanner';
 
 const shouldIgnoreWebError = (message: string) =>
   message.includes('ResizeObserver loop completed with undelivered notifications') ||
@@ -52,6 +55,13 @@ export default function RootLayout() {
     queryClient.clear();
   }, [authScopeKey]);
 
+  useEffect(() => {
+    if (!token) {
+      void logoutPurchases();
+      return;
+    }
+    void configurePurchases(venueId ?? undefined);
+  }, [token, venueId]);
 
   useEffect(() => {
     if (!token) return undefined;
@@ -113,20 +123,22 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
           <PaperProvider theme={makePaperTheme(themeMode)}>
-            <View style={{ flex: 1, width: '100%', backgroundColor: '#FFFFFF' }}>
-              <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }} edges={['top', 'left', 'right']}>
-                <ErrorBoundary>
-                  <OfflineBanner />
-                  <SubscriptionGate>
-                    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }} />
-                  </SubscriptionGate>
-                </ErrorBoundary>
-              </SafeAreaView>
-            </View>
+            <A0PurchaseProvider config={{ appUserId: venueId ?? undefined, debug }}>
+              <View style={{ flex: 1, width: '100%', backgroundColor: '#FFFFFF' }}>
+                <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }} edges={['top', 'left', 'right']}>
+                  <ErrorBoundary>
+                    <OfflineBanner />
+                    <DataErrorBanner />
+                    <SubscriptionGate>
+                      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }} />
+                    </SubscriptionGate>
+                  </ErrorBoundary>
+                </SafeAreaView>
+              </View>
+            </A0PurchaseProvider>
           </PaperProvider>
         </QueryClientProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
-

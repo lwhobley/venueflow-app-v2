@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { tenantIsolationExtension } from './tenant-isolation.extension';
 import { tenantIsolationEnforced } from './tenant-isolation-config';
 
@@ -60,6 +61,16 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         if (prop === 'onModuleInit' || prop === 'onModuleDestroy' || prop === 'constructor') {
           return Reflect.get(target, prop, receiver);
         }
+        // runRawTenantTransaction must run against the UNEXTENDED base client
+        // (target), not `extended`. Bind explicitly to `target` rather than
+        // relying on implicit `this` from the call site: unlike the lifecycle
+        // hooks above, this method's own body calls `this.$transaction`, and
+        // if `this` resolved back to the Proxy that call would re-enter this
+        // same trap and land on `extended.$transaction` instead of the raw one
+        // — defeating the whole point (see runRawTenantTransaction's doc).
+        if (prop === 'runRawTenantTransaction') {
+          return (target as unknown as Record<string, Function>)[prop].bind(target);
+        }
         const value = (extended as unknown as Record<string | symbol, unknown>)[prop as string];
         if (typeof value === 'function') return (value as Function).bind(extended);
         return value;
@@ -73,5 +84,26 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   async onModuleDestroy() {
     await this.$disconnect();
+  }
+
+  /**
+   * Run `fn` in a transaction on the RAW (non-tenant-extended) client and
+   * return its result.
+   *
+   * Why raw: TenantRequestTransactionInterceptor binds the resulting `tx` in
+   * tenant-request-transaction.ts's AsyncLocalStorage so the tenant-isolation
+   * extension's $allOperations hook can redirect arbitrary model calls
+   * (`this.prisma.reservation.findMany()` etc. from anywhere in the app) to
+   * this SAME already-GUC-bound transaction with zero call-site changes. If
+   * `tx` here carried the extension too, that redirect would call back into
+   * the extension on `tx` itself and recurse forever. Called through the Proxy
+   * above, which binds `this` to the unextended base client for this one
+   * method only.
+   */
+  async runRawTenantTransaction<T>(
+    fn: (tx: Prisma.TransactionClient) => Promise<T>,
+    options?: { maxWait?: number; timeout?: number; isolationLevel?: Prisma.TransactionIsolationLevel },
+  ): Promise<T> {
+    return this.$transaction(fn, options);
   }
 }

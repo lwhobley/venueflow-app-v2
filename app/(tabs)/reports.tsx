@@ -11,6 +11,8 @@ import { ProviderDropdown } from '../../components/ProviderDropdown';
 import { ManagerGate } from '../../components/ManagerGate';
 import { SectionHeader } from '../../components/AppCard';
 import { useI18n } from '../../lib/i18n';
+import { asArray } from '../../lib/format';
+
 
 // What we record as the export destination on /v1/payroll/record-export. The
 // server stores `provider` as a free-form string today, so this list is purely
@@ -129,8 +131,8 @@ export default function ReportsScreen() {
         const scheduled = laborForecast.totals?.scheduledHours ?? 0;
         const suggested = laborForecast.totals?.suggestedHours ?? 0;
         const budgetHours = laborForecast.laborBudgetHours ?? null;
-        const otRisk = (laborForecast.otRisk ?? []) as Array<{ name: string; scheduledHours: number; overLimit: boolean }>;
-        const alerts = (laborForecast.alerts ?? []) as Array<{ kind: string; severity: string; message: string }>;
+        const otRisk = asArray(laborForecast.otRisk) as Array<{ name: string; scheduledHours: number; overLimit: boolean }>;
+        const alerts = asArray(laborForecast.alerts) as Array<{ kind: string; severity: string; message: string }>;
         const understaffedDays = alerts.filter((a) => a.kind === 'understaffed').length;
         const overstaffedDays = alerts.filter((a) => a.kind === 'overstaffed').length;
         const otViolations = otRisk.filter((r) => r.overLimit).length;
@@ -283,3 +285,8 @@ export default function ReportsScreen() {
     </ManagerGate>
   );
 }
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

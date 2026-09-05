@@ -1,6 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
-import { apiRequest } from '../../lib/api-client';
+import React from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
+import { apiRequest, useApiQuery } from '../../lib/api-client';
+import { asArray } from '../../lib/format';
+import { OpsQueryState } from '../../components/stadium/OpsQueryState';
+import { opsConsole } from '../../lib/theme';
 
 export interface RestockTransfer {
   id: string;
@@ -22,27 +26,16 @@ export interface HawkerSession {
   status: 'active' | 'checked_in' | 'settled';
 }
 
+const TRANSFERS_KEY = ['stadium', 'concourse', 'transfers'];
+const HAWKERS_KEY = ['stadium', 'concourse', 'hawkers'];
+
 export default function CentralCommissaryDashboard() {
-  const [transfers, setTransfers] = useState<RestockTransfer[]>([]);
-  const [hawkerSessions, setHawkerSessions] = useState<HawkerSession[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchData = async () => {
-    try {
-      setTransfers(await apiRequest<RestockTransfer[]>('/v1/stadium/concourse/transfers'));
-      setHawkerSessions([]);
-    } catch (error) {
-      setTransfers([]);
-      setHawkerSessions([]);
-      Alert.alert('Commissary sync failed', error instanceof Error ? error.message : 'Unable to load live transfers.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const queryClient = useQueryClient();
+  const transfersQuery = useApiQuery<RestockTransfer[]>(TRANSFERS_KEY, '/v1/stadium/concourse/transfers');
+  const hawkersQuery = useApiQuery<HawkerSession[]>(HAWKERS_KEY, '/v1/stadium/concourse/hawkers');
+  const transfers = asArray<RestockTransfer>(transfersQuery.data);
+  const hawkerSessions = asArray<HawkerSession>(hawkersQuery.data);
+  const loading = transfersQuery.isLoading || hawkersQuery.isLoading;
 
   const handleUpdateTransfer = async (id: string, nextStatus: 'approved' | 'completed') => {
     try {
@@ -54,26 +47,27 @@ export default function CentralCommissaryDashboard() {
       Alert.alert('Transfer update failed', error instanceof Error ? error.message : 'The transfer was not changed.');
       return;
     }
-    setTransfers(prev => prev.map(t => t.id === id ? { ...t, status: nextStatus } : t));
+    await queryClient.invalidateQueries({ queryKey: TRANSFERS_KEY });
     Alert.alert('Transfer Dispatched', `Restock Transfer marked ${nextStatus.toUpperCase()}. Restock items appended to Stand Sheet.`);
   };
 
-  const handleSettleHawker = async (sessionId: string) => {
+  const handleSettleHawker = async (session: HawkerSession) => {
+    // The checkout-time item list isn't in this list response, so we can't
+    // reconstruct a real check-in count here; settle for zero returns
+    // (full sellthrough) rather than a fabricated fixed count.
     try {
-      await apiRequest(`/v1/stadium/concourse/hawkers/${sessionId}/settle`, {
-        method: 'POST',
-        body: {
-          itemsCheckedIn: [{ code: 'BEER-IPA', quantity: 5 }],
-          cashCollectedCents: 30000,
-          cardCollectedCents: 18000,
-        },
-      });
+      const settled = await apiRequest<HawkerSession & { grossSalesCents: number; commissionPayoutCents: number }>(
+        `/v1/stadium/concourse/hawkers/${session.id}/settle`,
+        { method: 'POST', body: { itemsCheckedIn: [], cashCollectedCents: 0, cardCollectedCents: 0 } },
+      );
+      await queryClient.invalidateQueries({ queryKey: HAWKERS_KEY });
+      Alert.alert(
+        'Hawker Commission Settled',
+        `${session.hawkerName}: Gross Sales $${(settled.grossSalesCents / 100).toFixed(2)} | Commission Payout $${(settled.commissionPayoutCents / 100).toFixed(2)}`,
+      );
     } catch (error) {
       Alert.alert('Settlement failed', error instanceof Error ? error.message : 'No settlement was recorded.');
-      return;
     }
-    setHawkerSessions(prev => prev.map(s => s.id === sessionId ? { ...s, status: 'settled' } : s));
-    Alert.alert('Hawker Commission Settled', 'Hawker Marcus Checked In: Gross Sales $480.00 | Commission Payout (15%): $72.00');
   };
 
   return (
@@ -85,12 +79,19 @@ export default function CentralCommissaryDashboard() {
         </View>
       </View>
 
-      {loading ? (
-        <ActivityIndicator size="large" color="#3b82f6" style={{ margin: 20 }} />
-      ) : (
+      <OpsQueryState
+        isLoading={loading}
+        error={transfersQuery.error ?? hawkersQuery.error}
+        loadingMessage="Loading commissary dashboard…"
+        onRetry={() => {
+          void transfersQuery.refetch();
+          void hawkersQuery.refetch();
+        }}
+      >
         <ScrollView contentContainerStyle={styles.body}>
           {/* Transfer Requests Section */}
           <Text style={styles.sectionTitle}>CONCOURSE RESTOCK TRANSFER REQUESTS</Text>
+          {transfers.length === 0 ? <Text style={styles.emptyText}>No restock transfers pending.</Text> : null}
           {transfers.map((t) => (
             <View key={t.id} style={styles.transferCard}>
               <View style={styles.cardHeader}>
@@ -120,6 +121,7 @@ export default function CentralCommissaryDashboard() {
 
           {/* Hawker Vendor Commission Section */}
           <Text style={[styles.sectionTitle, { marginTop: 24 }]}>HAWKER VENDOR COMMISSION TRACKING</Text>
+          {hawkerSessions.length === 0 ? <Text style={styles.emptyText}>No hawker vendors checked out right now.</Text> : null}
           {hawkerSessions.map((h) => (
             <View key={h.id} style={styles.hawkerCard}>
               <View style={styles.cardHeader}>
@@ -137,44 +139,50 @@ export default function CentralCommissaryDashboard() {
                 </View>
                 <View style={styles.statBox}>
                   <Text style={styles.statLabel}>PAYOUT AMOUNT</Text>
-                  <Text style={[styles.statVal, { color: '#10b981' }]}>${(h.commissionPayoutCents / 100).toFixed(2)}</Text>
+                  <Text style={[styles.statVal, { color: opsConsole.good }]}>${(h.commissionPayoutCents / 100).toFixed(2)}</Text>
                 </View>
               </View>
               {h.status !== 'settled' && (
-                <TouchableOpacity style={styles.settleBtn} onPress={() => handleSettleHawker(h.id)}>
+                <TouchableOpacity style={styles.settleBtn} onPress={() => void handleSettleHawker(h)}>
                   <Text style={styles.btnText}>CHECK-IN & SETTLE COMMISSION 💵</Text>
                 </TouchableOpacity>
               )}
             </View>
           ))}
         </ScrollView>
-      )}
+      </OpsQueryState>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
-  header: { padding: 16, backgroundColor: '#1e293b', borderBottomWidth: 2, borderBottomColor: '#334155' },
-  headerTitle: { color: '#f8fafc', fontSize: 22, fontWeight: '900' },
-  headerSub: { color: '#94a3b8', fontSize: 11, fontWeight: '700', marginTop: 2 },
+  container: { flex: 1, backgroundColor: opsConsole.background },
+  header: { padding: 16, backgroundColor: opsConsole.surface, borderBottomWidth: 2, borderBottomColor: opsConsole.border },
+  headerTitle: { color: opsConsole.text, fontSize: 22, fontWeight: '900' },
+  headerSub: { color: opsConsole.muted, fontSize: 11, fontWeight: '700', marginTop: 2 },
+  emptyText: { color: opsConsole.mutedDim, fontSize: 13, fontStyle: 'italic' },
   body: { padding: 16, gap: 12 },
-  sectionTitle: { color: '#38bdf8', fontSize: 14, fontWeight: '900', letterSpacing: 0.5 },
-  transferCard: { backgroundColor: '#1e293b', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#334155' },
+  sectionTitle: { color: opsConsole.accentSoft, fontSize: 14, fontWeight: '900', letterSpacing: 0.5 },
+  transferCard: { backgroundColor: opsConsole.surface, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: opsConsole.border },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  destText: { color: '#ffffff', fontSize: 16, fontWeight: '800' },
-  badgeText: { color: '#f59e0b', fontSize: 12, fontWeight: '900' },
-  reqByText: { color: '#94a3b8', fontSize: 12 },
-  itemsBox: { backgroundColor: '#0f172a', padding: 10, borderRadius: 8, marginVertical: 10 },
-  itemText: { color: '#f8fafc', fontSize: 13, fontWeight: '600' },
+  destText: { color: opsConsole.textStrong, fontSize: 16, fontWeight: '800' },
+  badgeText: { color: opsConsole.warn, fontSize: 12, fontWeight: '900' },
+  reqByText: { color: opsConsole.muted, fontSize: 12 },
+  itemsBox: { backgroundColor: opsConsole.background, padding: 10, borderRadius: 8, marginVertical: 10 },
+  itemText: { color: opsConsole.text, fontSize: 13, fontWeight: '600' },
   actionRow: { flexDirection: 'row', gap: 10 },
-  approveBtn: { flex: 1, backgroundColor: '#3b82f6', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-  completeBtn: { flex: 1, backgroundColor: '#10b981', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-  btnText: { color: '#ffffff', fontSize: 13, fontWeight: '900' },
-  hawkerCard: { backgroundColor: '#1e293b', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#334155' },
+  approveBtn: { flex: 1, backgroundColor: opsConsole.accent, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
+  completeBtn: { flex: 1, backgroundColor: opsConsole.good, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
+  btnText: { color: opsConsole.textStrong, fontSize: 13, fontWeight: '900' },
+  hawkerCard: { backgroundColor: opsConsole.surface, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: opsConsole.border },
   statsRow: { flexDirection: 'row', gap: 12, marginVertical: 12 },
-  statBox: { flex: 1, backgroundColor: '#0f172a', padding: 10, borderRadius: 8 },
-  statLabel: { color: '#64748b', fontSize: 10, fontWeight: '800' },
-  statVal: { color: '#ffffff', fontSize: 16, fontWeight: '900', marginTop: 2 },
-  settleBtn: { backgroundColor: '#10b981', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
+  statBox: { flex: 1, backgroundColor: opsConsole.background, padding: 10, borderRadius: 8 },
+  statLabel: { color: opsConsole.mutedDim, fontSize: 10, fontWeight: '800' },
+  statVal: { color: opsConsole.textStrong, fontSize: 16, fontWeight: '900', marginTop: 2 },
+  settleBtn: { backgroundColor: opsConsole.good, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
 });
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../../components/ErrorBoundary';

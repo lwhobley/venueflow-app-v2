@@ -31,6 +31,21 @@ export type AuthenticatedRequest = Request & {
 // across all replicas when a session is invalidated (e.g. logout).
 // The Supabase Postgres pooler handles this efficiently.
 
+type SessionBootstrapRow = { userId: string; expiresAt: Date; tokenHash: string | null };
+
+type ProfileBootstrapRow = {
+  id: string;
+  email: string;
+  fullName: string;
+  role: string;
+  allAccess: boolean;
+  trialEndsAt: Date | null;
+  venueId: string | null;
+  venueName: string | null;
+  venueSubscriptionStatus: string | null;
+  venueOrganizationId: string | null;
+};
+
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(
@@ -38,6 +53,35 @@ export class AuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly prisma: PrismaService,
   ) {}
+
+  // These two lookups run BEFORE any tenant context exists — they are what
+  // DISCOVERS the venueId in the first place, so no app.venue_id GUC can be
+  // bound yet. Session/User/Profile/Venue all carry RLS; Session and User
+  // have no stadium_api policy at all (they're global, not tenant-owned —
+  // see VENUE_SCOPED_MODELS in tenant-scope.ts), and Profile's/Venue's own
+  // policies require the very venueId this lookup exists to determine. Under
+  // a future NOBYPASSRLS stadium_api runtime role, plain Prisma calls here
+  // would return zero rows for every request. Routed through the narrow
+  // SECURITY DEFINER functions from migration 20260903140000 instead — see
+  // that migration's comment and docs/rls-cutover-runbook.md. Verified
+  // end-to-end against a real NOBYPASSRLS role locally: these two calls (and
+  // only these) work with zero GUCs bound, while every other table stays
+  // fail-closed until the tenant context below is resolved and bound.
+  // Behaves identically under today's bypass role too (SECURITY DEFINER does
+  // not require caller privilege), so this is a single code path, not a
+  // cutover-only branch.
+  private async lookupSession(sessionId: string): Promise<SessionBootstrapRow | null> {
+    const rows = await this.prisma.$queryRaw<SessionBootstrapRow[]>`
+      SELECT * FROM app_private.auth_lookup_session(${sessionId})
+    `;
+    return rows[0] ?? null;
+  }
+
+  private async lookupProfiles(userId: string, venueId?: string): Promise<ProfileBootstrapRow[]> {
+    return this.prisma.$queryRaw<ProfileBootstrapRow[]>`
+      SELECT * FROM app_private.auth_lookup_profiles(${userId}, ${venueId ?? null})
+    `;
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
@@ -76,10 +120,7 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('Session is no longer valid. Please sign in again.');
     }
     const now = Date.now();
-    const row = await this.prisma.session.findUnique({
-      where: { id: payload.sid },
-      select: { userId: true, expiresAt: true, tokenHash: true },
-    });
+    const row = await this.lookupSession(payload.sid);
     const session = row
       ? { userId: row.userId, expiresAt: row.expiresAt.getTime(), tokenHash: row.tokenHash }
       : null;
@@ -109,31 +150,11 @@ export class AuthGuard implements CanActivate {
       ? rawVenueHeader.trim()
       : undefined;
     const requestedVenueId = headerVenueId || payload.venueId || undefined;
-    const profileSelect = {
-      id: true,
-      email: true,
-      fullName: true,
-      role: true,
-      allAccess: true,
-      trialEndsAt: true,
-      venueId: true,
-      venue: {
-        select: {
-          name: true,
-          subscriptionStatus: true,
-          organizationId: true,
-        },
-      },
-    } as const;
-    let liveProfile = await this.prisma.profile.findFirst({
-      where: {
-        userId: payload.sub,
-        ...(requestedVenueId ? { venueId: requestedVenueId } : {}),
-        OR: [{ membershipStatus: null }, { membershipStatus: 'active' }],
-      },
-      select: profileSelect,
-      orderBy: { createdAt: 'asc' },
-    });
+    // lookupProfiles already applies the same filters the old Prisma query did
+    // (userId match, membershipStatus null-or-active, ordered by createdAt
+    // asc) — see migration 20260903140000. venueId filtering, when
+    // requestedVenueId is set, happens inside the RPC too; take the first row.
+    let liveProfile: ProfileBootstrapRow | null = (await this.lookupProfiles(payload.sub, requestedVenueId))[0] ?? null;
     if (!liveProfile && headerVenueId) {
       throw new ForbiddenException('You do not have an active membership at the requested venue.');
     }
@@ -141,15 +162,8 @@ export class AuthGuard implements CanActivate {
     // explicit venue request, fall back only to another verified active
     // membership so normal account recovery and venue switching remain usable.
     if (!liveProfile && !headerVenueId && requestedVenueId) {
-      liveProfile = await this.prisma.profile.findFirst({
-        where: {
-          userId: payload.sub,
-          venueId: { not: null },
-          OR: [{ membershipStatus: null }, { membershipStatus: 'active' }],
-        },
-        select: profileSelect,
-        orderBy: { createdAt: 'asc' },
-      });
+      const rows = await this.lookupProfiles(payload.sub);
+      liveProfile = rows.find((p) => p.venueId !== null) ?? null;
     }
     // Privilege claims come only from the live profile. When the profile row is
     // gone, clear role/allAccess/profileId rather than trusting stale JWT fields
@@ -163,9 +177,9 @@ export class AuthGuard implements CanActivate {
       allAccess: liveProfile?.allAccess ?? false,
       trialEndsAt: liveProfile?.trialEndsAt?.toISOString() ?? null,
       venueId: liveProfile?.venueId ?? null,
-      venueName: liveProfile?.venue?.name ?? null,
-      organizationId: liveProfile?.venue?.organizationId ?? null,
-      venueStatus: liveProfile?.venue?.subscriptionStatus ?? null,
+      venueName: liveProfile?.venueName ?? null,
+      organizationId: liveProfile?.venueOrganizationId ?? null,
+      venueStatus: liveProfile?.venueSubscriptionStatus ?? null,
     };
 
     request.user = resolvedUser;

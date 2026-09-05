@@ -6,6 +6,7 @@ import { memo } from 'react';
 import { View } from 'react-native';
 import { Button, Card, Chip, Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { asArray } from '../../lib/format';
 import { useQuery } from '../../lib/railway-hooks';
 import { api } from '../../lib/railway-api';
 import { accents, colors, radius, spacing } from '../../lib/theme';
@@ -43,10 +44,11 @@ export const MovementTimeline = memo(function MovementTimeline({ itemId }: { ite
     | null
     | undefined;
   if (!data) return <Text style={{ color: colors.muted }}>Loading history...</Text>;
-  if (data.movements.length === 0) return <Text style={{ color: colors.muted }}>No movements recorded yet.</Text>;
+  const movements = asArray<MovementRow>(data.movements);
+  if (movements.length === 0) return <Text style={{ color: colors.muted }}>No movements recorded yet.</Text>;
   return (
     <View style={{ gap: 2 }}>
-      {data.movements.map((m) => {
+      {movements.map((m) => {
         const color = MOVEMENT_COLORS[m.movementType] ?? colors.muted;
         const date = new Date(m.createdAt);
         const isTransfer = m.movementType === 'transfer' || m.notes?.includes('[transfer:');
@@ -88,7 +90,8 @@ export const LocationBreakdownCard = memo(function LocationBreakdownCard({
   activeArea: string;
   onSelectArea: (area: string) => void;
 }) {
-  if (!summaries || summaries.length === 0) return null;
+  const locList = asArray<LocationStockSummary>(summaries);
+  if (locList.length === 0) return null;
   return (
     <Card style={{ backgroundColor: colors.surface, borderRadius: 16 }}>
       <Card.Content style={{ gap: spacing.sm }}>
@@ -98,7 +101,7 @@ export const LocationBreakdownCard = memo(function LocationBreakdownCard({
             <Text variant="titleMedium" style={{ fontWeight: '700' }}>Venue Outlet Breakdown</Text>
           </View>
           <Chip compact style={{ backgroundColor: accents[0].bg }}>
-            {summaries.length} Locations
+            {locList.length} Locations
           </Chip>
         </View>
         <Text style={{ color: colors.muted, fontSize: 12 }}>
@@ -106,7 +109,7 @@ export const LocationBreakdownCard = memo(function LocationBreakdownCard({
         </Text>
 
         <View style={{ gap: spacing.xs, marginTop: 4 }}>
-          {summaries.map((loc) => {
+          {locList.map((loc) => {
             const isSelected = activeArea.toLowerCase() === loc.area.toLowerCase();
             return (
               <View
@@ -164,10 +167,11 @@ export const EventStockoutRiskCard = memo(function EventStockoutRiskCard({
   velocity: VelocityRow[] | null | undefined;
   activeMultiplier: number;
 }) {
-  if (!velocity || velocity.length === 0) return null;
+  const rows = asArray<VelocityRow>(velocity);
+  if (rows.length === 0) return null;
 
   // Filter items with burn rate or low days until empty
-  const riskItems = velocity
+  const riskItems = rows
     .filter((v) => v.daysUntilEmpty !== null && v.daysUntilEmpty <= (7 * activeMultiplier))
     .sort((a, b) => (a.daysUntilEmpty ?? 999) - (b.daysUntilEmpty ?? 999))
     .slice(0, 8);
@@ -217,13 +221,14 @@ export const EventStockoutRiskCard = memo(function EventStockoutRiskCard({
 });
 
 export const VelocityCard = memo(function VelocityCard({ velocity }: { velocity: VelocityRow[] | null | undefined }) {
-  if (!velocity || velocity.length === 0 || !velocity.some((v) => v.perWeek > 0)) return null;
+  const rows = asArray<VelocityRow>(velocity);
+  if (rows.length === 0 || !rows.some((v) => v.perWeek > 0)) return null;
   return (
     <Card style={{ backgroundColor: colors.surface, borderRadius: 16 }}>
       <Card.Content style={{ gap: spacing.sm }}>
         <Text variant="titleMedium" style={{ fontWeight: '700' }}>Usage Velocity & Depletion</Text>
         <Text style={{ color: colors.muted, fontSize: 12 }}>4-week rolling consumption across all stadium outlets.</Text>
-        {velocity
+        {rows
           .filter((v) => v.perWeek > 0)
           .sort((a, b) => (a.daysUntilEmpty ?? Infinity) - (b.daysUntilEmpty ?? Infinity))
           .slice(0, 12)
@@ -264,7 +269,7 @@ export const ShrinkageCard = memo(function ShrinkageCard({ data }: { data: Shrin
 
         {!data ? (
           <Text style={{ color: colors.muted }}>Loading...</Text>
-        ) : data.rows.length === 0 ? (
+        ) : asArray(data.rows).length === 0 ? (
           <Text style={{ color: colors.muted }}>No waste or comp movements recorded in the past 30 days.</Text>
         ) : (
           <>
@@ -281,7 +286,7 @@ export const ShrinkageCard = memo(function ShrinkageCard({ data }: { data: Shrin
             )}
 
             <Text style={{ fontWeight: '700', fontSize: 12, color: colors.muted, marginTop: 4 }}>Category Summary:</Text>
-            {data.rows.map((row) => (
+            {asArray<ShrinkageData['rows'][number]>(data.rows).map((row) => (
               <View key={row.category} style={{ paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors.border }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Text style={{ fontWeight: '700', textTransform: 'capitalize' }}>{row.category}</Text>
@@ -341,11 +346,11 @@ export const PurchaseOrderCard = memo(function PurchaseOrderCard({
           <Text style={{ color: colors.muted }}>All items are at or above par level.</Text>
         ) : (
           <>
-            <Text style={{ color: colors.muted }}>{purchaseOrder.itemCount} items below par across {purchaseOrder.groups.length} supplier{purchaseOrder.groups.length !== 1 ? 's' : ''}</Text>
-            {purchaseOrder.groups.map((group) => (
+            <Text style={{ color: colors.muted }}>{purchaseOrder.itemCount} items below par across {asArray(purchaseOrder.groups).length} supplier{asArray(purchaseOrder.groups).length !== 1 ? 's' : ''}</Text>
+            {asArray<PurchaseOrderData['groups'][number]>(purchaseOrder.groups).map((group) => (
               <View key={group.supplier} style={{ gap: 4 }}>
                 <Text style={{ fontWeight: '700', color: colors.primary, marginTop: spacing.sm }}>{group.supplier}</Text>
-                {group.lines.map((line) => (
+                {asArray<PurchaseOrderData['groups'][number]['lines'][number]>(group.lines).map((line) => (
                   <View key={line._id} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: colors.border }}>
                     <View style={{ flex: 1 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -405,10 +410,10 @@ export const AgingCard = memo(function AgingCard({ report }: { report: AgingRepo
           <Text style={{ color: colors.muted }}>Loading...</Text>
         ) : (
           <>
-            <Text style={{ fontWeight: '700', color: report.uncountedItems.length > 0 ? colors.warning : colors.muted }}>
-              {report.uncountedItems.length} item{report.uncountedItems.length !== 1 ? 's' : ''} not counted in 7+ days
+            <Text style={{ fontWeight: '700', color: asArray(report.uncountedItems).length > 0 ? colors.warning : colors.muted }}>
+              {asArray(report.uncountedItems).length} item{asArray(report.uncountedItems).length !== 1 ? 's' : ''} not counted in 7+ days
             </Text>
-            {report.uncountedItems.slice(0, 8).map((item) => (
+            {asArray<AgingReport['uncountedItems'][number]>(report.uncountedItems).slice(0, 8).map((item) => (
               <View key={item._id} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3, borderBottomWidth: 1, borderBottomColor: colors.border }}>
                 <Text style={{ fontSize: 13 }}>{item.name}</Text>
                 <Text style={{ color: colors.muted, fontSize: 12 }}>
@@ -416,16 +421,16 @@ export const AgingCard = memo(function AgingCard({ report }: { report: AgingRepo
                 </Text>
               </View>
             ))}
-            {report.uncountedItems.length > 8 && (
-              <Text style={{ color: colors.muted, fontSize: 12 }}>+{report.uncountedItems.length - 8} more</Text>
+            {asArray(report.uncountedItems).length > 8 && (
+              <Text style={{ color: colors.muted, fontSize: 12 }}>+{asArray(report.uncountedItems).length - 8} more</Text>
             )}
 
-            {report.noActivityItems.length > 0 && (
+            {asArray(report.noActivityItems).length > 0 && (
               <>
                 <Text style={{ fontWeight: '700', color: colors.muted, marginTop: spacing.sm }}>
-                  {report.noActivityItems.length} item{report.noActivityItems.length !== 1 ? 's' : ''} with no movement in 30 days
+                  {asArray(report.noActivityItems).length} item{asArray(report.noActivityItems).length !== 1 ? 's' : ''} with no movement in 30 days
                 </Text>
-                {report.noActivityItems.slice(0, 6).map((item) => (
+                {asArray<AgingReport['noActivityItems'][number]>(report.noActivityItems).slice(0, 6).map((item) => (
                   <Text key={item._id} style={{ color: colors.charcoal, fontSize: 12 }}>
                     {item.name} — {item.onHand} on hand
                   </Text>
@@ -433,18 +438,18 @@ export const AgingCard = memo(function AgingCard({ report }: { report: AgingRepo
               </>
             )}
 
-            {report.staleCostItems.length > 0 && (
+            {asArray(report.staleCostItems).length > 0 && (
               <>
                 <Text style={{ fontWeight: '700', color: colors.muted, marginTop: spacing.sm }}>
-                  {report.staleCostItems.length} item{report.staleCostItems.length !== 1 ? 's' : ''} missing unit cost
+                  {asArray(report.staleCostItems).length} item{asArray(report.staleCostItems).length !== 1 ? 's' : ''} missing unit cost
                 </Text>
-                {report.staleCostItems.slice(0, 6).map((item) => (
+                {asArray<AgingReport['staleCostItems'][number]>(report.staleCostItems).slice(0, 6).map((item) => (
                   <Text key={item._id} style={{ color: colors.charcoal, fontSize: 12 }}>{item.name}</Text>
                 ))}
               </>
             )}
 
-            {report.uncountedItems.length === 0 && report.noActivityItems.length === 0 && report.staleCostItems.length === 0 && (
+            {asArray(report.uncountedItems).length === 0 && asArray(report.noActivityItems).length === 0 && asArray(report.staleCostItems).length === 0 && (
               <Text style={{ color: colors.muted }}>All items are up to date.</Text>
             )}
           </>

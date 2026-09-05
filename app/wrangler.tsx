@@ -18,6 +18,7 @@ const ALLOWED_WRANGLER_ROUTES = new Set([
   '/stadium/stand-sheet',
   '/stadium/suite-attendant',
   '/stadium/kds',
+  '/stadium/distro-pickup',
   '/stadium/commissary',
   '/stadium/labor-dashboard',
   '/event-issues',
@@ -85,3 +86,8 @@ export default function WranglerScreen() {
     </View>
   </ScrollView>;
 }
+
+// Expo Router renders this boundary around this route only, so a render
+// error here shows a recovery card in place instead of unmounting the
+// whole app through the root boundary.
+export { RouteErrorBoundary as ErrorBoundary } from '../components/ErrorBoundary';

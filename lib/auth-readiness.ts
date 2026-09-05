@@ -11,6 +11,9 @@ export function useAuthenticatedSession() {
   const token = useAuthStore((state: AuthState) => state.token);
   const isReady = hydrated && Boolean(user) && Boolean(token);
 
+  // `useQuery` here returns the payload itself (or undefined while loading),
+  // so it must never be destructured. `useQueryState` is the variant that
+  // returns the { data, isLoading } envelope.
   const { data: me, isLoading } = useQueryState(api.app.getMe, isReady ? {} : 'skip');
 
   // Hydrate the venue list from the server (getMe returns venues). This runs

@@ -104,3 +104,20 @@ export type StaffRequest = {
 };
 
 export type TimeEntry = ClockEntry;
+
+export type DepartmentSummary = {
+  id: string;
+  code: string;
+  name: string;
+  defaultRoute: string;
+  isPrimary?: boolean;
+};
+
+export type WorkspaceResolution = {
+  assigned: boolean;
+  primaryDepartment?: DepartmentSummary;
+  departments: DepartmentSummary[];
+  allowedOperationalAreas: string[];
+  defaultRoute: string;
+  effectiveRole: Role | string;
+};

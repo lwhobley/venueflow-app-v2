@@ -1,6 +1,13 @@
 import { defineConfig, configDefaults } from 'vitest/config';
 
 export default defineConfig({
+  // Component specs render through react-native-web, which is already a
+  // dependency of this Expo app, so React Native primitives resolve in jsdom.
+  resolve: {
+    alias: {
+      'react-native': 'react-native-web',
+    },
+  },
   test: {
     exclude: [...configDefaults.exclude, '.claude/**', '**/*.integration.spec.ts'],
     coverage: {

@@ -1,10 +1,11 @@
-import { Body, Controller, ForbiddenException, Get, Post } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Post, UseInterceptors } from '@nestjs/common';
 import { IsIn, IsOptional, IsString } from 'class-validator';
 import { IntegrationStatus, ReservationSource } from '@prisma/client';
 import { canManageVenue } from '../../auth/roles';
 import { RequireSubscription } from '../../billing/require-subscription.decorator';
 import { generateWebhookSecret } from '../../common/webhook-auth';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 
@@ -27,6 +28,7 @@ class UpsertReservationConnectionDto {
   status!: IntegrationStatus;
 }
 
+@UseInterceptors(TenantRequestTransactionInterceptor)
 @Controller('v1/integrations')
 export class IntegrationsController {
   constructor(private readonly prisma: PrismaService) {}

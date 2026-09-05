@@ -37,6 +37,13 @@ export const FACILITY_SCOPED_MODELS: ReadonlySet<string> = new Set([
   'EventMenuOverlay', 'TempAgency', 'WorkerProfile', 'ShiftPunch',
   'UnionRuleConfig', 'UnionComplianceViolation',
   'FacilityZone', 'Outlet', 'SubVenue', 'Terminal',
+  'KitchenFulfillmentTicket', 'KitchenFulfillmentStatusHistory',
+  'Department', 'DepartmentMembership', 'DepartmentAreaRule', 'UserAreaOverride',
+  'DailyTemporaryRoster', 'DailyTemporaryRosterWorker', 'DailyTemporaryRosterHistory',
+  'VmsVendor', 'VmsStaffMember', 'VmsStaffingOrder',
+  'VmsTimeAttendance', 'VmsInventorySyncLog', 'VmsAuditLog',
+  'VmsStaffAssignment', 'VmsStaffAvailability', 'VmsOrderTemplate',
+  'VmsNotificationPreference', 'VmsNotificationLog', 'VmsPunchLockout',
 ]);
 
 /**

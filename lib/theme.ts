@@ -95,12 +95,40 @@ export const authInputProps = {
   style: { backgroundColor: authColors.surface },
 };
 
+// Screens index this list by fixed position (accents[0] .. accents[5]) for KPI
+// tiles and callout cards, so it must keep at least six entries — a shorter
+// list crashes those screens with "cannot read properties of undefined".
 export const accents = [
   { bg: designPalettes.light.primary, fg: "#FFFFFF", icon: designPalettes.light.primary },
   { bg: designPalettes.light.secondary, fg: "#FFFFFF", icon: designPalettes.light.secondary },
   { bg: designPalettes.light.info, fg: "#FFFFFF", icon: designPalettes.light.info },
   { bg: designPalettes.light.warning, fg: "#FFFFFF", icon: designPalettes.light.warning },
+  { bg: designPalettes.light.charcoal, fg: "#FFFFFF", icon: designPalettes.light.charcoal },
+  { bg: designPalettes.light.shadow, fg: "#FFFFFF", icon: designPalettes.light.shadow },
 ];
+
+/**
+ * Palette for the stadium operations consoles (KDS, stand sheets, commissary,
+ * runner and kiosk screens). Those run on wall-mounted kitchen displays and
+ * back-of-house tablets, so they stay dark regardless of the app's light/dark
+ * setting — but they were each hardcoding the same slate ramp inline, which
+ * meant a dozen near-identical hex values and no single place to adjust them.
+ */
+export const opsConsole = {
+  background: "#0F172A",
+  surface: "#1E293B",
+  border: "#334155",
+  text: "#F8FAFC",
+  textStrong: "#FFFFFF",
+  muted: "#94A3B8",
+  mutedDim: "#64748B",
+  subtle: "#CBD5E1",
+  accent: "#3B82F6",
+  accentSoft: "#38BDF8",
+  good: "#10B981",
+  warn: "#F59E0B",
+  danger: "#EF4444",
+} as const;
 
 export const spacing = {
   xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, xxxl: 48, huge: 64,
@@ -110,8 +138,13 @@ export const radius = {
   sharp: 6, soft: 14, sm: 10, md: 14, lg: 18, xl: 24, pill: 999,
 };
 
+// Loaded via useFonts() in app/_layout.tsx. These string literals must match
+// the keys passed there exactly, or React Native silently falls back to the
+// system font with no warning.
 export const fontFamily = {
-  display: undefined, displayItalic: undefined, displayMedium: undefined,
+  display: "Fraunces_600SemiBold",
+  displayItalic: "Fraunces_600SemiBold_Italic",
+  displayMedium: "Fraunces_500Medium",
 } as const;
 
 export const type = {
@@ -121,8 +154,8 @@ export const type = {
   body: { fontSize: 15, lineHeight: 22, letterSpacing: 0 },
   bodyLarge: { fontSize: 17, lineHeight: 24, letterSpacing: 0 },
   heading: { fontSize: 20, lineHeight: 26, letterSpacing: -0.2, fontWeight: "700" as const },
-  title: { fontSize: 28, lineHeight: 34, letterSpacing: -0.4, fontWeight: "700" as const },
-  display: { fontSize: 40, lineHeight: 44, letterSpacing: -0.6, fontWeight: "700" as const },
+  title: { fontSize: 28, lineHeight: 34, letterSpacing: -0.4, fontWeight: "600" as const, fontFamily: fontFamily.display },
+  display: { fontSize: 40, lineHeight: 44, letterSpacing: -0.6, fontWeight: "600" as const, fontFamily: fontFamily.display },
 } as const;
 
 export const shadow = {

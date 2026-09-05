@@ -20,6 +20,16 @@ function makeController() {
 
 const user = { sub: 'user-1' } as any;
 
+it('rejects linking an administrator-controlled IdP subject to any existing global account', async () => {
+  const { controller, prisma } = makeController();
+  prisma.enterpriseSsoProvider = { findUniqueOrThrow: vi.fn().mockResolvedValue({ organizationId: 'attacker-org' }) };
+  prisma.user = { findUnique: vi.fn() };
+  prisma.enterpriseSsoIdentity = { upsert: vi.fn() };
+  await expect(controller.provisionIdentity(user, 'provider-a', { email: 'victim@example.org', subject: 'controlled-subject' })).rejects.toThrow('linking is disabled');
+  expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  expect(prisma.enterpriseSsoIdentity.upsert).not.toHaveBeenCalled();
+});
+
 describe('EnterpriseSsoAdminController.updateGroupRoleMapping', () => {
   it('rejects an update that leaves a platform_admin mapping live when the actor cannot assign that role', async () => {
     const { controller, prisma } = makeController();

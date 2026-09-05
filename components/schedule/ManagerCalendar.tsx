@@ -3,14 +3,16 @@ import { Platform, Pressable, ScrollView, View, Modal } from 'react-native';
 import { router } from 'expo-router';
 import { Button, Card, Chip, Divider, IconButton, Menu, Searchbar, SegmentedButtons, Snackbar, Text, TextInput } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useMutation, useQuery } from '../../lib/railway-hooks';
+import { useMutation, useQuery, useQueryState } from '../../lib/railway-hooks';
 import { api } from '../../lib/railway-api';
 import type { Id } from '../../lib/ids';
 import { accents, colors, spacing } from '../../lib/theme';
 import { useIsDesktop } from '../../lib/responsive';
 import { AutoScheduleModal } from './AutoScheduleModal';
 import { ScheduleSkeleton } from './ScheduleSkeleton';
+import { ScreenState } from '../ScreenState';
 import { CollapsibleSection } from '../AppCard';
+import { asArray } from '../../lib/format';
 
 type ShiftSnapshot = {
   dayIndex: number;
@@ -125,7 +127,7 @@ function roleAccent(role: string) {
 }
 
 function availabilityLabel(rows: AvailabilityRow[] | undefined, dayIndex: number) {
-  const dayRows = (rows ?? []).filter((row) => row.dayIndex === dayIndex);
+  const dayRows = asArray(rows).filter((row) => row.dayIndex === dayIndex);
   if (dayRows.length === 0) return 'Available unless an unavailable-day request is approved';
   return dayRows
     .slice(0, 2)
@@ -169,7 +171,8 @@ export function ManagerCalendar({ venueId }: { venueId: Id<'venues'> }) {
   }, [weekOffset]);
 
   const selectedWeekStart = `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, '0')}-${String(weekStart.getDate()).padStart(2, '0')}`;
-  const data = useQuery(api.scheduling.getManagerSchedule, { venueId, weekStart: selectedWeekStart });
+  const scheduleQuery = useQueryState<any>(api.scheduling.getManagerSchedule, { venueId, weekStart: selectedWeekStart });
+  const data = scheduleQuery.data;
   const forecast = useQuery(api.scheduling.getLaborForecast, { venueId, weekStart: selectedWeekStart }) as LaborForecast | undefined;
   const templates = useQuery(api.scheduling.listScheduleTemplates, { venueId });
   const requestRows = useQuery(api.app.listStaffRequests, { venueId });
@@ -218,10 +221,10 @@ export function ManagerCalendar({ venueId }: { venueId: Id<'venues'> }) {
   const [autoOpen, setAutoOpen] = useState(false);
   const [undo, setUndo] = useState<{ label: string; shifts: ShiftSnapshot[] } | null>(null);
 
-  const shifts = useMemo(() => (data?.shifts ?? []) as ManagerShift[], [data]);
-  const staff = useMemo(() => (data?.staff ?? []) as Staff[], [data]);
-  const templateList = useMemo(() => (templates ?? []) as Template[], [templates]);
-  const requests = useMemo(() => ((requestRows ?? []) as StaffRequest[]).filter((row) => row.status === 'pending'), [requestRows]);
+  const shifts = useMemo(() => asArray(data?.shifts) as ManagerShift[], [data]);
+  const staff = useMemo(() => asArray(data?.staff) as Staff[], [data]);
+  const templateList = useMemo(() => asArray(templates) as Template[], [templates]);
+  const requests = useMemo(() => (asArray(requestRows) as StaffRequest[]).filter((row) => row.status === 'pending'), [requestRows]);
   const selectedShift = shifts.find((shift) => shift._id === selectedShiftId) ?? null;
   const pickedName = staff.find((row) => row._id === pickedStaff)?.fullName ?? null;
 
@@ -413,8 +416,22 @@ export function ManagerCalendar({ venueId }: { venueId: Id<'venues'> }) {
     );
   }, [shifts]);
 
-  if (data === undefined) {
+  if (scheduleQuery.isLoading) {
     return <ScheduleSkeleton rows={5} />;
+  }
+
+  // A failed week read used to sit on the skeleton forever, which reads as a
+  // slow network rather than a request the server refused.
+  if (scheduleQuery.error || data === undefined) {
+    return (
+      <ScreenState
+        isLoading={false}
+        error={scheduleQuery.error ?? new Error('The schedule for this week could not be loaded.')}
+        onRetry={() => void scheduleQuery.refetch()}
+      >
+        {null}
+      </ScreenState>
+    );
   }
 
   const topButtonStyle = isDesktop ? { minWidth: 120 } : {};
@@ -712,7 +729,7 @@ export function ManagerCalendar({ venueId }: { venueId: Id<'venues'> }) {
               
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                  {(forecast?.days ?? []).map((row) => {
+                  {asArray(forecast?.days).map((row) => {
                     const bg = row.status === 'under' ? '#FFF5DA' : row.status === 'over' ? '#FDE7E9' : '#E1FBF3';
                     const fg = row.status === 'under' ? colors.warning : row.status === 'over' ? colors.danger : colors.success;
                     return (
