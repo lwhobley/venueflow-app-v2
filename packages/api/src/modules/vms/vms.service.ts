@@ -20,6 +20,7 @@ import {
 } from '@prisma/client';
 import {
   ApproveAttendanceDto,
+  AuthorizePunchDto,
   ClockInDto,
   ClockOutDto,
   CreateStaffingOrderDto,
@@ -39,6 +40,65 @@ import { zonedIsoDate, zonedWallClockToUtc } from '../../common/venue-time';
 /** Failed punch attempts before a worker is locked out, and for how long. */
 export const MAX_PUNCH_ATTEMPTS = 5;
 export const PUNCH_LOCKOUT_MINUTES = 15;
+
+function getPunchSecret(): string {
+  return process.env.JWT_SECRET || process.env.SESSION_SECRET || 'venue-wrangler-punch-secret-key-1882';
+}
+
+export function generatePunchAuthToken(payload: {
+  staffMemberId: string;
+  facilityId: string;
+  action: 'clock_in' | 'clock_out';
+  attendanceId?: string;
+  expiresInSeconds?: number;
+}): string {
+  const exp = Date.now() + (payload.expiresInSeconds ?? 900) * 1000;
+  const data = {
+    staffMemberId: payload.staffMemberId,
+    facilityId: payload.facilityId,
+    action: payload.action,
+    attendanceId: payload.attendanceId,
+    exp,
+  };
+  const body = Buffer.from(JSON.stringify(data)).toString('base64url');
+  const sig = crypto.createHmac('sha256', getPunchSecret()).update(body).digest('base64url');
+  return `${body}.${sig}`;
+}
+
+export function verifyPunchAuthToken(token: string, expected: {
+  staffMemberId?: string;
+  facilityId: string;
+  action: 'clock_in' | 'clock_out';
+  attendanceId?: string;
+}): { valid: boolean; staffMemberId?: string; error?: string } {
+  try {
+    const [body, sig] = token.split('.');
+    if (!body || !sig) return { valid: false, error: 'Malformed punch authorization token.' };
+    const expectedSig = crypto.createHmac('sha256', getPunchSecret()).update(body).digest('base64url');
+    if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))) {
+      return { valid: false, error: 'Invalid punch authorization token signature.' };
+    }
+    const data = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+    if (Date.now() > data.exp) {
+      return { valid: false, error: 'Punch authorization token expired.' };
+    }
+    if (data.facilityId !== expected.facilityId) {
+      return { valid: false, error: 'Punch token bound to different facility.' };
+    }
+    if (data.action !== expected.action) {
+      return { valid: false, error: `Punch token action mismatch: expected ${expected.action}, got ${data.action}.` };
+    }
+    if (expected.staffMemberId && data.staffMemberId !== expected.staffMemberId) {
+      return { valid: false, error: 'Punch token bound to different staff member.' };
+    }
+    if (expected.attendanceId && data.attendanceId && data.attendanceId !== expected.attendanceId) {
+      return { valid: false, error: 'Punch token bound to different attendance record.' };
+    }
+    return { valid: true, staffMemberId: data.staffMemberId };
+  } catch {
+    return { valid: false, error: 'Failed to verify punch authorization token.' };
+  }
+}
 
 /**
  * Scrypt-based Key Derivation for Worker PINs (N3)
@@ -901,12 +961,81 @@ export class VmsService {
     return R * c;
   }
 
+  async authorizePunch(
+    organizationId: string,
+    facilityId: string,
+    dto: AuthorizePunchDto,
+  ) {
+    const staff = await this.prisma.vmsStaffMember.findFirst({
+      where: { id: dto.staffMemberId, organizationId, facilityId },
+    });
+    if (!staff) throw new NotFoundException('Staff member not found');
+
+    await this.checkPunchLockout(organizationId, facilityId, staff.id);
+
+    if (!staff.pinHash && !staff.badgeNumber) {
+      throw new ForbiddenException(
+        'Staff member has no PIN or badge credential configured on file. A manager must record this punch.',
+      );
+    }
+    if (staff.pinHash && staff.pinSalt) {
+      if (!dto.pin) {
+        throw new BadRequestException('Worker PIN required for punch authorization.');
+      }
+      if (!verifyPin(dto.pin, staff.pinSalt, staff.pinHash)) {
+        await this.recordFailedPunchAttempt(organizationId, facilityId, staff.id);
+        throw new BadRequestException('Invalid worker PIN.');
+      }
+    } else if (staff.badgeNumber) {
+      if (
+        !dto.badgeCode ||
+        !this.timingSafeCompare(
+          dto.badgeCode.trim().toLowerCase(),
+          staff.badgeNumber.trim().toLowerCase(),
+        )
+      ) {
+        await this.recordFailedPunchAttempt(organizationId, facilityId, staff.id);
+        throw new BadRequestException('Invalid worker badge code.');
+      }
+    }
+    await this.resetFailedPunchAttempts(staff.id);
+
+    const token = generatePunchAuthToken({
+      staffMemberId: staff.id,
+      facilityId,
+      action: dto.action,
+      attendanceId: dto.attendanceId,
+      expiresInSeconds: 900,
+    });
+
+    return {
+      punchAuthToken: token,
+      staffMemberId: staff.id,
+      action: dto.action,
+      expiresInSeconds: 900,
+    };
+  }
+
   async clockIn(
     organizationId: string,
     facilityId: string,
     dto: ClockInDto,
     options?: { isManager?: boolean; callerUserId?: string; ipAddress?: string },
   ) {
+    // Check idempotency by clientMutationId if supplied
+    if (dto.clientMutationId) {
+      const existing = await this.prisma.vmsTimeAttendance.findFirst({
+        where: { facilityId, clientMutationId: dto.clientMutationId },
+        include: { staffMember: true },
+      });
+      if (existing) {
+        if (existing.staffMember) {
+          existing.staffMember = sanitizeStaffMember(existing.staffMember) as any;
+        }
+        return existing;
+      }
+    }
+
     const staff = await this.prisma.vmsStaffMember.findFirst({
       where: { id: dto.staffMemberId, organizationId, facilityId },
       include: { vendor: true },
@@ -915,50 +1044,49 @@ export class VmsService {
 
     // Worker credential check (B4, N3, N5):
     if (!options?.isManager) {
-      // Lockout guards the self-service path only. Applying it to a manager
-      // punch would block the documented remedy for a locked-out worker and
-      // leave their shift unrecorded, which the no-show sweep later reads as
-      // an absence.
-      await this.checkPunchLockout(organizationId, facilityId, staff.id);
+      if (dto.punchAuthToken) {
+        const tokenRes = verifyPunchAuthToken(dto.punchAuthToken, {
+          staffMemberId: staff.id,
+          facilityId,
+          action: 'clock_in',
+        });
+        if (!tokenRes.valid) {
+          throw new ForbiddenException(tokenRes.error || 'Invalid punch authorization token.');
+        }
+      } else {
+        // Lockout guards the self-service path only. Applying it to a manager
+        // punch would block the documented remedy for a locked-out worker and
+        // leave their shift unrecorded, which the no-show sweep later reads as
+        // an absence.
+        await this.checkPunchLockout(organizationId, facilityId, staff.id);
 
-      if (!staff.pinHash && !staff.badgeNumber) {
-        throw new ForbiddenException(
-          'Staff member has no PIN or badge credential configured on file. A manager must record this punch.',
-        );
+        if (!staff.pinHash && !staff.badgeNumber) {
+          throw new ForbiddenException(
+            'Staff member has no PIN or badge credential configured on file. A manager must record this punch.',
+          );
+        }
+        if (staff.pinHash && staff.pinSalt) {
+          if (!dto.pin) {
+            throw new BadRequestException('Worker PIN required for clock-in.');
+          }
+          if (!verifyPin(dto.pin, staff.pinSalt, staff.pinHash)) {
+            await this.recordFailedPunchAttempt(organizationId, facilityId, staff.id);
+            throw new BadRequestException('Invalid worker PIN.');
+          }
+        } else if (staff.badgeNumber) {
+          if (
+            !dto.badgeCode ||
+            !this.timingSafeCompare(
+              dto.badgeCode.trim().toLowerCase(),
+              staff.badgeNumber.trim().toLowerCase(),
+            )
+          ) {
+            await this.recordFailedPunchAttempt(organizationId, facilityId, staff.id);
+            throw new BadRequestException('Invalid worker badge code.');
+          }
+        }
+        await this.resetFailedPunchAttempts(staff.id);
       }
-      if (staff.pinHash && staff.pinSalt) {
-        if (!dto.pin) {
-          throw new BadRequestException('Worker PIN required for clock-in.');
-        }
-        if (!verifyPin(dto.pin, staff.pinSalt, staff.pinHash)) {
-          await this.recordFailedPunchAttempt(organizationId, facilityId, staff.id);
-          throw new BadRequestException('Invalid worker PIN.');
-        }
-      } else if (staff.badgeNumber) {
-        if (
-          !dto.badgeCode ||
-          !this.timingSafeCompare(
-            dto.badgeCode.trim().toLowerCase(),
-            staff.badgeNumber.trim().toLowerCase(),
-          )
-        ) {
-          await this.recordFailedPunchAttempt(organizationId, facilityId, staff.id);
-          throw new BadRequestException('Invalid worker badge code.');
-        }
-      }
-      await this.resetFailedPunchAttempts(staff.id);
-    }
-
-    // Active punch check: Key on clockOut: null to prevent open punch accumulation (N4)
-    const activePunch = await this.prisma.vmsTimeAttendance.findFirst({
-      where: {
-        staffMemberId: dto.staffMemberId,
-        facilityId,
-        clockOut: null,
-      },
-    });
-    if (activePunch) {
-      throw new BadRequestException('Staff member already has an active clock-in without clock-out.');
     }
 
     // Geofencing verification (F1, N9):
@@ -992,25 +1120,60 @@ export class VmsService {
     const multiplier = staff.vendor?.billingRateMultiplier ?? 1.0;
     const rateCents = Math.round(staff.hourlyRateCents * multiplier);
 
-    const attendance = await this.prisma.vmsTimeAttendance.create({
-      data: {
-        organizationId,
-        facilityId,
-        staffMemberId: dto.staffMemberId,
-        orderId: dto.orderId,
-        clockIn: new Date(),
-        billedRateCents: rateCents,
-        status: deviationFlags.length > 0 ? VmsAttendanceStatus.flagged_exception : VmsAttendanceStatus.clocked_in,
-        deviceInfo: dto.deviceInfo,
-        gpsLatitude: dto.gpsLatitude,
-        gpsLongitude: dto.gpsLongitude,
-        isWithinGeofence,
-        deviationFlags,
-      },
-      include: {
-        staffMember: true,
-      },
-    });
+    let attendance: any;
+    try {
+      attendance = await this.prisma.$transaction(async (tx) => {
+        // Active punch check: Key on clockOut: null to prevent open punch accumulation (N4)
+        const activePunch = await tx.vmsTimeAttendance.findFirst({
+          where: {
+            staffMemberId: dto.staffMemberId,
+            facilityId,
+            clockOut: null,
+          },
+          include: { staffMember: true },
+        });
+        if (activePunch) {
+          if (dto.clientMutationId && activePunch.clientMutationId === dto.clientMutationId) {
+            return activePunch;
+          }
+          throw new BadRequestException('Staff member already has an active clock-in without clock-out.');
+        }
+
+        return tx.vmsTimeAttendance.create({
+          data: {
+            organizationId,
+            facilityId,
+            staffMemberId: dto.staffMemberId,
+            orderId: dto.orderId,
+            clockIn: new Date(),
+            billedRateCents: rateCents,
+            status: deviationFlags.length > 0 ? VmsAttendanceStatus.flagged_exception : VmsAttendanceStatus.clocked_in,
+            deviceInfo: dto.deviceInfo,
+            gpsLatitude: dto.gpsLatitude,
+            gpsLongitude: dto.gpsLongitude,
+            isWithinGeofence,
+            deviationFlags,
+            clientMutationId: dto.clientMutationId ?? null,
+          },
+          include: {
+            staffMember: true,
+          },
+        });
+      });
+    } catch (err: any) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        const activePunch = await this.prisma.vmsTimeAttendance.findFirst({
+          where: { staffMemberId: dto.staffMemberId, facilityId, clockOut: null },
+          include: { staffMember: true },
+        });
+        if (activePunch && dto.clientMutationId && activePunch.clientMutationId === dto.clientMutationId) {
+          if (activePunch.staffMember) activePunch.staffMember = sanitizeStaffMember(activePunch.staffMember) as any;
+          return activePunch;
+        }
+        throw new BadRequestException('Staff member already has an active clock-in without clock-out.');
+      }
+      throw err;
+    }
 
     await this.logAudit({
       organizationId,
@@ -1047,38 +1210,48 @@ export class VmsService {
 
     // Check lockout
     if (attendance.staffMemberId) {
-      if (attendance.staffMemberId) {
-        await this.checkPunchLockout(organizationId, facilityId, attendance.staffMemberId);
-      }
+      await this.checkPunchLockout(organizationId, facilityId, attendance.staffMemberId);
     }
 
     // Worker credential check on self clock-out (B4, N3, N5):
     if (!options?.isManager) {
-      const staff = attendance.staffMember;
-      if (!staff?.pinHash && !staff?.badgeNumber) {
-        throw new ForbiddenException(
-          'Staff member has no PIN or badge credential configured on file. A manager must record this punch.',
-        );
-      }
-      if (staff?.pinHash && staff?.pinSalt) {
-        if (!dto.pin) throw new BadRequestException('Worker PIN required for clock-out.');
-        if (!verifyPin(dto.pin, staff.pinSalt, staff.pinHash)) {
-          if (staff.id) await this.recordFailedPunchAttempt(organizationId, facilityId, staff.id);
-          throw new BadRequestException('Invalid worker PIN.');
+      if (dto.punchAuthToken) {
+        const tokenRes = verifyPunchAuthToken(dto.punchAuthToken, {
+          staffMemberId: attendance.staffMemberId ?? undefined,
+          facilityId,
+          action: 'clock_out',
+          attendanceId: attendance.id,
+        });
+        if (!tokenRes.valid) {
+          throw new ForbiddenException(tokenRes.error || 'Invalid punch authorization token.');
         }
-      } else if (staff?.badgeNumber) {
-        if (
-          !dto.badgeCode ||
-          !this.timingSafeCompare(
-            dto.badgeCode.trim().toLowerCase(),
-            staff.badgeNumber.trim().toLowerCase(),
-          )
-        ) {
-          if (staff.id) await this.recordFailedPunchAttempt(organizationId, facilityId, staff.id);
-          throw new BadRequestException('Invalid worker badge code.');
+      } else {
+        const staff = attendance.staffMember;
+        if (!staff?.pinHash && !staff?.badgeNumber) {
+          throw new ForbiddenException(
+            'Staff member has no PIN or badge credential configured on file. A manager must record this punch.',
+          );
         }
+        if (staff?.pinHash && staff?.pinSalt) {
+          if (!dto.pin) throw new BadRequestException('Worker PIN required for clock-out.');
+          if (!verifyPin(dto.pin, staff.pinSalt, staff.pinHash)) {
+            if (staff.id) await this.recordFailedPunchAttempt(organizationId, facilityId, staff.id);
+            throw new BadRequestException('Invalid worker PIN.');
+          }
+        } else if (staff?.badgeNumber) {
+          if (
+            !dto.badgeCode ||
+            !this.timingSafeCompare(
+              dto.badgeCode.trim().toLowerCase(),
+              staff.badgeNumber.trim().toLowerCase(),
+            )
+          ) {
+            if (staff.id) await this.recordFailedPunchAttempt(organizationId, facilityId, staff.id);
+            throw new BadRequestException('Invalid worker badge code.');
+          }
+        }
+        if (staff?.id) await this.resetFailedPunchAttempts(staff.id);
       }
-      if (staff?.id) await this.resetFailedPunchAttempts(staff.id);
     }
 
     const clockOutTime = new Date();

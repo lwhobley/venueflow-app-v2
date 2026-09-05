@@ -268,7 +268,10 @@ export class TimeClockController {
     }
 
     if (this.asyncWrites?.isEnabled?.()) {
-      const key = (idempotencyKey ?? '').trim() || crypto.randomUUID();
+      const key = (idempotencyKey ?? '').trim();
+      if (!key) {
+        throw new BadRequestException('Idempotency-Key header is required for high-volume async clock-in.');
+      }
       return this.asyncWrites.enqueue('clock_in', key, {
         profileId: scope.profileId, venueId: venue.id, lat: body.lat, lng: body.lng,
         accuracy: body.accuracy, mocked: body.mocked, clockInAt: new Date().toISOString(),

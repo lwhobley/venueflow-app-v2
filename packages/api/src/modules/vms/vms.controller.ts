@@ -20,6 +20,7 @@ import { VmsSchedulerService } from './vms-scheduler.service';
 import {
   AiParseOrderDto,
   ApproveAttendanceDto,
+  AuthorizePunchDto,
   ClockInDto,
   ClockOutDto,
   CreateStaffingOrderDto,
@@ -304,6 +305,15 @@ export class VmsController {
   // TIME & ATTENDANCE
   // ---------------------------------------------------------------------------
 
+  @Post('attendance/authorize-punch')
+  async authorizePunch(
+    @VenueScope() scope: Scope,
+    @Body() body: AuthorizePunchDto,
+  ) {
+    const orgId = await this.organizationIdFor(scope.venueId);
+    return this.service.authorizePunch(orgId, scope.venueId, body);
+  }
+
   @Post('attendance/clock-in')
   async clockIn(
     @VenueScope() scope: Scope,
@@ -311,8 +321,12 @@ export class VmsController {
     @Req() req: any,
   ) {
     const isManager = canManageVenue(scope.role, scope.allAccess);
-    if (!isManager && !body.pin && !body.badgeCode) {
-      throw new ForbiddenException('Worker PIN or badge credential required for self-service clock punch.');
+    if (!isManager && !body.pin && !body.badgeCode && !body.punchAuthToken) {
+      throw new ForbiddenException('Worker PIN, badge credential, or punch authorization token required for self-service clock punch.');
+    }
+    const mutationId = (req.headers?.['idempotency-key'] || req.headers?.['x-idempotency-key'] || body.clientMutationId)?.toString();
+    if (mutationId) {
+      body.clientMutationId = mutationId;
     }
     const orgId = await this.organizationIdFor(scope.venueId);
     return this.service.clockIn(orgId, scope.venueId, body, {
@@ -329,8 +343,12 @@ export class VmsController {
     @Req() req: any,
   ) {
     const isManager = canManageVenue(scope.role, scope.allAccess);
-    if (!isManager && !body.pin && !body.badgeCode) {
-      throw new ForbiddenException('Worker PIN or badge credential required for self-service clock punch.');
+    if (!isManager && !body.pin && !body.badgeCode && !body.punchAuthToken) {
+      throw new ForbiddenException('Worker PIN, badge credential, or punch authorization token required for self-service clock punch.');
+    }
+    const mutationId = (req.headers?.['idempotency-key'] || req.headers?.['x-idempotency-key'] || body.clientMutationId)?.toString();
+    if (mutationId) {
+      body.clientMutationId = mutationId;
     }
     const orgId = await this.organizationIdFor(scope.venueId);
     return this.service.clockOut(orgId, scope.venueId, body, {

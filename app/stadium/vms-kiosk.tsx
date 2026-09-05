@@ -80,6 +80,7 @@ export default function VmsKioskScreen() {
 
   // Routed through the Railway mutation layer so a punch made on a dropped
   // connection is queued locally and replayed, rather than lost.
+  const authorizePunch = useMutation<any, any>(api.vms.authorizePunch);
   const clockIn = useMutation<any, any>(api.vms.clockIn);
   const clockOut = useMutation<any, any>(api.vms.clockOut);
 
@@ -121,10 +122,20 @@ export default function VmsKioskScreen() {
     setMessage(null);
 
     try {
+      const authRes = await authorizePunch({
+        staffMemberId: selected.id,
+        action: hasOpenPunch ? 'clock_out' : 'clock_in',
+        attendanceId: hasOpenPunch ? openPunchByStaff.get(selected.id) : undefined,
+        pin,
+      });
+      const punchAuthToken = authRes?.punchAuthToken;
+      const clientMutationId = `kiosk-${selected.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
       if (hasOpenPunch) {
         await clockOut({
           attendanceId: openPunchByStaff.get(selected.id),
-          pin,
+          punchAuthToken,
+          clientMutationId,
           deviceInfo: 'kiosk',
         });
         setMessage({
@@ -134,7 +145,8 @@ export default function VmsKioskScreen() {
       } else {
         await clockIn({
           staffMemberId: selected.id,
-          pin,
+          punchAuthToken,
+          clientMutationId,
           deviceInfo: 'kiosk',
         });
         setMessage({
@@ -142,6 +154,7 @@ export default function VmsKioskScreen() {
           text: `${selected.firstName} ${selected.lastName} clocked in. Have a good shift.`,
         });
       }
+      setPin('');
       setMode('done');
       setTimeout(reset, 3500);
     } catch (err: any) {

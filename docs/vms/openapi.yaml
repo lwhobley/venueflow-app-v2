@@ -618,6 +618,42 @@ paths:
         '200': { description: Deleted }
 
   # ------------------------------------------------------------- Attendance
+  /v1/vms/attendance/authorize-punch:
+    post:
+      tags: [Attendance]
+      summary: Authorize a worker punch and issue a short-lived signed punch token
+      description: |
+        Authenticates a worker via PIN or badge code and returns a short-lived
+        (5-minute) signed punch authorization token. This token can be passed
+        to clock-in or clock-out without caching or persisting plaintext credentials
+        in client offline storage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [staffMemberId, action]
+              properties:
+                staffMemberId: { type: string }
+                pin: { type: string }
+                badgeCode: { type: string }
+                action: { type: string, enum: [clock_in, clock_out] }
+      responses:
+        '201':
+          description: Punch authorization issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  punchAuthToken: { type: string }
+                  expiresAt: { type: string, format: date-time }
+                  action: { type: string }
+                  staffMemberId: { type: string }
+        '400': { description: Invalid credential or missing action }
+        '403': { description: Locked out after repeated failures }
+
   /v1/vms/attendance/clock-in:
     post:
       tags: [Attendance]

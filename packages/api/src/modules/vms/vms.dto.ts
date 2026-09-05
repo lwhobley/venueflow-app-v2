@@ -256,6 +256,26 @@ export class UpdateFulfillmentStatusDto {
   status!: VmsFulfillmentStatus;
 }
 
+export class AuthorizePunchDto {
+  @IsString()
+  staffMemberId!: string;
+
+  @IsString()
+  action!: 'clock_in' | 'clock_out';
+
+  @IsString()
+  @IsOptional()
+  attendanceId?: string;
+
+  @IsString()
+  @IsOptional()
+  pin?: string;
+
+  @IsString()
+  @IsOptional()
+  badgeCode?: string;
+}
+
 export class ClockInDto {
   @IsString()
   staffMemberId!: string;
@@ -267,6 +287,14 @@ export class ClockInDto {
   @IsString()
   @IsOptional()
   badgeCode?: string;
+
+  @IsString()
+  @IsOptional()
+  punchAuthToken?: string;
+
+  @IsString()
+  @IsOptional()
+  clientMutationId?: string;
 
   @IsString()
   @IsOptional()
@@ -296,6 +324,14 @@ export class ClockOutDto {
   @IsString()
   @IsOptional()
   badgeCode?: string;
+
+  @IsString()
+  @IsOptional()
+  punchAuthToken?: string;
+
+  @IsString()
+  @IsOptional()
+  clientMutationId?: string;
 
   @IsInt()
   @IsOptional()

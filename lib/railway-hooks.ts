@@ -184,6 +184,11 @@ const mutationRoutes: Record<string, Route> = {
     method: 'POST',
     body: (args) => args,
   },
+  'vms.authorizePunch': {
+    path: '/v1/vms/attendance/authorize-punch',
+    method: 'POST',
+    body: (args) => args,
+  },
   'vms.clockIn': {
     path: '/v1/vms/attendance/clock-in',
     method: 'POST',

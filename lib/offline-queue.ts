@@ -225,18 +225,29 @@ export function offlineQueueConflicts() {
   return queue.filter((item) => item.status === 'conflict' || item.status === 'blocked_scope' || item.status === 'failed');
 }
 
+function sanitizeOfflinePayload(body: any): any {
+  if (!body || typeof body !== 'object') return body;
+  if (Array.isArray(body)) return body.map(sanitizeOfflinePayload);
+  const sanitized: Record<string, any> = { ...body };
+  delete sanitized.pin;
+  delete sanitized.badgeCode;
+  delete sanitized.password;
+  return sanitized;
+}
+
 export async function enqueueOfflineMutation(input: EnqueueInput) {
   await ensureLoaded();
   const owner = scope();
   const idempotencyKey = (input.idempotencyKey && input.idempotencyKey.trim().length >= 16)
     ? input.idempotencyKey.trim()
     : createIdempotencyKey();
+  const sanitizedBody = sanitizeOfflinePayload(input.body ?? undefined);
   const row: OfflineMutation = {
     ...input,
     id: createIdempotencyKey(),
     ...owner,
     idempotencyKey,
-    body: input.body ?? undefined,
+    body: sanitizedBody,
     headers: { ...(input.headers ?? {}), 'Idempotency-Key': idempotencyKey },
     createdAt: Date.now(),
     attempts: 0,

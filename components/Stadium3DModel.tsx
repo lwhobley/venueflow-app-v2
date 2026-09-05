@@ -841,6 +841,7 @@ export default function Stadium3DModel(_props: Stadium3DModelProps) {
     // ── ANIMATION & RENDER LOOP ──
     let animationFrame = 0;
     const tempVec = new THREE.Vector3();
+    let prevProjected: ProjectedPin[] = [];
 
     const render = () => {
       controls.update();
@@ -918,7 +919,27 @@ export default function Stadium3DModel(_props: Stadium3DModelProps) {
         };
       });
 
-      setProjectedPins(updatedProjected);
+      // Only trigger React state update if pin count, visibility, or positions changed meaningfully (>0.5px)
+      let pinsChanged = updatedProjected.length !== prevProjected.length;
+      if (!pinsChanged) {
+        for (let i = 0; i < updatedProjected.length; i++) {
+          const curr = updatedProjected[i];
+          const prev = prevProjected[i];
+          if (
+            curr.pin.id !== prev.pin.id ||
+            curr.visible !== prev.visible ||
+            (curr.visible && (Math.abs(curr.x - prev.x) > 0.5 || Math.abs(curr.y - prev.y) > 0.5))
+          ) {
+            pinsChanged = true;
+            break;
+          }
+        }
+      }
+
+      if (pinsChanged) {
+        prevProjected = updatedProjected;
+        setProjectedPins(updatedProjected);
+      }
 
       renderer.render(scene, camera);
       animationFrame = requestAnimationFrame(render);
@@ -930,6 +951,24 @@ export default function Stadium3DModel(_props: Stadium3DModelProps) {
       cancelAnimationFrame(animationFrame);
       resizeObserver.disconnect();
       controls.dispose();
+
+      // Clean up Three.js scene geometries and materials to prevent GPU resource leaks
+      scene.traverse((object) => {
+        if ((object as THREE.Mesh).isMesh) {
+          const mesh = object as THREE.Mesh;
+          if (mesh.geometry) {
+            mesh.geometry.dispose();
+          }
+          if (mesh.material) {
+            if (Array.isArray(mesh.material)) {
+              mesh.material.forEach((mat) => mat.dispose());
+            } else {
+              mesh.material.dispose();
+            }
+          }
+        }
+      });
+
       renderer.dispose();
       renderer.domElement.remove();
     };

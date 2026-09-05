@@ -3,12 +3,14 @@ import { connect, type ChannelModel } from 'amqplib';
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
-import { AppModule } from '../app.module';
+import { WorkerModule } from './worker.module';
 import { PrismaService } from '../prisma/prisma.service';
 import { runWithTenant } from '../prisma/tenant-context';
 import { applyTenantSessionSettings } from '../prisma/tenant-transaction';
 import { AsyncWriteMessage, AsyncWriteService } from './async-write.service';
 import { assertQueueTopology, HIGH_VOLUME_WRITE_QUEUE } from './queue-topology';
+
+const MAX_DELIVERY_RETRIES = 5;
 
 function payloadHash(payload: Record<string, unknown>) {
   return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
@@ -94,10 +96,11 @@ async function apply(prisma: PrismaService, message: AsyncWriteMessage): Promise
   });
 }
 
-function isPermanent(error: unknown) {
+function isPermanent(error: unknown, deliveryCount: number = 0) {
+  if (deliveryCount >= MAX_DELIVERY_RETRIES) return true;
   const code = (error as { code?: string } | null)?.code;
   const message = error instanceof Error ? error.message : '';
-  return ['P2003', 'P2025'].includes(code ?? '')
+  return ['P2002', 'P2003', 'P2025'].includes(code ?? '')
     || message.includes('missing venueId')
     || message.includes('different payload')
     || message.includes('must be negative')
@@ -105,7 +108,7 @@ function isPermanent(error: unknown) {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.createApplicationContext(AppModule);
+  const app = await NestFactory.createApplicationContext(WorkerModule);
   const prisma = app.get(PrismaService);
   const writes = app.get(AsyncWriteService);
   if (!writes.isEnabled() || !process.env.RABBITMQ_URL) {
@@ -121,6 +124,11 @@ async function bootstrap() {
   await channel.consume(HIGH_VOLUME_WRITE_QUEUE, async (delivery) => {
     if (!delivery) return;
     let message: AsyncWriteMessage | null = null;
+    const deathHeader = delivery.properties.headers?.['x-death'];
+    const deliveryCount = Array.isArray(deathHeader) && deathHeader.length > 0
+      ? (Number(deathHeader[0]?.count) || 1)
+      : (delivery.fields.redelivered ? 1 : 0);
+
     try {
       message = JSON.parse(delivery.content.toString()) as AsyncWriteMessage;
       if (!message.id || !message.kind || !message.idempotencyKey || !message.payload) throw new Error('Malformed async write message.');
@@ -128,7 +136,7 @@ async function bootstrap() {
       await writes.markResult(message.kind, messageVenueId(message), message.idempotencyKey, result);
       channel.ack(delivery);
     } catch (error) {
-      const permanent = isPermanent(error) || !message;
+      const permanent = isPermanent(error, deliveryCount) || !message;
       if (message) {
         await writes.markResult(message.kind, typeof message.payload.venueId === 'string' ? message.payload.venueId : 'unknown', message.idempotencyKey, {
           accepted: false,

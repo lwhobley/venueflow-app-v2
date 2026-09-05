@@ -525,6 +525,9 @@ export class StadiumController {
 
   @Post('events/:id/closeout')
   async upsertEventCloseout(@VenueScope() scope: Scope, @Param('id') eventId: string, @Body() body: UpsertEventCloseoutDto) {
+    if (!canManageVenue(scope.role, scope.allAccess) && !canFinalizeCloseout(scope.role, scope.allAccess)) {
+      throw new ForbiddenException('Closeout modifications require manager or financial authority.');
+    }
     const isFinalizing = body.status === 'finalized';
     if (isFinalizing && !canFinalizeCloseout(scope.role, scope.allAccess)) {
       throw new ForbiddenException('Closeout finalization requires financial director or administrative authority.');
@@ -535,7 +538,7 @@ export class StadiumController {
 
     return withTenantTransaction(this.prisma, async (tx) => {
       const existing = await tx.eventCloseout.findUnique({ where: { eventId } });
-      if (existing && existing.status !== 'draft' && !isFinalizing) {
+      if (existing && existing.status !== 'draft') {
         throw new ConflictException('Finalized or adjusted closeouts must be modified via immutable revisions.');
       }
 
@@ -554,6 +557,9 @@ export class StadiumController {
           laborHours: body.laborHours ?? null,
           laborCostCents: body.laborCostCents ?? null,
           inventoryVarianceCents: body.inventoryVarianceCents ?? null,
+          outletResults: (body.outletResults as Prisma.InputJsonValue) ?? null,
+          inventoryResults: (body.inventoryResults as Prisma.InputJsonValue) ?? null,
+          laborResults: (body.laborResults as Prisma.InputJsonValue) ?? null,
           notes: body.notes?.trim() || null,
           finalizedAt: isFinalizing ? new Date() : null,
           finalizedBy: isFinalizing ? scope.profileId : null,
@@ -566,6 +572,9 @@ export class StadiumController {
           laborHours: body.laborHours ?? undefined,
           laborCostCents: body.laborCostCents ?? undefined,
           inventoryVarianceCents: body.inventoryVarianceCents ?? undefined,
+          outletResults: (body.outletResults as Prisma.InputJsonValue) ?? undefined,
+          inventoryResults: (body.inventoryResults as Prisma.InputJsonValue) ?? undefined,
+          laborResults: (body.laborResults as Prisma.InputJsonValue) ?? undefined,
           notes: body.notes?.trim() || undefined,
           ...(isFinalizing ? { finalizedAt: new Date(), finalizedBy: scope.profileId } : {}),
         },
@@ -578,6 +587,9 @@ export class StadiumController {
         laborHours: closeout.laborHours,
         laborCostCents: closeout.laborCostCents,
         inventoryVarianceCents: closeout.inventoryVarianceCents,
+        outletResults: closeout.outletResults,
+        inventoryResults: closeout.inventoryResults,
+        laborResults: closeout.laborResults,
       };
       const revisionHash = computeRevisionHash(null, 1, payload);
 
@@ -595,6 +607,9 @@ export class StadiumController {
           laborHours: closeout.laborHours,
           laborCostCents: closeout.laborCostCents,
           inventoryVarianceCents: closeout.inventoryVarianceCents,
+          outletResults: (closeout.outletResults as Prisma.InputJsonValue) ?? null,
+          inventoryResults: (closeout.inventoryResults as Prisma.InputJsonValue) ?? null,
+          laborResults: (closeout.laborResults as Prisma.InputJsonValue) ?? null,
           createdBy: scope.profileId,
           approvedBy: isFinalizing ? scope.profileId : null,
           approvedAt: isFinalizing ? new Date() : null,
@@ -607,6 +622,9 @@ export class StadiumController {
           laborHours: closeout.laborHours,
           laborCostCents: closeout.laborCostCents,
           inventoryVarianceCents: closeout.inventoryVarianceCents,
+          outletResults: (closeout.outletResults as Prisma.InputJsonValue) ?? undefined,
+          inventoryResults: (closeout.inventoryResults as Prisma.InputJsonValue) ?? undefined,
+          laborResults: (closeout.laborResults as Prisma.InputJsonValue) ?? undefined,
           approvedBy: isFinalizing ? scope.profileId : undefined,
           approvedAt: isFinalizing ? new Date() : undefined,
         },
@@ -660,6 +678,9 @@ export class StadiumController {
         laborHours: body.laborHours ?? closeout.laborHours,
         laborCostCents: body.laborCostCents ?? closeout.laborCostCents,
         inventoryVarianceCents: body.inventoryVarianceCents ?? closeout.inventoryVarianceCents,
+        outletResults: body.outletResults !== undefined ? body.outletResults : closeout.outletResults,
+        inventoryResults: body.inventoryResults !== undefined ? body.inventoryResults : closeout.inventoryResults,
+        laborResults: body.laborResults !== undefined ? body.laborResults : closeout.laborResults,
         adjustmentReason: body.adjustmentReason.trim(),
       };
       const revisionHash = computeRevisionHash(parentHash, nextVersion, payload);
@@ -678,6 +699,9 @@ export class StadiumController {
           laborHours: payload.laborHours,
           laborCostCents: payload.laborCostCents,
           inventoryVarianceCents: payload.inventoryVarianceCents,
+          outletResults: (payload.outletResults as Prisma.InputJsonValue) ?? null,
+          inventoryResults: (payload.inventoryResults as Prisma.InputJsonValue) ?? null,
+          laborResults: (payload.laborResults as Prisma.InputJsonValue) ?? null,
           adjustmentReason: payload.adjustmentReason,
           createdBy: scope.profileId,
           approvedBy: scope.allAccess ? scope.profileId : null,
@@ -696,6 +720,9 @@ export class StadiumController {
           laborHours: payload.laborHours,
           laborCostCents: payload.laborCostCents,
           inventoryVarianceCents: payload.inventoryVarianceCents,
+          outletResults: (payload.outletResults as Prisma.InputJsonValue) ?? undefined,
+          inventoryResults: (payload.inventoryResults as Prisma.InputJsonValue) ?? undefined,
+          laborResults: (payload.laborResults as Prisma.InputJsonValue) ?? undefined,
           adjustmentReason: payload.adjustmentReason,
         },
       });

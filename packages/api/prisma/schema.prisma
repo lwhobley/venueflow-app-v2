@@ -3510,6 +3510,7 @@ model VmsTimeAttendance {
   deviationFlags        String[]              @default([])
   approvedByUserId      String?
   approvedAt            DateTime?
+  clientMutationId      String?
   createdAt             DateTime              @default(now())
   updatedAt             DateTime              @updatedAt
 
@@ -3520,6 +3521,7 @@ model VmsTimeAttendance {
 
   @@index([facilityId, staffMemberId, status])
   @@index([facilityId, clockIn])
+  @@index([facilityId, clientMutationId])
 }
 
 model VmsInventorySyncLog {
