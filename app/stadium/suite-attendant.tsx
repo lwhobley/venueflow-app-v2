@@ -103,7 +103,7 @@ export default function SuiteAttendantRunnerScreen() {
     <View style={styles.container}>
       {/* Mobile Header */}
       <View style={styles.header}>
-        <View>
+        <View style={styles.headerCopy}>
           <Text style={styles.headerTitle}>SUITE ATTENDANT RUNNER</Text>
           <Text style={styles.headerSub}>LEVEL 3 VIP SUITES • RUNNER MOBILE INTERFACE</Text>
         </View>
@@ -266,18 +266,19 @@ const styles = StyleSheet.create({
     padding: 16, backgroundColor: opsConsole.surface, borderBottomWidth: 1, borderBottomColor: opsConsole.border,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
   },
+  headerCopy: { flex: 1, minWidth: 0 },
   headerTitle: { color: opsConsole.text, fontSize: 18, fontWeight: '900' },
   headerSub: { color: opsConsole.muted, fontSize: 10, fontWeight: '700', marginTop: 2 },
   refreshIconBtn: { backgroundColor: opsConsole.border, padding: 8, borderRadius: 8 },
   refreshIconText: { fontSize: 16 },
-  zoneFilterBar: { flexDirection: 'row', padding: 12, backgroundColor: opsConsole.surface, gap: 8 },
+  zoneFilterBar: { flexDirection: 'row', flexWrap: 'wrap', padding: 12, backgroundColor: opsConsole.surface, gap: 8 },
   zoneChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: opsConsole.border },
   zoneChipActive: { backgroundColor: opsConsole.accent },
   zoneChipText: { color: opsConsole.muted, fontSize: 11, fontWeight: '700' },
   zoneChipTextActive: { color: opsConsole.textStrong },
   listContainer: { padding: 12, gap: 12 },
   orderCard: { backgroundColor: opsConsole.surface, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: opsConsole.border },
-  statusBanner: { paddingHorizontal: 12, paddingVertical: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  statusBanner: { paddingHorizontal: 12, paddingVertical: 8, flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'space-between', alignItems: 'center' },
   bgPrep: { backgroundColor: '#eab308' },
   bgEnRoute: { backgroundColor: '#0284c7' },
   bgDelivered: { backgroundColor: '#16a34a' },
@@ -290,7 +291,7 @@ const styles = StyleSheet.create({
   itemsHeader: { color: opsConsole.mutedDim, fontSize: 11, fontWeight: '800', marginTop: 10, marginBottom: 4 },
   itemRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 2 },
   itemBadge: { color: opsConsole.accentSoft, fontSize: 12, fontWeight: '900', width: 28 },
-  itemText: { color: opsConsole.text, fontSize: 13, fontWeight: '600' },
+  itemText: { color: opsConsole.text, fontSize: 13, fontWeight: '600', flex: 1, minWidth: 0 },
   actionRow: { marginTop: 12, gap: 8 },
   deliverBtn: { backgroundColor: opsConsole.good, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
   deliverBtnText: { color: opsConsole.textStrong, fontSize: 14, fontWeight: '900' },

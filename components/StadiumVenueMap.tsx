@@ -12,6 +12,7 @@ import { styles } from './stadium-map/StadiumVenueMap.styles';
 import { asArray } from '../lib/format';
 import { PremiumSpacesDirectory } from './stadium-map/PremiumSpacesDirectory';
 import { groupPremiumSpaces } from './stadium-map/premium-spaces';
+import { MobileStadiumNavigator } from './stadium-map/MobileStadiumNavigator';
 
 // Static stadium zone/unit data and component styles were split out into
 // components/stadium-map/ to keep this file to the actual component logic —
@@ -185,6 +186,29 @@ export function StadiumVenueMap({
     setSelectedZoneId(owner?.id ?? zoneId ?? 'ALL');
     if (onSelectUnit) onSelectUnit(unit);
   };
+
+  if (isMobile) {
+    return (
+      <View style={styles.container}>
+        <MobileStadiumNavigator
+          zones={zonesState}
+          initialZoneId={initialZoneId}
+          selectedUnitId={selectedUnitId}
+          onSelectUnit={(unit) => {
+            handleUnitPress(unit);
+            setActiveModalUnit(unit);
+          }}
+        />
+        {activeModalUnit ? (
+          <StadiumUnitDetailModal
+            visible={Boolean(activeModalUnit)}
+            unit={activeModalUnit}
+            onClose={() => setActiveModalUnit(null)}
+          />
+        ) : null}
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -1549,7 +1573,7 @@ export function StadiumVenueMap({
                       <Text style={styles.beoPackageTitle}>
                         {activeSelectedUnit.unit.suiteDetails.beoPackageName ?? 'Executive Hospitality Buffet'}
                       </Text>
-                      
+
                       {activeSelectedUnit.unit.suiteDetails.suiteholder ? (
                         <Text style={styles.beoSuiteholderText}>
                           Holder: <Text style={{ fontWeight: '700' }}>{activeSelectedUnit.unit.suiteDetails.suiteholder}</Text> · {activeSelectedUnit.unit.suiteDetails.guestCount ?? 20} Guests

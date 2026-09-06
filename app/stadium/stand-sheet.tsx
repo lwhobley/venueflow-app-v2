@@ -5,6 +5,7 @@ import { apiRequest, useApiQuery } from '../../lib/api-client';
 import { asArray } from '../../lib/format';
 import { OpsQueryState } from '../../components/stadium/OpsQueryState';
 import { opsConsole } from '../../lib/theme';
+import { useResponsive } from '../../lib/responsive';
 
 export interface StandSheetItem {
   code: string;
@@ -37,6 +38,7 @@ export interface StandSheetData {
 const STAND_SHEETS_KEY = ['stadium', 'concourse', 'stand-sheets'];
 
 export default function StandSheetAuditScreen() {
+  const { isPhone } = useResponsive();
   const queryClient = useQueryClient();
   const query = useApiQuery<StandSheetData[]>(STAND_SHEETS_KEY, '/v1/stadium/concourse/stand-sheets');
   const sheets = asArray<StandSheetData>(query.data);
@@ -78,8 +80,8 @@ export default function StandSheetAuditScreen() {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <View>
+      <View style={[styles.header, isPhone && styles.headerPhone]}>
+        <View style={styles.headerTitleGroup}>
           <Text style={styles.headerTitle}>STAND SHEET RECONCILIATION</Text>
           <Text style={styles.headerSub}>CONCOURSE F&B AUDIT ENGINE • AUTOMATIC VARIANCE TRACKING</Text>
         </View>
@@ -98,16 +100,16 @@ export default function StandSheetAuditScreen() {
       >
         {activeSheet ? <ScrollView contentContainerStyle={styles.body}>
           {/* Summary Cards */}
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryCard}>
+          <View style={[styles.summaryRow, isPhone && styles.summaryRowPhone]}>
+            <View style={[styles.summaryCard, isPhone && styles.summaryCardPhone]}>
               <Text style={styles.summaryLabel}>EXPECTED REVENUE</Text>
               <Text style={styles.summaryValue}>${((activeSheet.expectedSalesRevenueCents || 0) / 100).toFixed(2)}</Text>
             </View>
-            <View style={styles.summaryCard}>
+            <View style={[styles.summaryCard, isPhone && styles.summaryCardPhone]}>
               <Text style={styles.summaryLabel}>ACTUAL POS REVENUE</Text>
               <Text style={styles.summaryValue}>${((activeSheet.actualPosRevenueCents || 0) / 100).toFixed(2)}</Text>
             </View>
-            <View style={[styles.summaryCard, activeSheet.varianceAmountCents === 0 ? styles.bgMatch : styles.bgDiff]}>
+            <View style={[styles.summaryCard, isPhone && styles.summaryCardPhone, activeSheet.varianceAmountCents === 0 ? styles.bgMatch : styles.bgDiff]}>
               <Text style={styles.summaryLabel}>REVENUE VARIANCE</Text>
               <Text style={styles.summaryValueText}>
                 ${((activeSheet.varianceAmountCents || 0) / 100).toFixed(2)}
@@ -122,7 +124,8 @@ export default function StandSheetAuditScreen() {
           </View>
 
           {/* Audit Table */}
-          <View style={styles.tableCard}>
+          <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={styles.tableScroller}>
+          <View style={[styles.tableCard, isPhone && styles.tableCardPhone]}>
             <Text style={styles.tableHeaderTitle}>INVENTORY RECONCILIATION BREAKDOWN</Text>
             <View style={styles.tableHeaderRow}>
               <Text style={[styles.th, { flex: 2 }]}>ITEM</Text>
@@ -155,6 +158,7 @@ export default function StandSheetAuditScreen() {
               </View>
             ))}
           </View>
+          </ScrollView>
 
           <View style={styles.formulaBox}>
             <Text style={styles.formulaTitle}>📐 AUTOMATIC VARIANCE FORMULA:</Text>
@@ -176,13 +180,17 @@ const styles = StyleSheet.create({
     padding: 16, backgroundColor: opsConsole.surface, borderBottomWidth: 2, borderBottomColor: opsConsole.border,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
   },
+  headerPhone: { flexDirection: 'column', alignItems: 'stretch', gap: 10 },
+  headerTitleGroup: { flex: 1, minWidth: 0 },
   headerTitle: { color: opsConsole.text, fontSize: 22, fontWeight: '900' },
   headerSub: { color: opsConsole.muted, fontSize: 11, fontWeight: '700', marginTop: 2 },
   reconcileBtnHeader: { backgroundColor: opsConsole.good, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8 },
   reconcileBtnText: { color: opsConsole.textStrong, fontSize: 13, fontWeight: '900' },
   body: { padding: 16, gap: 16 },
   summaryRow: { flexDirection: 'row', gap: 12 },
+  summaryRowPhone: { flexWrap: 'wrap' },
   summaryCard: { flex: 1, backgroundColor: opsConsole.surface, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: opsConsole.border },
+  summaryCardPhone: { flexBasis: 145 },
   bgMatch: { borderColor: opsConsole.good },
   bgDiff: { borderColor: opsConsole.danger },
   summaryLabel: { color: opsConsole.muted, fontSize: 10, fontWeight: '800' },
@@ -192,6 +200,8 @@ const styles = StyleSheet.create({
   standTitle: { color: opsConsole.textStrong, fontSize: 18, fontWeight: '800' },
   standSub: { color: opsConsole.accentSoft, fontSize: 12, fontWeight: '700', marginTop: 2 },
   tableCard: { backgroundColor: opsConsole.surface, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: opsConsole.border },
+  tableCardPhone: { minWidth: 760 },
+  tableScroller: { flexGrow: 1 },
   tableHeaderTitle: { color: opsConsole.text, fontSize: 14, fontWeight: '900', marginBottom: 12 },
   tableHeaderRow: { flexDirection: 'row', paddingVertical: 8, borderBottomWidth: 2, borderBottomColor: opsConsole.border },
   th: { flex: 1, color: opsConsole.mutedDim, fontSize: 10, fontWeight: '800', textAlign: 'center' },

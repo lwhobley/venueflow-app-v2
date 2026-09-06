@@ -36,6 +36,7 @@ import {
 import { InlineMessage } from '../../components/InlineMessage';
 import { SectionHeader } from '../../components/AppCard';
 import { readPickedFileText } from '../../lib/picked-file';
+import { useResponsive } from '../../lib/responsive';
 import {
   INVENTORY_RENDER_BATCH_SIZE,
   inventoryRowsForWindow,
@@ -107,6 +108,7 @@ const addItemNumberField = { flexGrow: 1, flexShrink: 1, flexBasis: 120, minWidt
 export default function BarStockScreen() {
   const { t } = useI18n();
   const { venue, isReady, canManage, profileLoading } = useVenueAuth();
+  const { isPhone } = useResponsive();
 
   // Multi-location & Event Par state
   const [activeLocation, setActiveLocation] = useState<string>('all');
@@ -203,6 +205,7 @@ export default function BarStockScreen() {
   const [editCostItemId, setEditCostItemId] = useState<string | null>(null);
   const [editCostValue, setEditCostValue] = useState('');
   const [showAgingReport, setShowAgingReport] = useState(false);
+  const [showInventoryTools, setShowInventoryTools] = useState(false);
   const [visibleItemCount, setVisibleItemCount] = useState(INVENTORY_RENDER_BATCH_SIZE);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [prepKind, setPrepKind] = useState<PrepBoardKind>('prep');
@@ -628,7 +631,7 @@ export default function BarStockScreen() {
     return (
       <ScrollView
         style={{ flex: 1, backgroundColor: colors.background }}
-        contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl }}
+        contentContainerStyle={{ padding: isPhone ? spacing.md : spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl }}
         showsVerticalScrollIndicator={false}
       >
         <SectionHeader kicker="STADIUM INVENTORY" title="Stock Directory" subtitle="Live beverage and food levels across stadium locations." />
@@ -841,7 +844,7 @@ export default function BarStockScreen() {
                 <MaterialCommunityIcons name="lightning-bolt" size={18} color={eventParMultiplier > 1 ? colors.success : colors.primary} />
                 <Text style={{ fontWeight: '800', fontSize: 13 }}>Event Par Surge Multiplier:</Text>
               </View>
-              <View style={{ flexDirection: 'row', gap: 4 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                 {[
                   { label: '1.0x Normal', val: 1.0 },
                   { label: '1.5x Busy', val: 1.5 },
@@ -856,7 +859,7 @@ export default function BarStockScreen() {
                     style={{ backgroundColor: eventParMultiplier === m.val ? colors.primary : colors.background }}
                     textStyle={{ color: eventParMultiplier === m.val ? '#fff' : colors.charcoal, fontSize: 11, fontWeight: '700' }}
                   >
-                    {m.label}
+                    {isPhone ? m.label.replace('1.0x ', '').replace('1.5x ', '').replace('2.0x ', '').replace('2.5x ', '') : m.label}
                   </Chip>
                 ))}
               </View>
@@ -881,7 +884,7 @@ export default function BarStockScreen() {
               style={{ backgroundColor: activeLocation === 'all' ? colors.primary : colors.surface }}
               textStyle={{ color: activeLocation === 'all' ? '#fff' : colors.charcoal, fontWeight: '700' }}
             >
-              All Stadium Locations ({allItems.length})
+              {isPhone ? `All locations (${allItems.length})` : `All Stadium Locations (${allItems.length})`}
             </Chip>
             {locationSummaries.map((loc) => (
               <Chip
@@ -905,6 +908,28 @@ export default function BarStockScreen() {
           />
         )}
 
+        {/* Search first on phones so a manager can narrow the working set before scanning metrics and tools. */}
+        <View style={{ gap: spacing.xs }}>
+          <TextInput
+            placeholder={isPhone ? 'Search items, SKU or location' : 'Search by SKU, item name, supplier, or location...'}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            mode="outlined"
+            dense
+            left={<TextInput.Icon icon="magnify" />}
+            style={{ backgroundColor: colors.surface }}
+          />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+            <Chip compact selected={stockStatusFilter === 'all'} onPress={() => setStockStatusFilter('all')}>All ({items.length})</Chip>
+            <Chip compact selected={stockStatusFilter === 'below_par'} onPress={() => setStockStatusFilter('below_par')} style={{ backgroundColor: stockStatusFilter === 'below_par' ? accents[4].bg : colors.surface }}>
+              Below Par ({lowItems.length})
+            </Chip>
+            <Chip compact selected={stockStatusFilter === 'critical'} onPress={() => setStockStatusFilter('critical')}>
+              Out of Stock
+            </Chip>
+          </ScrollView>
+        </View>
+
         {/* Event Stockout Warnings */}
         <EventStockoutRiskCard velocity={velocity} activeMultiplier={eventParMultiplier} />
 
@@ -920,7 +945,7 @@ export default function BarStockScreen() {
               setCategory('spirit');
             }}
           >
-            Beverage ({allItems.filter((i) => !foodCategories.includes(i.category as any) && i.category !== 'supply').length})
+            {isPhone ? 'Beverage' : `Beverage (${allItems.filter((i) => !foodCategories.includes(i.category as any) && i.category !== 'supply').length})`}
           </Button>
           <Button
             mode={activeTab === 'food' ? 'contained' : 'text'}
@@ -932,7 +957,7 @@ export default function BarStockScreen() {
               setCategory('protein');
             }}
           >
-            Food ({allItems.filter((i) => foodCategories.includes(i.category as any)).length})
+            {isPhone ? 'Food' : `Food (${allItems.filter((i) => foodCategories.includes(i.category as any)).length})`}
           </Button>
           <Button
             mode={activeTab === 'supplies' ? 'contained' : 'text'}
@@ -944,7 +969,7 @@ export default function BarStockScreen() {
               setCategory('supply');
             }}
           >
-            Supplies ({allItems.filter((i) => i.category === 'supply' || i.category === 'other').length})
+            {isPhone ? 'Supplies' : `Supplies (${allItems.filter((i) => i.category === 'supply' || i.category === 'other').length})`}
           </Button>
         </View>
 
@@ -954,11 +979,11 @@ export default function BarStockScreen() {
             { label: 'Active Items', value: String(items.length), a: accents[0] },
             { label: eventParMultiplier > 1 ? `Below Par (${eventParMultiplier}x)` : 'Below Par', value: String(activeLowStockCount), a: accents[4] },
             { label: 'Inventory Value', value: money(activeTotalValueCents), a: accents[2] },
-          ].map((metric) => (
-            <Card key={metric.label} style={{ backgroundColor: metric.a.bg, width: '31%', flexGrow: 1, borderRadius: radius.sharp }}>
+          ].map((metric, index) => (
+            <Card key={metric.label} style={{ backgroundColor: metric.a.bg, width: isPhone ? (index === 2 ? '100%' : '47%') : '31%', flexGrow: 1, borderRadius: radius.sharp }}>
               <Card.Content>
                 <Text style={{ color: metric.a.fg, fontSize: 22, fontWeight: '800' }}>{metric.value}</Text>
-                <Text style={{ color: colors.charcoal, fontSize: 12 }}>{metric.label}</Text>
+                <Text style={{ color: metric.a.fg, fontSize: 12, fontWeight: '600' }}>{metric.label}</Text>
               </Card.Content>
             </Card>
           ))}
@@ -974,6 +999,7 @@ export default function BarStockScreen() {
               setBatchCountMode(true);
               setBatchCountArea(activeLocation);
             }}
+            style={{ flexGrow: 1 }}
           >
             Zone Audit
           </Button>
@@ -987,12 +1013,28 @@ export default function BarStockScreen() {
                 setTransferFromArea(items[0].area ?? 'Main Warehouse');
               }
             }}
+            style={{ flexGrow: 1 }}
           >
             Stock Transfer
           </Button>
           <Button compact mode="outlined" textColor={colors.primary} icon="barcode-scan" onPress={() => void openScanner()}>
             Scan SKU
           </Button>
+        </View>
+
+        {isPhone ? (
+          <Button
+            mode="outlined"
+            icon={showInventoryTools ? 'chevron-up' : 'dots-horizontal'}
+            onPress={() => setShowInventoryTools((visible) => !visible)}
+            contentStyle={{ minHeight: 44 }}
+          >
+            {showInventoryTools ? 'Hide tools' : 'More inventory tools'}
+          </Button>
+        ) : null}
+
+        {(!isPhone || showInventoryTools) ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
           <Button compact mode="outlined" textColor={colors.primary} onPress={() => setShowShrinkage((v) => !v)}>
             {showShrinkage ? 'Hide Waste Log' : 'Shrinkage & Waste'}
           </Button>
@@ -1008,29 +1050,8 @@ export default function BarStockScreen() {
           <Button compact mode="outlined" textColor={colors.primary} onPress={() => setShowAgingReport((v) => !v)}>
             {showAgingReport ? 'Hide Aging' : 'Aging Report'}
           </Button>
-        </View>
-
-        {/* Search & Stock Filter Bar */}
-        <View style={{ gap: spacing.xs }}>
-          <TextInput
-            placeholder="Search by SKU, item name, supplier, or location..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            mode="outlined"
-            dense
-            left={<TextInput.Icon icon="magnify" />}
-            style={{ backgroundColor: colors.surface }}
-          />
-          <View style={{ flexDirection: 'row', gap: 6 }}>
-            <Chip compact selected={stockStatusFilter === 'all'} onPress={() => setStockStatusFilter('all')}>All ({items.length})</Chip>
-            <Chip compact selected={stockStatusFilter === 'below_par'} onPress={() => setStockStatusFilter('below_par')} style={{ backgroundColor: stockStatusFilter === 'below_par' ? accents[4].bg : colors.surface }}>
-              Below Par ({lowItems.length})
-            </Chip>
-            <Chip compact selected={stockStatusFilter === 'critical'} onPress={() => setStockStatusFilter('critical')}>
-              Out of Stock (0)
-            </Chip>
           </View>
-        </View>
+        ) : null}
 
         {/* Scanned item result */}
         {scannedItem && (

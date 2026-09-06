@@ -143,7 +143,7 @@ export default function PosAggregatorScreen() {
           <View style={styles.liveIndicator}>
             <View style={styles.liveDot} />
             <CommandText palette={palette} variant="caption" style={{ color: '#FFFFFF', fontWeight: '800' }}>
-              AGGREGATOR CORE v2.4 · ONLINE
+              LIVE
             </CommandText>
           </View>
         </View>
@@ -187,7 +187,7 @@ export default function PosAggregatorScreen() {
 
       {/* Navigation Tabs */}
       <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md }}>
-        <View style={[styles.tabBar, { borderBottomColor: palette.divider }]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.tabBar, { borderBottomColor: palette.divider }]}>
           <Pressable
             onPress={() => setActiveTab('feed')}
             style={[styles.tabItem, activeTab === 'feed' && { borderBottomColor: '#17643B', borderBottomWidth: 2 }]}
@@ -237,7 +237,7 @@ export default function PosAggregatorScreen() {
               Tender Settlement
             </CommandText>
           </Pressable>
-        </View>
+        </ScrollView>
       </View>
 
       {/* Main Tab Content */}
@@ -508,6 +508,8 @@ const styles = StyleSheet.create({
   },
   headerTopRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     alignItems: 'center',
     justifyContent: 'space-between',
   },
@@ -544,7 +546,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     gap: spacing.md,
     paddingTop: spacing.xs,
-    overflow: 'scroll',
   },
   tabItem: {
     flexDirection: 'row',
@@ -576,6 +577,8 @@ const styles = StyleSheet.create({
   },
   providerStatsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     justifyContent: 'space-between',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#E5E8E2',
