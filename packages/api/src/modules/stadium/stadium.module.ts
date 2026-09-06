@@ -19,6 +19,8 @@ import { KitchenDistroFulfillmentController } from './kitchen-distro-fulfillment
 import { KitchenDistroFulfillmentService } from './kitchen-distro-fulfillment.service';
 import { DailyRosterController } from './daily-roster.controller';
 import { DailyRosterService } from './daily-roster.service';
+import { EventBeoReportController } from './event-beo-report.controller';
+import { EventBeoReportService } from './event-beo-report.service';
 
 @Module({
   imports: [PrismaModule, NotificationsModule],
@@ -32,6 +34,7 @@ import { DailyRosterService } from './daily-roster.service';
     UnionComplianceController,
     KitchenDistroFulfillmentController,
     DailyRosterController,
+    EventBeoReportController,
   ],
   providers: [
     SuiteHospitalityService,
@@ -43,6 +46,7 @@ import { DailyRosterService } from './daily-roster.service';
     UnionComplianceService,
     KitchenDistroFulfillmentService,
     DailyRosterService,
+    EventBeoReportService,
   ],
   exports: [
     SuiteHospitalityService,
@@ -54,6 +58,7 @@ import { DailyRosterService } from './daily-roster.service';
     UnionComplianceService,
     KitchenDistroFulfillmentService,
     DailyRosterService,
+    EventBeoReportService,
   ],
 })
 export class StadiumModule {}

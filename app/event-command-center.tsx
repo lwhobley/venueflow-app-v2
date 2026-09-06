@@ -9,6 +9,7 @@ import { CommandButton, CommandSurface, CommandText, StatusPill } from '../compo
 import { colors, spacing, useDesignTheme, radius } from '../lib/theme';
 import { useResponsive } from '../lib/responsive';
 import { asArray } from '../lib/format';
+import { beoReportRoute } from '../lib/beo-report';
 
 export default function EventCommandCenterScreen() {
   const params = useLocalSearchParams<{ eventId?: string }>();
@@ -96,7 +97,7 @@ export default function EventCommandCenterScreen() {
                     <View style={{ flexDirection: 'row', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
                       {blocker.code === 'OPEN_SHIFT' ? (<Button compact mode="outlined" textColor="#17643B" onPress={() => router.push('/(tabs)/schedule')}>Open Schedule</Button>) : null}
                       {blocker.code === 'UNASSIGNED_TABLE' ? (<Button compact mode="outlined" textColor="#17643B" onPress={() => router.push('/stadium-map')}>Open Stadium Map</Button>) : null}
-                      {blocker.code === 'BEO_NOT_CONFIRMED' ? (<Button compact mode="outlined" textColor="#17643B" onPress={() => router.push('/(tabs)/guests?crmView=events')}>Open Event BEO</Button>) : null}
+                      {blocker.code === 'BEO_NOT_CONFIRMED' ? (<Button compact mode="outlined" textColor="#17643B" onPress={() => router.push(beoReportRoute({ eventId: selectedEventId || undefined }) as any)}>Open Event BEO</Button>) : null}
                     </View>
                   </View>
                 ))}

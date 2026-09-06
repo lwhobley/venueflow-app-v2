@@ -17,7 +17,7 @@ import { radius, spacing, useDesignTheme } from '../../lib/theme';
 import { asArray, formatDuration, formatMoney } from '../../lib/format';
 import { canManageVenue } from '../../lib/permissions';
 import { useResponsive } from '../../lib/responsive';
-import { EVENT_BEO_ROUTE, READINESS_ROW_ROUTES, type ReadinessRowLabel } from '../../lib/crm-routing';
+import { EVENT_BEO_ROUTE, READINESS_ROW_ROUTES, SUITE_BEO_REPORT_ROUTE, type ReadinessRowLabel } from '../../lib/crm-routing';
 
 
 type NotificationItem = {
@@ -32,7 +32,7 @@ const todayLabel = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: '
 const MORE_OPS = [
   { href: '/(tabs)/schedule', label: 'Rosters', icon: 'calendar-week' as const },
   { href: '/(tabs)/staff', label: 'Staff & Union', icon: 'account-group' as const },
-  { href: EVENT_BEO_ROUTE, label: 'Event BEOs', icon: 'file-document-edit-outline' as const },
+  { href: EVENT_BEO_ROUTE, label: 'Event BEO report', icon: 'file-document-edit-outline' as const },
   { href: '/(tabs)/documents', label: 'Documents & Files', icon: 'file-document-multiple-outline' as const },
   { href: '/(tabs)/reports', label: 'Reports & Recon', icon: 'chart-box-outline' as const },
   { href: '/(tabs)/sales', label: 'Concessions POS', icon: 'cash-register' as const },
@@ -136,7 +136,7 @@ export default function HomeScreen() {
             <MaterialCommunityIcons name="clipboard-list-outline" size={18} color={String(palette.primary)} />
             <CommandText palette={palette} variant="caption" style={{ fontWeight: '700', color: palette.charcoal }}>Stand Sheets</CommandText>
           </Pressable>
-          <Pressable onPress={() => router.push('/stadium/suite-attendant')} style={({ pressed }) => [styles.subTile, { backgroundColor: palette.surface, borderColor: palette.border, opacity: pressed ? 0.7 : 1 }]}>
+          <Pressable onPress={() => router.push(SUITE_BEO_REPORT_ROUTE as any)} style={({ pressed }) => [styles.subTile, { backgroundColor: palette.surface, borderColor: palette.border, opacity: pressed ? 0.7 : 1 }]}>
             <MaterialCommunityIcons name="room-service-outline" size={18} color={String(palette.primary)} />
             <CommandText palette={palette} variant="caption" style={{ fontWeight: '700', color: palette.charcoal }}>Suite BEOs</CommandText>
           </Pressable>

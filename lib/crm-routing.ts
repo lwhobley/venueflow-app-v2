@@ -33,17 +33,22 @@ export function parseWorkspaceView(value: unknown): WorkspaceView | undefined {
     : undefined;
 }
 
-/** The CRM workspace opened on its Events tab — the event BEO list. */
-export const EVENT_BEO_ROUTE = '/(tabs)/guests?crmView=events';
+/**
+ * The published event BEO report — the suite BEO list and each department's run
+ * of service for one event. BEO entry points lead here rather than to the CRM
+ * pipeline, which is where a BEO is drafted, not where service reads it.
+ */
+export { EVENT_BEO_ROUTE, SUITE_BEO_REPORT_ROUTE, beoReportRoute } from './beo-report';
 
 /**
  * Destination for each readiness row on the home screen. The categories come
- * from the readiness endpoint: `approvals` scores unconfirmed CRM BEOs, so that
- * row belongs on the BEO list, while `setup` really is checklist-backed.
+ * from the readiness endpoint: `approvals` scores unconfirmed BEOs, so that row
+ * belongs on the published BEO report opened on the suites section, while
+ * `setup` really is checklist-backed.
  */
 export const READINESS_ROW_ROUTES = {
   'Concessions & Stands': '/facility',
-  'Luxury Suite BEOs': EVENT_BEO_ROUTE,
+  'Luxury Suite BEOs': '/stadium/beo-report?department=premium_hospitality',
   'Commissary & Kitchens': '/checklist',
   'Staffing & Union Roster': '/staff',
 } as const;

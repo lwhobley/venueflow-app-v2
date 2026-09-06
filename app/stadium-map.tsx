@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { CommandButton, CommandText } from '../components/FutureUI';
 import { StadiumVenueMap } from '../components/StadiumVenueMap';
 import { spacing, useDesignTheme } from '../lib/theme';
+import { EVENT_BEO_ROUTE } from '../lib/beo-report';
 
 export default function StadiumMapScreen() {
   const palette = useDesignTheme();
@@ -61,6 +62,7 @@ export default function StadiumMapScreen() {
         <View style={[styles.quickActionsCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
           <CommandText palette={palette} variant="title">Stadium F&B Workflows</CommandText>
           <View style={styles.actionsGrid}>
+            <CommandButton palette={palette} icon="file-document-check-outline" selected onPress={() => router.push(EVENT_BEO_ROUTE as any)} style={{ flex: 1, minWidth: 150 }}>Event BEO Report</CommandButton>
             <CommandButton palette={palette} icon="clipboard-list-outline" onPress={() => router.push('/stadium/stand-sheet')} style={{ flex: 1, minWidth: 150 }}>Stand Sheets</CommandButton>
             <CommandButton palette={palette} icon="room-service-outline" onPress={() => router.push('/stadium/suite-attendant')} style={{ flex: 1, minWidth: 150 }}>Suite Attendant</CommandButton>
             <CommandButton palette={palette} icon="chef-hat" onPress={() => router.push('/stadium/kds')} style={{ flex: 1, minWidth: 150 }}>Kitchen KDS</CommandButton>

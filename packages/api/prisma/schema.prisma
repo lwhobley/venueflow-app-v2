@@ -447,112 +447,113 @@ model PasswordCredential {
 }
 
 model Organization {
-  id                 String                          @id @default(cuid())
-  name               String
-  code               String                          @unique
-  createdAt          DateTime                        @default(now())
-  updatedAt          DateTime                        @updatedAt
-  venues             Venue[]
-  eventIssues        EventIssue[]
-  eventAuditLogs     EventAuditLog[]
-  eventReadiness     EventFnbReadiness[]
-  facilities         Facility[]
-  facilityZones      FacilityZone[]
-  subVenues          SubVenue[]
-  outlets            Outlet[]
-  terminals          Terminal[]
-  memberships        OrganizationMembership[]
-  scopeAssignments   ScopeAssignment[]
-  ssoProviders       EnterpriseSsoProvider[]
-  ssoGroupMappings   EnterpriseSsoGroupRoleMapping[]
-  suiteBeoOrders     SuiteBeoOrder[]
-  standSheets        StandSheet[]
-  inventoryTransfers InventoryTransferRequest[]
-  hawkerSessions     HawkerVendorSession[]
-  eventMenuOverlays  EventMenuOverlay[]
-  tempAgencies       TempAgency[]
-  workerProfiles     WorkerProfile[]
-  shiftPunches       ShiftPunch[]
-  unionRuleConfigs   UnionRuleConfig[]
-  unionViolations    UnionComplianceViolation[]
-  venueEvents        VenueEvent[]
-  eventCloseouts     EventCloseout[]
-  eventPlanSnapshots EventPlanSnapshot[]
-  kitchenFulfillmentTickets KitchenFulfillmentTicket[]
-  kitchenFulfillmentHistories KitchenFulfillmentStatusHistory[]
-  departments                Department[]
-  departmentMemberships      DepartmentMembership[]
-  departmentAreaRules        DepartmentAreaRule[]
-  userAreaOverrides          UserAreaOverride[]
-  dailyTemporaryRosters      DailyTemporaryRoster[]
-  dailyTemporaryRosterWorkers DailyTemporaryRosterWorker[]
+  id                            String                            @id @default(cuid())
+  name                          String
+  code                          String                            @unique
+  createdAt                     DateTime                          @default(now())
+  updatedAt                     DateTime                          @updatedAt
+  venues                        Venue[]
+  eventIssues                   EventIssue[]
+  eventAuditLogs                EventAuditLog[]
+  eventReadiness                EventFnbReadiness[]
+  facilities                    Facility[]
+  facilityZones                 FacilityZone[]
+  subVenues                     SubVenue[]
+  outlets                       Outlet[]
+  terminals                     Terminal[]
+  memberships                   OrganizationMembership[]
+  scopeAssignments              ScopeAssignment[]
+  ssoProviders                  EnterpriseSsoProvider[]
+  ssoGroupMappings              EnterpriseSsoGroupRoleMapping[]
+  suiteBeoOrders                SuiteBeoOrder[]
+  standSheets                   StandSheet[]
+  inventoryTransfers            InventoryTransferRequest[]
+  hawkerSessions                HawkerVendorSession[]
+  eventMenuOverlays             EventMenuOverlay[]
+  tempAgencies                  TempAgency[]
+  workerProfiles                WorkerProfile[]
+  shiftPunches                  ShiftPunch[]
+  unionRuleConfigs              UnionRuleConfig[]
+  unionViolations               UnionComplianceViolation[]
+  venueEvents                   VenueEvent[]
+  eventCloseouts                EventCloseout[]
+  eventPlanSnapshots            EventPlanSnapshot[]
+  eventBeoReports               EventBeoReport[]
+  kitchenFulfillmentTickets     KitchenFulfillmentTicket[]
+  kitchenFulfillmentHistories   KitchenFulfillmentStatusHistory[]
+  departments                   Department[]
+  departmentMemberships         DepartmentMembership[]
+  departmentAreaRules           DepartmentAreaRule[]
+  userAreaOverrides             UserAreaOverride[]
+  dailyTemporaryRosters         DailyTemporaryRoster[]
+  dailyTemporaryRosterWorkers   DailyTemporaryRosterWorker[]
   dailyTemporaryRosterHistories DailyTemporaryRosterHistory[]
-  vmsVendors                 VmsVendor[]
-  vmsStaffMembers            VmsStaffMember[]
-  vmsStaffingOrders          VmsStaffingOrder[]
-  vmsTimeAttendances         VmsTimeAttendance[]
-  vmsInventorySyncLogs       VmsInventorySyncLog[]
-  vmsAuditLogs               VmsAuditLog[]
-  vmsStaffAssignments        VmsStaffAssignment[]
-  vmsStaffAvailabilities     VmsStaffAvailability[]
-  vmsOrderTemplates          VmsOrderTemplate[]
-  vmsNotificationPreferences VmsNotificationPreference[]
-  vmsNotificationLogs        VmsNotificationLog[]
-  vmsPunchLockouts           VmsPunchLockout[]
+  vmsVendors                    VmsVendor[]
+  vmsStaffMembers               VmsStaffMember[]
+  vmsStaffingOrders             VmsStaffingOrder[]
+  vmsTimeAttendances            VmsTimeAttendance[]
+  vmsInventorySyncLogs          VmsInventorySyncLog[]
+  vmsAuditLogs                  VmsAuditLog[]
+  vmsStaffAssignments           VmsStaffAssignment[]
+  vmsStaffAvailabilities        VmsStaffAvailability[]
+  vmsOrderTemplates             VmsOrderTemplate[]
+  vmsNotificationPreferences    VmsNotificationPreference[]
+  vmsNotificationLogs           VmsNotificationLog[]
+  vmsPunchLockouts              VmsPunchLockout[]
 }
 
 model Facility {
-  id                 String                          @id @default(cuid())
-  organizationId     String
-  code               String
-  name               String
-  timezone           String?
-  address            String?
-  latitude           Float?
-  longitude          Float?
-  capacity           Int?
-  active             Boolean                         @default(true)
-  createdAt          DateTime                        @default(now())
-  updatedAt          DateTime                        @updatedAt
-  organization       Organization                    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  zones              FacilityZone[]
-  subVenues          SubVenue[]
-  outlets            Outlet[]
-  terminals          Terminal[]
-  scopeAssignments   ScopeAssignment[]
-  ssoProviders       EnterpriseSsoProvider[]         @relation("SsoProviderDefaultFacility")
-  ssoGroupMappings   EnterpriseSsoGroupRoleMapping[]
-  suiteBeoOrders     SuiteBeoOrder[]
-  standSheets        StandSheet[]
-  inventoryTransfers InventoryTransferRequest[]
-  hawkerSessions     HawkerVendorSession[]
-  eventMenuOverlays  EventMenuOverlay[]
-  tempAgencies       TempAgency[]
-  workerProfiles     WorkerProfile[]
-  shiftPunches       ShiftPunch[]
-  unionRuleConfigs   UnionRuleConfig[]
-  unionViolations    UnionComplianceViolation[]
-  kitchenFulfillmentTickets KitchenFulfillmentTicket[]
-  kitchenFulfillmentHistories KitchenFulfillmentStatusHistory[]
-  departments                Department[]
-  departmentMemberships      DepartmentMembership[]
-  departmentAreaRules        DepartmentAreaRule[]
-  userAreaOverrides          UserAreaOverride[]
-  dailyTemporaryRosters      DailyTemporaryRoster[]
-  dailyTemporaryRosterWorkers DailyTemporaryRosterWorker[]
+  id                            String                            @id @default(cuid())
+  organizationId                String
+  code                          String
+  name                          String
+  timezone                      String?
+  address                       String?
+  latitude                      Float?
+  longitude                     Float?
+  capacity                      Int?
+  active                        Boolean                           @default(true)
+  createdAt                     DateTime                          @default(now())
+  updatedAt                     DateTime                          @updatedAt
+  organization                  Organization                      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  zones                         FacilityZone[]
+  subVenues                     SubVenue[]
+  outlets                       Outlet[]
+  terminals                     Terminal[]
+  scopeAssignments              ScopeAssignment[]
+  ssoProviders                  EnterpriseSsoProvider[]           @relation("SsoProviderDefaultFacility")
+  ssoGroupMappings              EnterpriseSsoGroupRoleMapping[]
+  suiteBeoOrders                SuiteBeoOrder[]
+  standSheets                   StandSheet[]
+  inventoryTransfers            InventoryTransferRequest[]
+  hawkerSessions                HawkerVendorSession[]
+  eventMenuOverlays             EventMenuOverlay[]
+  tempAgencies                  TempAgency[]
+  workerProfiles                WorkerProfile[]
+  shiftPunches                  ShiftPunch[]
+  unionRuleConfigs              UnionRuleConfig[]
+  unionViolations               UnionComplianceViolation[]
+  kitchenFulfillmentTickets     KitchenFulfillmentTicket[]
+  kitchenFulfillmentHistories   KitchenFulfillmentStatusHistory[]
+  departments                   Department[]
+  departmentMemberships         DepartmentMembership[]
+  departmentAreaRules           DepartmentAreaRule[]
+  userAreaOverrides             UserAreaOverride[]
+  dailyTemporaryRosters         DailyTemporaryRoster[]
+  dailyTemporaryRosterWorkers   DailyTemporaryRosterWorker[]
   dailyTemporaryRosterHistories DailyTemporaryRosterHistory[]
-  vmsVendors                 VmsVendor[]
-  vmsStaffMembers            VmsStaffMember[]
-  vmsStaffingOrders          VmsStaffingOrder[]
-  vmsTimeAttendances         VmsTimeAttendance[]
-  vmsInventorySyncLogs       VmsInventorySyncLog[]
-  vmsAuditLogs               VmsAuditLog[]
-  vmsStaffAssignments        VmsStaffAssignment[]
-  vmsStaffAvailabilities     VmsStaffAvailability[]
-  vmsOrderTemplates          VmsOrderTemplate[]
-  vmsNotificationPreferences VmsNotificationPreference[]
-  vmsNotificationLogs        VmsNotificationLog[]
-  vmsPunchLockouts           VmsPunchLockout[]
+  vmsVendors                    VmsVendor[]
+  vmsStaffMembers               VmsStaffMember[]
+  vmsStaffingOrders             VmsStaffingOrder[]
+  vmsTimeAttendances            VmsTimeAttendance[]
+  vmsInventorySyncLogs          VmsInventorySyncLog[]
+  vmsAuditLogs                  VmsAuditLog[]
+  vmsStaffAssignments           VmsStaffAssignment[]
+  vmsStaffAvailabilities        VmsStaffAvailability[]
+  vmsOrderTemplates             VmsOrderTemplate[]
+  vmsNotificationPreferences    VmsNotificationPreference[]
+  vmsNotificationLogs           VmsNotificationLog[]
+  vmsPunchLockouts              VmsPunchLockout[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -560,26 +561,26 @@ model Facility {
 }
 
 model FacilityZone {
-  id               String                          @id @default(cuid())
-  organizationId   String
-  facilityId       String
-  code             String
-  name             String
-  zoneType         FacilityZoneType                @default(concourse)
-  level            String?
-  sortOrder        Int                             @default(0)
-  active           Boolean                         @default(true)
-  createdAt        DateTime                        @default(now())
-  updatedAt        DateTime                        @updatedAt
-  organization     Organization                    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility         Facility                        @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
-  subVenues        SubVenue[]
-  outlets          Outlet[]
-  terminals        Terminal[]
-  scopeAssignments ScopeAssignment[]
-  ssoGroupMappings EnterpriseSsoGroupRoleMapping[]
-  suiteBeoOrders   SuiteBeoOrder[]
-  standSheets      StandSheet[]
+  id                  String                          @id @default(cuid())
+  organizationId      String
+  facilityId          String
+  code                String
+  name                String
+  zoneType            FacilityZoneType                @default(concourse)
+  level               String?
+  sortOrder           Int                             @default(0)
+  active              Boolean                         @default(true)
+  createdAt           DateTime                        @default(now())
+  updatedAt           DateTime                        @updatedAt
+  organization        Organization                    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility            Facility                        @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  subVenues           SubVenue[]
+  outlets             Outlet[]
+  terminals           Terminal[]
+  scopeAssignments    ScopeAssignment[]
+  ssoGroupMappings    EnterpriseSsoGroupRoleMapping[]
+  suiteBeoOrders      SuiteBeoOrder[]
+  standSheets         StandSheet[]
   departmentAreaRules DepartmentAreaRule[]
 
   @@unique([organizationId, facilityId, id])
@@ -611,26 +612,26 @@ model SubVenue {
 }
 
 model Outlet {
-  id             String           @id @default(cuid())
-  organizationId String
-  facilityId     String
-  zoneId         String
-  subVenueId     String?
-  code           String
-  name           String
-  department     FnbDepartment
-  outletType     FnbOperationType
-  status         FnbUnitStatus    @default(open)
-  capacity       Int?
-  notes          String?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility       Facility         @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
-  zone           FacilityZone     @relation(fields: [organizationId, facilityId, zoneId], references: [organizationId, facilityId, id], onDelete: Restrict)
-  subVenue       SubVenue?        @relation(fields: [organizationId, facilityId, zoneId, subVenueId], references: [organizationId, facilityId, zoneId, id], onDelete: Restrict)
-  terminals      Terminal[]
-  standSheets    StandSheet[]
+  id                  String               @id @default(cuid())
+  organizationId      String
+  facilityId          String
+  zoneId              String
+  subVenueId          String?
+  code                String
+  name                String
+  department          FnbDepartment
+  outletType          FnbOperationType
+  status              FnbUnitStatus        @default(open)
+  capacity            Int?
+  notes               String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility            Facility             @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  zone                FacilityZone         @relation(fields: [organizationId, facilityId, zoneId], references: [organizationId, facilityId, id], onDelete: Restrict)
+  subVenue            SubVenue?            @relation(fields: [organizationId, facilityId, zoneId, subVenueId], references: [organizationId, facilityId, zoneId, id], onDelete: Restrict)
+  terminals           Terminal[]
+  standSheets         StandSheet[]
   departmentAreaRules DepartmentAreaRule[]
 
   @@unique([organizationId, facilityId, zoneId, id])
@@ -861,7 +862,7 @@ model Venue {
   waitlistEntries               Waitlist[]
   tableAssignments              TableAssignment[]
   posConnections                PosConnection[]
-  posAggregatorChannels          PosAggregatorChannel[]
+  posAggregatorChannels         PosAggregatorChannel[]
   posLaborPunches               PosLaborPunch[]
   crmActivityLogs               CrmActivityLog[]
   crmBeos                       CrmBeo[]
@@ -899,6 +900,7 @@ model Venue {
   eventFnbReadiness             EventFnbReadiness[]
   eventCloseouts                EventCloseout[]
   eventPlanSnapshots            EventPlanSnapshot[]
+  eventBeoReports               EventBeoReport[]
   asyncWriteReceipts            AsyncWriteReceipt[]
   fnbPartners                   FnbPartner[]
   organization                  Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
@@ -909,7 +911,7 @@ model Venue {
 }
 
 model Profile {
-  id                         String               @id @default(cuid())
+  id                         String                 @id @default(cuid())
   userId                     String?
   tokenIdentifier            String?
   email                      String
@@ -920,17 +922,17 @@ model Profile {
   altPhone                   String?
   address                    String?
   dateOfBirth                DateTime?
-  certifications             String[]             @default([])
+  certifications             String[]               @default([])
   venueId                    String?
   membershipStatus           MembershipStatus?
-  allAccess                  Boolean              @default(false)
-  sickHoursAccrued           Float                @default(0.0)
-  ptoHoursAccrued            Float                @default(0.0)
+  allAccess                  Boolean                @default(false)
+  sickHoursAccrued           Float                  @default(0.0)
+  ptoHoursAccrued            Float                  @default(0.0)
   trialEndsAt                DateTime?
-  createdAt                  DateTime             @default(now())
-  updatedAt                  DateTime             @updatedAt
-  user                       User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
-  venue                      Venue?               @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  createdAt                  DateTime               @default(now())
+  updatedAt                  DateTime               @updatedAt
+  user                       User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  venue                      Venue?                 @relation(fields: [venueId], references: [id], onDelete: SetNull)
   shifts                     ScheduleShift[]
   availability               Availability[]
   pushTokens                 PushToken[]
@@ -940,15 +942,15 @@ model Profile {
   conversationReads          ConversationRead[]
   notificationEvents         NotificationEvent[]
   notificationReads          NotificationRead[]
-  requestedShiftSwaps        ShiftSwap[]          @relation("ShiftSwapRequesterProfile")
-  targetShiftSwaps           ShiftSwap[]          @relation("ShiftSwapTargetProfile")
+  requestedShiftSwaps        ShiftSwap[]            @relation("ShiftSwapRequesterProfile")
+  targetShiftSwaps           ShiftSwap[]            @relation("ShiftSwapTargetProfile")
   crmNotes                   CrmNote[]
   crmActivityLogs            CrmActivityLog[]
   tableStateHistory          TableStateHistory[]
-  servedTables               TableState[]         @relation("ServerTables")
-  assignedLeads              CrmLead[]            @relation("AssignedLeads")
-  createdScheduleMemoryNotes ScheduleMemoryNote[] @relation("ScheduleMemoryCreatedBy")
-  uploadedDocuments          VenueDocument[]      @relation("DocumentUploader")
+  servedTables               TableState[]           @relation("ServerTables")
+  assignedLeads              CrmLead[]              @relation("AssignedLeads")
+  createdScheduleMemoryNotes ScheduleMemoryNote[]   @relation("ScheduleMemoryCreatedBy")
+  uploadedDocuments          VenueDocument[]        @relation("DocumentUploader")
   aiUsageEvents              AiUsageEvent[]
   departmentMemberships      DepartmentMembership[]
   userAreaOverrides          UserAreaOverride[]
@@ -1978,20 +1980,20 @@ model BarInventoryItem {
 }
 
 model BarInventoryMovement {
-  id             String               @id @default(cuid())
-  venueId        String
-  itemId         String
-  movementType   BarStockMovementType
-  quantity       Float
+  id                String               @id @default(cuid())
+  venueId           String
+  itemId            String
+  movementType      BarStockMovementType
+  quantity          Float
   requestedQuantity Float?
   appliedQuantity   Float?
-  previousOnHand Float
-  nextOnHand     Float
-  notes          String?
-  createdBy      String
-  createdAt      DateTime             @default(now())
-  venue          Venue                @relation(fields: [venueId], references: [id], onDelete: Cascade)
-  item           BarInventoryItem     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  previousOnHand    Float
+  nextOnHand        Float
+  notes             String?
+  createdBy         String
+  createdAt         DateTime             @default(now())
+  venue             Venue                @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  item              BarInventoryItem     @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
   @@index([venueId, createdAt])
   @@index([itemId, createdAt])
@@ -2003,16 +2005,16 @@ model BarInventoryMovement {
  * redelivery or an ambiguous publisher/HTTP response.
  */
 model AsyncWriteReceipt {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   venueId        String
   kind           String
   idempotencyKey String
   payloadHash    String
-  status         String   @default("processing")
+  status         String    @default("processing")
   result         Json?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
   completedAt    DateTime?
-  venue          Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  venue          Venue     @relation(fields: [venueId], references: [id], onDelete: Cascade)
 
   @@unique([venueId, kind, idempotencyKey])
   @@index([venueId, status, createdAt])
@@ -2182,6 +2184,7 @@ model VenueEvent {
   auditLogs           EventAuditLog[]
   closeout            EventCloseout?
   planSnapshot        EventPlanSnapshot?
+  beoReports          EventBeoReport[]
 
   @@unique([venueId, eventCode])
   @@index([venueId, startsAt])
@@ -2370,6 +2373,43 @@ model EventPlanSnapshot {
   event               VenueEvent   @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, venueId, generatedAt])
+}
+
+enum EventBeoReportTrigger {
+  manual
+  scheduled
+}
+
+/**
+ * A published, point-in-time BEO report for one event: the suite BEO list plus
+ * every department's run of service in chronological order. Publishing writes a
+ * new immutable version rather than editing the last one, so a report handed to
+ * a suite host or a department head stays exactly as it was handed over.
+ */
+model EventBeoReport {
+  id                String                @id @default(cuid())
+  organizationId    String
+  venueId           String
+  eventId           String
+  version           Int
+  trigger           EventBeoReportTrigger @default(manual)
+  generatedBy       String
+  generatedByName   String?
+  publishedAt       DateTime              @default(now())
+  suiteBeoCount     Int                   @default(0)
+  suiteGuestCount   Int                   @default(0)
+  suiteRevenueCents Int                   @default(0)
+  departmentCount   Int                   @default(0)
+  lineItemCount     Int                   @default(0)
+  dataGaps          String[]              @default([])
+  report            Json
+  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  venue             Venue                 @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  event             VenueEvent            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, version])
+  @@index([organizationId, venueId, publishedAt])
+  @@index([eventId, publishedAt])
 }
 
 model FnbPartner {
@@ -2852,19 +2892,19 @@ enum ComplianceViolationType {
 }
 
 model TempAgency {
-  id                    String          @id @default(cuid())
+  id                    String                 @id @default(cuid())
   organizationId        String
   facilityId            String
   code                  String
   name                  String
-  billingRateMultiplier Float           @default(1.35)
+  billingRateMultiplier Float                  @default(1.35)
   contactEmail          String?
   contactPhone          String?
-  active                Boolean         @default(true)
-  createdAt             DateTime        @default(now())
-  updatedAt             DateTime        @updatedAt
-  organization          Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility              Facility        @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  active                Boolean                @default(true)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  organization          Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility              Facility               @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
   workers               WorkerProfile[]
   dailyRosters          DailyTemporaryRoster[]
 
@@ -2873,31 +2913,31 @@ model TempAgency {
 }
 
 model WorkerProfile {
-  id                String                     @id @default(cuid())
-  organizationId    String
-  facilityId        String
-  agencyId          String?
-  unionMemberId     String?
-  firstName         String
-  lastName          String
-  pinLookupTag      String?                    @unique
-  pinSalt           String?
-  pinHash           String?
-  qrLookupTag       String?                    @unique
-  qrSalt            String?
-  qrHash            String?
-  credentialsIssuedAt DateTime?
-  certFoodSafety    Boolean                    @default(false)
-  certAlcohol       Boolean                    @default(false)
-  certAlcoholExpiry DateTime?
-  active            Boolean                    @default(true)
-  createdAt         DateTime                   @default(now())
-  updatedAt         DateTime                   @updatedAt
-  organization      Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility          Facility                   @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
-  agency            TempAgency?                @relation(fields: [agencyId], references: [id], onDelete: SetNull)
-  shiftPunches      ShiftPunch[]
-  violations        UnionComplianceViolation[]
+  id                     String                       @id @default(cuid())
+  organizationId         String
+  facilityId             String
+  agencyId               String?
+  unionMemberId          String?
+  firstName              String
+  lastName               String
+  pinLookupTag           String?                      @unique
+  pinSalt                String?
+  pinHash                String?
+  qrLookupTag            String?                      @unique
+  qrSalt                 String?
+  qrHash                 String?
+  credentialsIssuedAt    DateTime?
+  certFoodSafety         Boolean                      @default(false)
+  certAlcohol            Boolean                      @default(false)
+  certAlcoholExpiry      DateTime?
+  active                 Boolean                      @default(true)
+  createdAt              DateTime                     @default(now())
+  updatedAt              DateTime                     @updatedAt
+  organization           Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility               Facility                     @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  agency                 TempAgency?                  @relation(fields: [agencyId], references: [id], onDelete: SetNull)
+  shiftPunches           ShiftPunch[]
+  violations             UnionComplianceViolation[]
   dailyRosterAssignments DailyTemporaryRosterWorker[]
 
   @@index([organizationId, facilityId, active])
@@ -2922,9 +2962,9 @@ model ShiftPunch {
   worker         WorkerProfile              @relation(fields: [workerId], references: [id], onDelete: Cascade)
   violations     UnionComplianceViolation[]
 
+  @@unique([facilityId, workerId, idempotencyKey])
   @@index([organizationId, facilityId, workerId, timestamp])
   @@index([workerId, punchType])
-  @@unique([facilityId, workerId, idempotencyKey])
 }
 
 model UnionRuleConfig {
@@ -2985,13 +3025,13 @@ enum KitchenTicketPriority {
 }
 
 model KitchenFulfillmentTicket {
-  id                 String                           @id @default(cuid())
-  organizationId     String
-  facilityId         String
-  eventId            String?
-  beoId              String?
-  zoneId             String?
-  serviceAreaId      String?
+  id                  String                            @id @default(cuid())
+  organizationId      String
+  facilityId          String
+  eventId             String?
+  beoId               String?
+  zoneId              String?
+  serviceAreaId       String?
   /**
    * Authoritative operational area, resolved server-side at creation from
    * server-owned records (Outlet/FnbOperationUnit department) or an explicit,
@@ -3000,35 +3040,35 @@ model KitchenFulfillmentTicket {
    * infer it from serviceAreaName/notes at decision time (review R2-01).
    */
   operationalAreaType OperationalAreaType
-  serviceAreaName    String
-  kitchenId          String
-  kitchenName        String
-  distroLocationId   String?
-  distroLocationName String?
-  requestedByUserId  String?
-  assignedToUserId   String?
-  status             KitchenTicketStatus              @default(waiting)
-  priority           KitchenTicketPriority            @default(normal)
-  itemName           String
-  itemDescription    String?
-  quantity           Int                              @default(1)
-  unitOfMeasure      String?
-  notes              String?
-  requestedAt        DateTime                         @default(now())
-  firedAt            DateTime?
-  readyAt            DateTime?
-  pickedUpAt         DateTime?
-  cancelledAt        DateTime?
-  pickedUpByUserId   String?
-  pickedUpByName     String?
-  overdueAt          DateTime?
-  wasOverdue         Boolean                          @default(false)
-  cancelReason       String?
-  createdAt          DateTime                         @default(now())
-  updatedAt          DateTime                         @updatedAt
-  organization       Organization                     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility           Facility                         @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
-  history            KitchenFulfillmentStatusHistory[]
+  serviceAreaName     String
+  kitchenId           String
+  kitchenName         String
+  distroLocationId    String?
+  distroLocationName  String?
+  requestedByUserId   String?
+  assignedToUserId    String?
+  status              KitchenTicketStatus               @default(waiting)
+  priority            KitchenTicketPriority             @default(normal)
+  itemName            String
+  itemDescription     String?
+  quantity            Int                               @default(1)
+  unitOfMeasure       String?
+  notes               String?
+  requestedAt         DateTime                          @default(now())
+  firedAt             DateTime?
+  readyAt             DateTime?
+  pickedUpAt          DateTime?
+  cancelledAt         DateTime?
+  pickedUpByUserId    String?
+  pickedUpByName      String?
+  overdueAt           DateTime?
+  wasOverdue          Boolean                           @default(false)
+  cancelReason        String?
+  createdAt           DateTime                          @default(now())
+  updatedAt           DateTime                          @updatedAt
+  organization        Organization                      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility            Facility                          @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  history             KitchenFulfillmentStatusHistory[]
 
   @@index([organizationId, facilityId, status])
   @@index([facilityId, kitchenId, status])
@@ -3119,12 +3159,12 @@ model Department {
   createdAt       DateTime                  @default(now())
   updatedAt       DateTime                  @updatedAt
 
-  organization    Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility        Facility                  @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
-  memberships     DepartmentMembership[]
-  areaRules       DepartmentAreaRule[]
-  userOverrides   UserAreaOverride[]
-  dailyRosters    DailyTemporaryRoster[]
+  organization  Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility      Facility               @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  memberships   DepartmentMembership[]
+  areaRules     DepartmentAreaRule[]
+  userOverrides UserAreaOverride[]
+  dailyRosters  DailyTemporaryRoster[]
 
   @@unique([organizationId, facilityId, code])
   @@unique([organizationId, facilityId, id])
@@ -3132,24 +3172,24 @@ model Department {
 }
 
 model DepartmentMembership {
-  id                String       @id @default(cuid())
-  organizationId    String
-  facilityId        String
-  departmentId      String
-  userId            String
-  profileId         String
-  role              Role?
-  isPrimary         Boolean      @default(false)
-  isActive          Boolean      @default(true)
-  assignedByUserId  String?
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  id               String   @id @default(cuid())
+  organizationId   String
+  facilityId       String
+  departmentId     String
+  userId           String
+  profileId        String
+  role             Role?
+  isPrimary        Boolean  @default(false)
+  isActive         Boolean  @default(true)
+  assignedByUserId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility          Facility     @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
-  department        Department   @relation(fields: [organizationId, facilityId, departmentId], references: [organizationId, facilityId, id], onDelete: Cascade)
-  profile           Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility     Facility     @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  department   Department   @relation(fields: [organizationId, facilityId, departmentId], references: [organizationId, facilityId, id], onDelete: Cascade)
+  profile      Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, facilityId, departmentId, userId])
   @@index([facilityId, userId, isActive])
@@ -3157,69 +3197,69 @@ model DepartmentMembership {
 }
 
 model DepartmentAreaRule {
-  id              String              @id @default(cuid())
-  organizationId  String
-  facilityId      String
-  departmentId    String
-  areaType        OperationalAreaType
-  zoneId          String?
-  subVenueId      String?
-  outletId        String?
-  actionScope     String              @default("read_write")
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  id             String              @id @default(cuid())
+  organizationId String
+  facilityId     String
+  departmentId   String
+  areaType       OperationalAreaType
+  zoneId         String?
+  subVenueId     String?
+  outletId       String?
+  actionScope    String              @default("read_write")
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
 
-  organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility        Facility            @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
-  department      Department          @relation(fields: [organizationId, facilityId, departmentId], references: [organizationId, facilityId, id], onDelete: Cascade)
-  zone            FacilityZone?       @relation(fields: [organizationId, facilityId, zoneId], references: [organizationId, facilityId, id], onDelete: Cascade)
-  outlet          Outlet?             @relation(fields: [organizationId, facilityId, zoneId, outletId], references: [organizationId, facilityId, zoneId, id], onDelete: Cascade)
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility     Facility      @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  department   Department    @relation(fields: [organizationId, facilityId, departmentId], references: [organizationId, facilityId, id], onDelete: Cascade)
+  zone         FacilityZone? @relation(fields: [organizationId, facilityId, zoneId], references: [organizationId, facilityId, id], onDelete: Cascade)
+  outlet       Outlet?       @relation(fields: [organizationId, facilityId, zoneId, outletId], references: [organizationId, facilityId, zoneId, id], onDelete: Cascade)
 
   @@index([organizationId, facilityId, departmentId, areaType])
 }
 
 model UserAreaOverride {
-  id                String              @id @default(cuid())
-  organizationId    String
-  facilityId        String
-  userId            String
-  profileId         String
-  departmentId      String?
-  areaType          OperationalAreaType
-  zoneId            String?
-  subVenueId        String?
-  outletId          String?
-  eventId           String?
-  reason            String
-  grantedByUserId   String
-  startsAt          DateTime            @default(now())
-  expiresAt         DateTime
-  active            Boolean             @default(true)
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  id              String              @id @default(cuid())
+  organizationId  String
+  facilityId      String
+  userId          String
+  profileId       String
+  departmentId    String?
+  areaType        OperationalAreaType
+  zoneId          String?
+  subVenueId      String?
+  outletId        String?
+  eventId         String?
+  reason          String
+  grantedByUserId String
+  startsAt        DateTime            @default(now())
+  expiresAt       DateTime
+  active          Boolean             @default(true)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 
-  organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility          Facility            @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
-  department        Department?         @relation(fields: [organizationId, facilityId, departmentId], references: [organizationId, facilityId, id], onDelete: SetNull)
-  profile           Profile             @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility     Facility     @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  department   Department?  @relation(fields: [organizationId, facilityId, departmentId], references: [organizationId, facilityId, id], onDelete: SetNull)
+  profile      Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([facilityId, userId, active, expiresAt])
 }
 
 model DailyTemporaryRoster {
-  id               String                      @id @default(cuid())
+  id               String            @id @default(cuid())
   organizationId   String
   facilityId       String
   operationalDate  String
   name             String
-  rosterType       DailyRosterType             @default(temporary)
+  rosterType       DailyRosterType   @default(temporary)
   staffingSource   String
   agencyId         String?
   departmentId     String
   serviceAreaId    String?
-  status           DailyRosterStatus           @default(draft)
-  version          Int                         @default(1)
+  status           DailyRosterStatus @default(draft)
+  version          Int               @default(1)
   notes            String?
   approvedByUserId String?
   approvedAt       DateTime?
@@ -3227,15 +3267,15 @@ model DailyTemporaryRoster {
   closedAt         DateTime?
   createdById      String
   updatedById      String
-  createdAt        DateTime                    @default(now())
-  updatedAt        DateTime                    @updatedAt
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
-  organization     Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility         Facility                    @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
-  agency           TempAgency?                 @relation(fields: [agencyId], references: [id], onDelete: SetNull)
-  department       Department                  @relation(fields: [organizationId, facilityId, departmentId], references: [organizationId, facilityId, id], onDelete: Restrict)
-  workers          DailyTemporaryRosterWorker[]
-  history          DailyTemporaryRosterHistory[]
+  organization Organization                  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility     Facility                      @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  agency       TempAgency?                   @relation(fields: [agencyId], references: [id], onDelete: SetNull)
+  department   Department                    @relation(fields: [organizationId, facilityId, departmentId], references: [organizationId, facilityId, id], onDelete: Restrict)
+  workers      DailyTemporaryRosterWorker[]
+  history      DailyTemporaryRosterHistory[]
 
   @@unique([organizationId, facilityId, operationalDate, name])
   @@unique([organizationId, facilityId, id])
@@ -3243,50 +3283,50 @@ model DailyTemporaryRoster {
 }
 
 model DailyTemporaryRosterWorker {
-  id                String               @id @default(cuid())
-  organizationId    String
-  facilityId        String
-  rosterId          String
-  workerProfileId   String?
-  workerName        String
-  workerRole        String
-  assignedOutletId  String?
-  shiftStartTime    DateTime?
-  shiftEndTime      DateTime?
-  checkedInAt       DateTime?
-  checkedOutAt      DateTime?
-  hoursWorked       Float                @default(0.0)
-  breakMinutes      Int                  @default(0)
-  hourlyRateCents   Int                  @default(0)
-  attendanceStatus  AttendanceStatus     @default(scheduled)
-  notes             String?
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
+  id               String           @id @default(cuid())
+  organizationId   String
+  facilityId       String
+  rosterId         String
+  workerProfileId  String?
+  workerName       String
+  workerRole       String
+  assignedOutletId String?
+  shiftStartTime   DateTime?
+  shiftEndTime     DateTime?
+  checkedInAt      DateTime?
+  checkedOutAt     DateTime?
+  hoursWorked      Float            @default(0.0)
+  breakMinutes     Int              @default(0)
+  hourlyRateCents  Int              @default(0)
+  attendanceStatus AttendanceStatus @default(scheduled)
+  notes            String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
-  organization      Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility          Facility             @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
-  roster            DailyTemporaryRoster @relation(fields: [organizationId, facilityId, rosterId], references: [organizationId, facilityId, id], onDelete: Cascade)
-  workerProfile     WorkerProfile?       @relation(fields: [workerProfileId], references: [id], onDelete: SetNull)
+  organization  Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility      Facility             @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  roster        DailyTemporaryRoster @relation(fields: [organizationId, facilityId, rosterId], references: [organizationId, facilityId, id], onDelete: Cascade)
+  workerProfile WorkerProfile?       @relation(fields: [workerProfileId], references: [id], onDelete: SetNull)
 
   @@index([rosterId, attendanceStatus])
   @@index([facilityId, workerProfileId])
 }
 
 model DailyTemporaryRosterHistory {
-  id             String               @id @default(cuid())
-  organizationId String
-  facilityId     String
-  rosterId       String
-  version        Int
+  id              String   @id @default(cuid())
+  organizationId  String
+  facilityId      String
+  rosterId        String
+  version         Int
   changedByUserId String
-  changeType     String
-  summary        String
-  details        Json?
-  timestamp      DateTime             @default(now())
+  changeType      String
+  summary         String
+  details         Json?
+  timestamp       DateTime @default(now())
 
-  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility       Facility             @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
-  roster         DailyTemporaryRoster @relation(fields: [organizationId, facilityId, rosterId], references: [organizationId, facilityId, id], onDelete: Cascade)
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility     Facility             @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  roster       DailyTemporaryRoster @relation(fields: [organizationId, facilityId, rosterId], references: [organizationId, facilityId, id], onDelete: Cascade)
 
   @@index([rosterId, version])
 }
@@ -3357,167 +3397,167 @@ enum VmsSyncSystem {
 }
 
 model VmsVendor {
-  id                    String                @id @default(cuid())
+  id                    String          @id @default(cuid())
   organizationId        String
   facilityId            String
   name                  String
   code                  String
-  vendorType            VmsVendorType         @default(staffing_agency)
+  vendorType            VmsVendorType   @default(staffing_agency)
   contactName           String?
   contactEmail          String?
   contactPhone          String?
-  rating                Float                 @default(5.0)
-  status                VmsVendorStatus       @default(active)
+  rating                Float           @default(5.0)
+  status                VmsVendorStatus @default(active)
   taxId                 String?
   insuranceExpiry       DateTime?
-  billingRateMultiplier Float                 @default(1.35)
+  billingRateMultiplier Float           @default(1.35)
   metadata              Json?
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
 
-  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
-  services              VmsVendorService[]
-  staffMembers          VmsStaffMember[]
-  orderFulfillments     VmsOrderFulfillment[]
+  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility          Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  services          VmsVendorService[]
+  staffMembers      VmsStaffMember[]
+  orderFulfillments VmsOrderFulfillment[]
 
   @@unique([organizationId, facilityId, code])
   @@index([organizationId, facilityId, status])
 }
 
 model VmsVendorService {
-  id                    String                @id @default(cuid())
-  vendorId              String
-  serviceType           String
-  hourlyRateCents       Int                   @default(2500)
-  overtimeRateCents     Int                   @default(3750)
-  minimumNoticeHours    Int                   @default(24)
-  availabilityJson      Json?
-  active                Boolean               @default(true)
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
+  id                 String   @id @default(cuid())
+  vendorId           String
+  serviceType        String
+  hourlyRateCents    Int      @default(2500)
+  overtimeRateCents  Int      @default(3750)
+  minimumNoticeHours Int      @default(24)
+  availabilityJson   Json?
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  vendor                VmsVendor             @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  vendor VmsVendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
 
   @@index([vendorId, serviceType])
 }
 
 model VmsStaffMember {
-  id                    String                @id @default(cuid())
-  organizationId        String
-  facilityId            String
-  vendorId              String?
-  workforceType         VmsWorkforceType      @default(agency_temp)
-  firstName             String
-  lastName              String
-  email                 String?
-  phone                 String?
-  skills                String[]              @default([])
-  certifications        Json?
-  hourlyRateCents       Int                   @default(2500)
-  status                VmsStaffStatus        @default(active)
-  rating                Float                 @default(5.0)
-  badgeNumber           String?
-  pinHash               String?
-  pinSalt               String?
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
+  id              String           @id @default(cuid())
+  organizationId  String
+  facilityId      String
+  vendorId        String?
+  workforceType   VmsWorkforceType @default(agency_temp)
+  firstName       String
+  lastName        String
+  email           String?
+  phone           String?
+  skills          String[]         @default([])
+  certifications  Json?
+  hourlyRateCents Int              @default(2500)
+  status          VmsStaffStatus   @default(active)
+  rating          Float            @default(5.0)
+  badgeNumber     String?
+  pinHash         String?
+  pinSalt         String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
-  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
-  vendor                VmsVendor?            @relation(fields: [vendorId], references: [id], onDelete: SetNull)
-  attendances           VmsTimeAttendance[]
-  assignments           VmsStaffAssignment[]
-  availabilities        VmsStaffAvailability[]
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility       Facility               @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  vendor         VmsVendor?             @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  attendances    VmsTimeAttendance[]
+  assignments    VmsStaffAssignment[]
+  availabilities VmsStaffAvailability[]
 
   @@index([organizationId, facilityId, status])
   @@index([vendorId])
 }
 
 model VmsStaffingOrder {
-  id                    String                @id @default(cuid())
-  organizationId        String
-  facilityId            String
-  eventId               String?
-  orderNumber           String
-  title                 String
-  roleRequired          String
-  quantityRequested     Int
-  quantityFulfilled     Int                   @default(0)
-  shiftDate             String
-  startTime             String
-  endTime               String
-  durationHours         Float                 @default(4.0)
-  budgetCents           Int                   @default(0)
-  actualCostCents       Int                   @default(0)
-  specialRequirements   String?
-  templateName          String?
-  cancellationReason    String?
-  status                VmsOrderStatus        @default(draft)
-  createdById           String
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
+  id                  String         @id @default(cuid())
+  organizationId      String
+  facilityId          String
+  eventId             String?
+  orderNumber         String
+  title               String
+  roleRequired        String
+  quantityRequested   Int
+  quantityFulfilled   Int            @default(0)
+  shiftDate           String
+  startTime           String
+  endTime             String
+  durationHours       Float          @default(4.0)
+  budgetCents         Int            @default(0)
+  actualCostCents     Int            @default(0)
+  specialRequirements String?
+  templateName        String?
+  cancellationReason  String?
+  status              VmsOrderStatus @default(draft)
+  createdById         String
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
 
-  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
-  fulfillments          VmsOrderFulfillment[]
-  attendances           VmsTimeAttendance[]
-  assignments           VmsStaffAssignment[]
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility     Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  fulfillments VmsOrderFulfillment[]
+  attendances  VmsTimeAttendance[]
+  assignments  VmsStaffAssignment[]
 
   @@unique([organizationId, facilityId, orderNumber])
   @@index([facilityId, shiftDate, status])
 }
 
 model VmsOrderFulfillment {
-  id                    String                @id @default(cuid())
-  orderId               String
-  vendorId              String
-  staffCountAssigned    Int                   @default(0)
-  bidHourlyRateCents    Int                   @default(0)
-  totalBidCents         Int                   @default(0)
-  status                VmsFulfillmentStatus  @default(bid_submitted)
-  confirmedAt           DateTime?
-  completedAt           DateTime?
-  notes                 String?
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
+  id                 String               @id @default(cuid())
+  orderId            String
+  vendorId           String
+  staffCountAssigned Int                  @default(0)
+  bidHourlyRateCents Int                  @default(0)
+  totalBidCents      Int                  @default(0)
+  status             VmsFulfillmentStatus @default(bid_submitted)
+  confirmedAt        DateTime?
+  completedAt        DateTime?
+  notes              String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
 
-  order                 VmsStaffingOrder      @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  vendor                VmsVendor             @relation(fields: [vendorId], references: [id], onDelete: Restrict)
-  assignments           VmsStaffAssignment[]
+  order       VmsStaffingOrder     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  vendor      VmsVendor            @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  assignments VmsStaffAssignment[]
 
   @@index([orderId, vendorId])
 }
 
 model VmsTimeAttendance {
-  id                    String                @id @default(cuid())
-  organizationId        String
-  facilityId            String
-  staffMemberId         String?
-  orderId               String?
-  clockIn               DateTime              @default(now())
-  clockOut              DateTime?
-  hoursWorked           Float                 @default(0.0)
-  breakMinutes          Int                   @default(0)
-  billableHours         Float                 @default(0.0)
-  billedRateCents       Int                   @default(0)
-  totalBilledCents      Int                   @default(0)
-  status                VmsAttendanceStatus   @default(clocked_in)
-  deviceInfo            String?
-  gpsLatitude           Float?
-  gpsLongitude          Float?
-  isWithinGeofence      Boolean               @default(true)
-  deviationFlags        String[]              @default([])
-  approvedByUserId      String?
-  approvedAt            DateTime?
-  clientMutationId      String?
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
+  id               String              @id @default(cuid())
+  organizationId   String
+  facilityId       String
+  staffMemberId    String?
+  orderId          String?
+  clockIn          DateTime            @default(now())
+  clockOut         DateTime?
+  hoursWorked      Float               @default(0.0)
+  breakMinutes     Int                 @default(0)
+  billableHours    Float               @default(0.0)
+  billedRateCents  Int                 @default(0)
+  totalBilledCents Int                 @default(0)
+  status           VmsAttendanceStatus @default(clocked_in)
+  deviceInfo       String?
+  gpsLatitude      Float?
+  gpsLongitude     Float?
+  isWithinGeofence Boolean             @default(true)
+  deviationFlags   String[]            @default([])
+  approvedByUserId String?
+  approvedAt       DateTime?
+  clientMutationId String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
-  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
-  staffMember           VmsStaffMember?       @relation(fields: [staffMemberId], references: [id], onDelete: Cascade)
-  order                 VmsStaffingOrder?     @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility     Facility          @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  staffMember  VmsStaffMember?   @relation(fields: [staffMemberId], references: [id], onDelete: Cascade)
+  order        VmsStaffingOrder? @relation(fields: [orderId], references: [id], onDelete: SetNull)
 
   @@index([facilityId, staffMemberId, status])
   @@index([facilityId, clockIn])
@@ -3525,36 +3565,36 @@ model VmsTimeAttendance {
 }
 
 model VmsInventorySyncLog {
-  id                    String                @id @default(cuid())
-  organizationId        String
-  facilityId            String
-  system                VmsSyncSystem         @default(yellow_dog)
-  syncType              String                @default("stock_and_supplies")
-  status                String                @default("success")
-  itemsSyncedCount      Int                   @default(0)
-  details               String?
-  metadata              Json?
-  createdAt             DateTime              @default(now())
+  id               String        @id @default(cuid())
+  organizationId   String
+  facilityId       String
+  system           VmsSyncSystem @default(yellow_dog)
+  syncType         String        @default("stock_and_supplies")
+  status           String        @default("success")
+  itemsSyncedCount Int           @default(0)
+  details          String?
+  metadata         Json?
+  createdAt        DateTime      @default(now())
 
-  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility     Facility     @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
 
   @@index([facilityId, system, createdAt])
 }
 
 model VmsAuditLog {
-  id                    String                @id @default(cuid())
-  organizationId        String
-  facilityId            String
-  entityType            String
-  entityId              String
-  action                String
-  performedByUserId     String
-  changes               Json?
-  timestamp             DateTime              @default(now())
+  id                String   @id @default(cuid())
+  organizationId    String
+  facilityId        String
+  entityType        String
+  entityId          String
+  action            String
+  performedByUserId String
+  changes           Json?
+  timestamp         DateTime @default(now())
 
-  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility     Facility     @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
 
   @@index([facilityId, entityType, timestamp])
 }
@@ -3594,24 +3634,24 @@ enum VmsNotificationStatus {
 /// system cannot say who was expected on a shift, which is what forced no-show
 /// detection to guess an attributed worker (review finding Q1).
 model VmsStaffAssignment {
-  id                    String                @id @default(cuid())
-  organizationId        String
-  facilityId            String
-  orderId               String
-  staffMemberId         String
-  fulfillmentId         String?
-  status                VmsAssignmentStatus   @default(assigned)
-  assignedAt            DateTime              @default(now())
-  releasedAt            DateTime?
-  notes                 String?
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
+  id             String              @id @default(cuid())
+  organizationId String
+  facilityId     String
+  orderId        String
+  staffMemberId  String
+  fulfillmentId  String?
+  status         VmsAssignmentStatus @default(assigned)
+  assignedAt     DateTime            @default(now())
+  releasedAt     DateTime?
+  notes          String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
 
-  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
-  order                 VmsStaffingOrder      @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  staffMember           VmsStaffMember        @relation(fields: [staffMemberId], references: [id], onDelete: Cascade)
-  fulfillment           VmsOrderFulfillment?  @relation(fields: [fulfillmentId], references: [id], onDelete: SetNull)
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility     Facility             @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  order        VmsStaffingOrder     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  staffMember  VmsStaffMember       @relation(fields: [staffMemberId], references: [id], onDelete: Cascade)
+  fulfillment  VmsOrderFulfillment? @relation(fields: [fulfillmentId], references: [id], onDelete: SetNull)
 
   @@unique([orderId, staffMemberId])
   @@index([organizationId, facilityId, status])
@@ -3622,20 +3662,20 @@ model VmsStaffAssignment {
 /// an unavailable block (PTO, other booking); the absence of any row means
 /// "no declared constraint" rather than "unavailable".
 model VmsStaffAvailability {
-  id                    String                @id @default(cuid())
-  organizationId        String
-  facilityId            String
-  staffMemberId         String
-  startDate             DateTime
-  endDate               DateTime
-  available             Boolean               @default(true)
-  reason                String?
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
+  id             String   @id @default(cuid())
+  organizationId String
+  facilityId     String
+  staffMemberId  String
+  startDate      DateTime
+  endDate        DateTime
+  available      Boolean  @default(true)
+  reason         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
-  staffMember           VmsStaffMember        @relation(fields: [staffMemberId], references: [id], onDelete: Cascade)
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility     Facility       @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  staffMember  VmsStaffMember @relation(fields: [staffMemberId], references: [id], onDelete: Cascade)
 
   // Explicit name: the derived one exceeds Postgres' 63-character identifier
   // limit and would be truncated, drifting from the migration.
@@ -3645,23 +3685,23 @@ model VmsStaffAvailability {
 
 /// Reusable requisition template (game day, private event, seasonal).
 model VmsOrderTemplate {
-  id                    String                @id @default(cuid())
-  organizationId        String
-  facilityId            String
-  name                  String
-  roleRequired          String
-  quantityRequested     Int                   @default(1)
-  startTime             String                @default("16:00")
-  endTime               String                @default("22:00")
-  durationHours         Float                 @default(4.0)
-  budgetCents           Int                   @default(0)
-  specialRequirements   String?
-  createdById           String
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
+  id                  String   @id @default(cuid())
+  organizationId      String
+  facilityId          String
+  name                String
+  roleRequired        String
+  quantityRequested   Int      @default(1)
+  startTime           String   @default("16:00")
+  endTime             String   @default("22:00")
+  durationHours       Float    @default(4.0)
+  budgetCents         Int      @default(0)
+  specialRequirements String?
+  createdById         String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility     Facility     @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
 
   @@unique([organizationId, facilityId, name])
   @@index([organizationId, facilityId])
@@ -3669,18 +3709,18 @@ model VmsOrderTemplate {
 
 /// Per-user opt-out for a given VMS notification event.
 model VmsNotificationPreference {
-  id                    String                @id @default(cuid())
-  organizationId        String
-  facilityId            String
-  userId                String
-  eventType             VmsNotificationEvent
-  emailEnabled          Boolean               @default(true)
-  smsEnabled            Boolean               @default(false)
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
+  id             String               @id @default(cuid())
+  organizationId String
+  facilityId     String
+  userId         String
+  eventType      VmsNotificationEvent
+  emailEnabled   Boolean              @default(true)
+  smsEnabled     Boolean              @default(false)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
 
-  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility     Facility     @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
 
   @@unique([facilityId, userId, eventType])
   @@index([organizationId, facilityId])
@@ -3688,21 +3728,21 @@ model VmsNotificationPreference {
 
 /// Delivery tracking for every VMS notification attempt.
 model VmsNotificationLog {
-  id                    String                @id @default(cuid())
-  organizationId        String
-  facilityId            String
-  eventType             VmsNotificationEvent
-  channel               VmsNotificationChannel @default(email)
-  recipient             String
-  subject               String?
-  status                VmsNotificationStatus  @default(sent)
-  errorMessage          String?
-  entityType            String?
-  entityId              String?
-  createdAt             DateTime              @default(now())
+  id             String                 @id @default(cuid())
+  organizationId String
+  facilityId     String
+  eventType      VmsNotificationEvent
+  channel        VmsNotificationChannel @default(email)
+  recipient      String
+  subject        String?
+  status         VmsNotificationStatus  @default(sent)
+  errorMessage   String?
+  entityType     String?
+  entityId       String?
+  createdAt      DateTime               @default(now())
 
-  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility     Facility     @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
 
   @@index([facilityId, eventType, createdAt])
   @@index([facilityId, status, createdAt])
@@ -3711,17 +3751,17 @@ model VmsNotificationLog {
 /// Durable, cross-replica failed-punch counter. Replaces the in-process Map that
 /// reset on deploy and gave an attacker N attempts per instance (finding P5).
 model VmsPunchLockout {
-  id                    String                @id @default(cuid())
-  organizationId        String
-  facilityId            String
-  staffMemberId         String                @unique
-  failedCount           Int                   @default(0)
-  lockedUntil           DateTime?
-  lastAttemptAt         DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
+  id             String    @id @default(cuid())
+  organizationId String
+  facilityId     String
+  staffMemberId  String    @unique
+  failedCount    Int       @default(0)
+  lockedUntil    DateTime?
+  lastAttemptAt  DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  facility              Facility              @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility     Facility     @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
 
   @@index([facilityId, lockedUntil])
 }
