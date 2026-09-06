@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { generatePunchAuthToken, getPunchSecret, verifyPunchAuthToken } from './vms.service';
+import { generatePunchAuthToken, getPunchSecret, verifyPunchAuthToken } from './vms-punch-auth';
 
 const SECRET = 'unit-test-punch-secret-key-32chars';
 
