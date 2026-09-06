@@ -3,6 +3,7 @@ import {
   groupPremiumSpaces,
   resolveUnitStatus,
   classifyPremiumSpace,
+  isPremiumUnitType,
 } from './premium-spaces';
 import { COMPREHENSIVE_STADIUM_ZONES, type StadiumZoneData } from './zone-data';
 import type { StadiumZoneItem } from '../StadiumUnitDetailModal';
@@ -127,6 +128,8 @@ describe('Premium Spaces Pure Grouping Logic', () => {
             capacity: 20,
             stadiumZone: 'West',
             level: '3',
+            stadiumLevel: '300',
+            premiumCategory: '300_suites',
             status: 'open',
           },
           {
@@ -138,6 +141,8 @@ describe('Premium Spaces Pure Grouping Logic', () => {
             capacity: 20,
             stadiumZone: 'West',
             level: '3',
+            stadiumLevel: '300',
+            premiumCategory: '300_suites',
             status: 'incident',
           },
           {
@@ -149,6 +154,8 @@ describe('Premium Spaces Pure Grouping Logic', () => {
             capacity: 20,
             stadiumZone: 'West',
             level: '3',
+            stadiumLevel: '300',
+            premiumCategory: '300_suites',
             status: 'open',
             suiteDetails: {
               suiteNumber: '303',
@@ -166,6 +173,123 @@ describe('Premium Spaces Pure Grouping Logic', () => {
     expect(suiteGroup?.units.length).toBe(3);
     // Suite 302 (incident) and Suite 303 (replenishmentPending) = 2 alerts
     expect(suiteGroup?.alertCount).toBe(2);
+  });
+
+  it('classifies nothing without premiumCategory metadata, whatever its level or type', () => {
+    const untaggedSuite: StadiumZoneItem = {
+      id: 'unit-untagged-318',
+      code: 'SUITE-318',
+      name: 'Suite 318',
+      department: 'premium_hospitality',
+      type: 'premium_suite',
+      capacity: 22,
+      stadiumZone: 'West Suite Tower Level 3',
+      level: '3',
+      status: 'open',
+      suiteDetails: { suiteNumber: '318', tier: 'Founders Suite' },
+    };
+
+    // Looks premium by type, level, suite number and tier - but is untagged.
+    expect(classifyPremiumSpace(untaggedSuite)).toBeNull();
+
+    const tagged: StadiumZoneItem = {
+      ...untaggedSuite,
+      premiumCategory: '300_suites',
+      stadiumLevel: '300',
+    };
+
+    expect(classifyPremiumSpace(tagged)?.groupId).toBe('300-level-suites');
+  });
+
+  it('resolves level from the suite number when stadiumLevel is omitted', () => {
+    const foundersOn400: StadiumZoneItem = {
+      id: 'unit-founders-425',
+      code: 'S-425',
+      name: 'Suite 425',
+      department: 'premium_hospitality',
+      type: 'premium_suite',
+      capacity: 18,
+      stadiumZone: 'Upper Suite Tower',
+      level: '4',
+      premiumCategory: 'founders_suites',
+      status: 'open',
+      suiteDetails: { suiteNumber: '425' },
+    };
+
+    const result = classifyPremiumSpace(foundersOn400);
+    expect(result?.groupId).toBe('owner-founders-suites');
+    // Level comes from the 400-series suite number, not a hardcoded '300'.
+    expect(result?.level).toBe('400');
+  });
+
+  it('tags every premium unit in the venue data with grouping metadata', () => {
+    // Premium-ness is judged by unit type here, independently of the
+    // classifier, so this cannot pass vacuously once classification is
+    // metadata-driven.
+    const untagged: string[] = [];
+    let premiumUnits = 0;
+
+    for (const zone of COMPREHENSIVE_STADIUM_ZONES) {
+      for (const unit of zone.units) {
+        if (!isPremiumUnitType(unit)) continue;
+        premiumUnits += 1;
+        if (!unit.premiumCategory || !unit.stadiumLevel) untagged.push(unit.code);
+      }
+    }
+
+    expect(premiumUnits).toBeGreaterThan(0);
+    expect(untagged).toEqual([]);
+  });
+
+  it('leaves non-premium units untagged so they never enter the directory', () => {
+    const groupedIds = new Set(
+      groupPremiumSpaces(COMPREHENSIVE_STADIUM_ZONES).flatMap((g) => g.units.map((u) => u.id)),
+    );
+
+    for (const zone of COMPREHENSIVE_STADIUM_ZONES) {
+      for (const unit of zone.units) {
+        if (unit.premiumCategory) continue;
+        expect(groupedIds.has(unit.id)).toBe(false);
+      }
+    }
+  });
+
+  it('classifies premium units from explicit metadata rather than hardcoded ids', () => {
+    const foundersUnit: StadiumZoneItem = {
+      id: 'unit-founders-metadata',
+      code: 'S-350',
+      name: 'Founders Skybox',
+      department: 'premium_hospitality',
+      type: 'premium_suite',
+      capacity: 24,
+      stadiumZone: 'West Suite Tower',
+      level: '3',
+      stadiumLevel: '300',
+      premiumCategory: 'founders_suites',
+      status: 'open',
+    };
+
+    // No `tier` string to match on: metadata alone must drive the grouping.
+    const founders = classifyPremiumSpace(foundersUnit);
+    expect(founders?.groupId).toBe('owner-founders-suites');
+    expect(founders?.level).toBe('300');
+
+    const fieldUnit: StadiumZoneItem = {
+      id: 'unit-field-metadata',
+      code: 'GREEN-A',
+      name: 'Field-Level Green Room',
+      department: 'entertainment_hospitality',
+      type: 'aux_performer_room',
+      capacity: 25,
+      stadiumZone: 'Tunnel Level Backstage',
+      level: '0',
+      stadiumLevel: 'Field',
+      premiumCategory: 'field_suites',
+      status: 'restricted',
+    };
+
+    const field = classifyPremiumSpace(fieldUnit);
+    expect(field?.groupId).toBe('field-level-suites');
   });
 });
 

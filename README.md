@@ -38,7 +38,8 @@ Venue Wrangler is a native iOS/Android venue ops app built with Expo Router, Nes
 ## Quality gates
 
 - `npm run typecheck` — strict TypeScript, must be clean.
-- `npm test` — Vitest unit suite (geofence anti-fraud rules, authorization role checks, billing state mapping).
+- `npm test` — full Vitest unit suite (geofence anti-fraud rules, authorization role checks, billing state mapping). Generates the Prisma client first, which the API specs need.
+- `npm run test:ui` — app-only subset (`components/`, `lib/`, and the site, scripts and Metro specs). Skips the API package, so it runs without a generated Prisma client.
 
 ## Production deploy
 

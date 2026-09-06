@@ -219,6 +219,10 @@ export const styles = StyleSheet.create({
   },
   overlayCloseBtn: {
     padding: 4,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   overlayStatsRow: {
     flexDirection: 'row',
@@ -388,5 +392,43 @@ export const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
+  },
+
+  // ── Accessible zone selector (non-visual route to every zone in 3D mode) ──
+  zoneListBar: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    paddingTop: 4,
+  },
+  zoneListChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 44,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    backgroundColor: 'rgba(8, 24, 44, 0.88)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.14)',
+  },
+  zoneListChipActive: {
+    backgroundColor: '#013369',
+    borderColor: '#00E5FF',
+  },
+  zoneListChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#B0BEC5',
+  },
+  zoneListChipTextActive: {
+    color: '#FFFFFF',
+  },
+  zoneListStatusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
   },
 });

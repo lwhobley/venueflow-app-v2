@@ -11,7 +11,7 @@ on:
       - 'vitest.config.ts'
       - '.github/workflows/api-ci.yml'
   pull_request:
-    branches: [main]
+    branches: [main, desktop-web]
     paths:
       - 'packages/api/**'
       - 'package.json'

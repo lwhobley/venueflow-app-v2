@@ -4,7 +4,7 @@ The stadium deployment uses a new, empty Supabase project. The NestJS API remain
 
 ## Target
 
-- Supabase project ref: `pxpsjjlrghrtdsbwbbqe`
+- Supabase project ref: `<supabase-project-ref>`
 - Region: `ca-central-1`
 - PostgreSQL: 17
 - Initial state verified 2026-08-11: no public tables and no migrations
@@ -14,9 +14,9 @@ The stadium deployment uses a new, empty Supabase project. The NestJS API remain
 Configure these only in the API/Cloud Run secret environment:
 
 ```dotenv
-DATABASE_URL="postgresql://postgres.pxpsjjlrghrtdsbwbbqe:<password>@<pooler-host>:5432/postgres?sslmode=require"
-DATABASE_DIRECT_URL="postgresql://postgres:<password>@db.pxpsjjlrghrtdsbwbbqe.supabase.co:5432/postgres?sslmode=require"
-EXPECTED_SUPABASE_PROJECT_REF="pxpsjjlrghrtdsbwbbqe"
+DATABASE_URL="postgresql://postgres.<supabase-project-ref>:<password>@<pooler-host>:5432/postgres?sslmode=require"
+DATABASE_DIRECT_URL="postgresql://postgres:<password>@db.<supabase-project-ref>.supabase.co:5432/postgres?sslmode=require"
+EXPECTED_SUPABASE_PROJECT_REF="<supabase-project-ref>"
 ```
 
 Use the Supabase pooler URL for the running Cloud Run service. Use the direct URL for migrations when the deployment network supports it. Never commit either connection string or the database password.
@@ -27,7 +27,7 @@ The `service_role` key is not a database connection string and cannot run Prisma
 
 1. Rotate the exposed service-role key in Supabase.
 2. Copy the pooler and direct database connection strings from Supabase **Connect** and store them as Cloud Run secrets.
-3. Set `EXPECTED_SUPABASE_PROJECT_REF=pxpsjjlrghrtdsbwbbqe`; the API safety check rejects any other remote database.
+3. Set `EXPECTED_SUPABASE_PROJECT_REF=<supabase-project-ref>`; the API safety check rejects any other remote database.
 4. From a trusted release environment, run `npm run api:prisma:generate` and `npm run api:prisma:migrate:deploy`.
 5. Run `npm run api:prisma:migrate:status` and confirm the full Prisma history, including `20260811120000_stadium_operations_foundation`, is applied.
 6. Deploy a new Cloud Run revision with the new database variables but no traffic.
