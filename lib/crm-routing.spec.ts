@@ -1,28 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { EVENT_BEO_ROUTE, READINESS_ROW_ROUTES, parseWorkspaceView } from './crm-routing';
+import {
+  EVENT_BEO_ROUTE,
+  READINESS_ROW_ROUTES,
+  crmEventBeoRoute,
+  parseWorkspaceView,
+} from './crm-routing';
 import { SUITE_BEO_REPORT_ROUTE, beoReportRoute, parseReportDepartment } from './beo-report';
 
 /**
- * BEO entry points kept landing on the opening/closing checklist, which is a
- * task list and has nothing to do with a banquet event order. They must reach
- * the published BEO report — the suite BEO list and each department's run of
- * service — not the checklist and not the CRM pipeline, which is where a BEO is
- * drafted rather than where service reads it.
+ * There are two BEO records with no relation between them: `CrmBeo`, the sales
+ * document drafted in the CRM, and `SuiteBeoOrder`, the operational suite order
+ * the published report is built from. Each entry point has to lead to the one
+ * holding the records it is talking about — and never to the opening/closing
+ * checklist, which is a task list and has nothing to do with either.
  */
 describe('BEO entry point routing', () => {
-  it('sends the suite BEO readiness row to the published report, opened on suites', () => {
+  it('sends the suite BEO readiness row to the CRM, which holds the rows it scores', () => {
+    // `approvals` counts unconfirmed CrmBeo rows, so the report — built from
+    // SuiteBeoOrder — would show a different set of records than the number.
     const route = READINESS_ROW_ROUTES['Luxury Suite BEOs'];
     expect(route).not.toContain('/checklist');
-    expect(route).not.toContain('/(tabs)/guests');
-    expect(route).toContain('/stadium/beo-report');
-
-    const department = new URLSearchParams(route.split('?')[1]).get('department');
-    expect(parseReportDepartment(department)).toBe('premium_hospitality');
-  });
-
-  it('points every BEO entry point at the report route', () => {
-    expect(EVENT_BEO_ROUTE).toBe('/stadium/beo-report');
-    expect(SUITE_BEO_REPORT_ROUTE).toBe('/stadium/beo-report?department=premium_hospitality');
+    expect(route).toContain('/(tabs)/guests');
+    expect(parseWorkspaceView(new URLSearchParams(route.split('?')[1]).get('crmView'))).toBe('events');
   });
 
   it('keeps the rows whose readiness category really is checklist-backed', () => {
@@ -32,12 +31,26 @@ describe('BEO entry point routing', () => {
     expect(READINESS_ROW_ROUTES['Concessions & Stands']).toBe('/facility');
   });
 
+  it('points the operational BEO entry points at the published report', () => {
+    expect(EVENT_BEO_ROUTE).toBe('/stadium/beo-report');
+    expect(SUITE_BEO_REPORT_ROUTE).toBe('/stadium/beo-report?department=premium_hospitality');
+  });
+
   it('builds an event- and department-scoped report link', () => {
     expect(beoReportRoute()).toBe('/stadium/beo-report');
     expect(beoReportRoute({ eventId: 'evt_1' })).toBe('/stadium/beo-report?eventId=evt_1');
     expect(beoReportRoute({ eventId: 'evt_1', department: 'culinary_production' })).toBe(
       '/stadium/beo-report?eventId=evt_1&department=culinary_production'
     );
+  });
+
+  it('links the report back to the CRM, narrowed to the event by name', () => {
+    expect(crmEventBeoRoute()).toBe('/(tabs)/guests?crmView=events');
+
+    const route = crmEventBeoRoute('Texans vs Colts');
+    const params = new URLSearchParams(route.split('?')[1]);
+    expect(params.get('crmView')).toBe('events');
+    expect(params.get('crmEvent')).toBe('Texans vs Colts');
   });
 
   it('ignores deep-link values the screens do not render', () => {

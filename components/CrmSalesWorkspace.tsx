@@ -105,11 +105,18 @@ export function CrmSalesWorkspace({
   venueId,
   enabled,
   initialView,
+  initialEventName,
 }: {
   venueId: Id<'venues'> | undefined;
   enabled: boolean;
   /** Opens the workspace on a specific tab, so a BEO link can land on Events. */
   initialView?: WorkspaceView;
+  /**
+   * Filters the Events tab to one event name. A link from the published BEO
+   * report arrives with the event's title, which is the only handle the sales
+   * and operational BEO records share.
+   */
+  initialEventName?: string;
 }) {
   const isDesktop = useIsDesktop();
   const [view, setView] = useState<WorkspaceView>(initialView ?? 'dashboard');
@@ -118,6 +125,10 @@ export function CrmSalesWorkspace({
   useEffect(() => {
     if (initialView) setView(initialView);
   }, [initialView]);
+  const [eventFilter, setEventFilter] = useState<string>(initialEventName ?? '');
+  useEffect(() => {
+    setEventFilter(initialEventName ?? '');
+  }, [initialEventName]);
   const [leadSearch, setLeadSearch] = useState('');
   const [selectedLeadId, setSelectedLeadId] = useState<Id<'crmLeads'> | null>(null);
   const [showLeadForm, setShowLeadForm] = useState(false);
@@ -423,7 +434,7 @@ export function CrmSalesWorkspace({
           ) : null}
 
           {view === 'events' ? (
-            <EventsView beos={beos} onConvert={async (beoId) => {
+            <EventsView beos={beos} eventFilter={eventFilter} onClearFilter={() => setEventFilter('')} onConvert={async (beoId) => {
               if (!venueId) return;
               try {
                 await convertBeoToContract({ venueId, beoId });
@@ -595,10 +606,36 @@ function ContactsView({ leads, search, onSearch, onSelectLead }: { leads: LeadRo
   );
 }
 
-function EventsView({ beos, onConvert }: { beos: BeoRow[] | undefined; onConvert: (beoId: Id<'crmBeos'>) => Promise<void> }) {
+function EventsView({
+  beos,
+  eventFilter,
+  onClearFilter,
+  onConvert,
+}: {
+  beos: BeoRow[] | undefined;
+  /** Event name to narrow the list to, from a report link. Empty shows all. */
+  eventFilter?: string;
+  onClearFilter?: () => void;
+  onConvert: (beoId: Id<'crmBeos'>) => Promise<void>;
+}) {
+  const needle = eventFilter?.trim().toLocaleLowerCase() ?? '';
+  const all = asArray(beos);
+  const matching = needle ? all.filter((beo) => beo.eventName.toLocaleLowerCase().includes(needle)) : all;
   return (
     <View style={{ gap: spacing.sm }}>
-      {asArray(beos).length === 0 ? <EmptyLine text="No BEO drafts yet." /> : asArray(beos).map((beo) => (
+      {needle ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' }}>
+          <Text style={{ color: colors.muted, flex: 1 }}>
+            {matching.length
+              ? `Showing ${matching.length} of ${all.length} BEOs for "${eventFilter}".`
+              : `No BEO drafts match "${eventFilter}". This event may only have suite orders.`}
+          </Text>
+          <Button compact mode="outlined" textColor={colors.primary} onPress={() => onClearFilter?.()}>
+            Show all
+          </Button>
+        </View>
+      ) : null}
+      {matching.length === 0 && !needle ? <EmptyLine text="No BEO drafts yet." /> : matching.map((beo) => (
         <View key={beo._id} style={{ padding: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: 8, gap: 4 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm }}>
             <View style={{ flex: 1 }}>
