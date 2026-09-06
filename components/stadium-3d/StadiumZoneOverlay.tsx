@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { StadiumZoneData } from '../stadium-map/zone-data';
+import { HIGHLIGHT_STATUS_LABELS, getHighlightColor } from './stadium-model-bindings';
 import type { OperationalHighlightStatus } from './stadium-3d.types';
 import { styles } from './Stadium3DViewer.styles';
 
@@ -17,30 +18,15 @@ export function StadiumZoneOverlay({
   onOpenDetails,
   onClose,
 }: StadiumZoneOverlayProps) {
-  const statusColor =
-    highlightStatus === 'critical'
-      ? '#FF5252'
-      : highlightStatus === 'attention'
-        ? '#FFA000'
-        : highlightStatus === 'watch'
-          ? '#FFD700'
-          : highlightStatus === 'ready'
-            ? '#00E676'
-            : '#00E5FF';
-
-  const statusLabel =
-    highlightStatus === 'critical'
-      ? 'CRITICAL ALERT'
-      : highlightStatus === 'attention'
-        ? 'ATTENTION NEEDED'
-        : highlightStatus === 'watch'
-          ? 'IN SERVICE'
-          : highlightStatus === 'ready'
-            ? 'OPERATIONAL READY'
-            : 'SELECTED ZONE';
+  // Same table that lights the model and fills the legend.
+  const statusColor = getHighlightColor(highlightStatus).colorHex;
+  const statusLabel = HIGHLIGHT_STATUS_LABELS[highlightStatus].toUpperCase();
 
   const totalUnits = zone.unitsCount ?? zone.units.length;
   const openUnits = zone.openCount ?? zone.units.filter((u) => u.status === 'open').length;
+  // The two zones with no geometry in the asset still appear here from the
+  // zone list; without units there is nothing for the details modal to open.
+  const hasUnits = zone.units.length > 0;
 
   return (
     <View
@@ -131,13 +117,24 @@ export function StadiumZoneOverlay({
       <View style={styles.overlayActionsRow}>
         <Pressable
           onPress={onOpenDetails}
-          style={({ pressed }) => [styles.overlayOpenBtn, { opacity: pressed ? 0.8 : 1 }]}
+          disabled={!hasUnits}
+          style={({ pressed }) => [
+            styles.overlayOpenBtn,
+            { opacity: !hasUnits ? 0.45 : pressed ? 0.8 : 1 },
+          ]}
           accessibilityRole="button"
-          accessibilityLabel={`Open details and workflows for ${zone.name}`}
+          accessibilityState={{ disabled: !hasUnits }}
+          accessibilityLabel={
+            hasUnits
+              ? `Open details and workflows for ${zone.name}`
+              : `${zone.name} has no units to open`
+          }
         >
           <MaterialCommunityIcons name="clipboard-text-outline" size={16} color="#001E3D" />
-          <Text style={styles.overlayOpenBtnText}>OPEN OPERATIONS DETAILS</Text>
-          <MaterialCommunityIcons name="arrow-right" size={16} color="#001E3D" />
+          <Text style={styles.overlayOpenBtnText}>
+            {hasUnits ? 'OPEN OPERATIONS DETAILS' : 'NO UNITS IN THIS ZONE'}
+          </Text>
+          {hasUnits ? <MaterialCommunityIcons name="arrow-right" size={16} color="#001E3D" /> : null}
         </Pressable>
       </View>
     </View>

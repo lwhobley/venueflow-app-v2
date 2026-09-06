@@ -1,6 +1,11 @@
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { CAMERA_PRESETS } from './stadium-model-bindings';
+import {
+  CAMERA_PRESETS,
+  HIGHLIGHT_STATUS_LABELS,
+  LEGEND_STATUSES,
+  getHighlightColor,
+} from './stadium-model-bindings';
 import type { CameraPresetId } from './stadium-3d.types';
 import { styles } from './Stadium3DViewer.styles';
 
@@ -103,22 +108,14 @@ export function Stadium3DControls({
       {/* Compact Operational Status Legend */}
       {showLegend ? (
         <View style={styles.legendBar} pointerEvents="none">
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#00E676' }]} />
-            <Text style={styles.legendText}>Ready</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#FFA000' }]} />
-            <Text style={styles.legendText}>In Service</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#D32F2F' }]} />
-            <Text style={styles.legendText}>Alert</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#00E5FF' }]} />
-            <Text style={styles.legendText}>Selected</Text>
-          </View>
+          {/* Swatches come from the same table that lights the model, so the key
+              cannot drift away from the colours actually on screen. */}
+          {LEGEND_STATUSES.map((status) => (
+            <View key={status} style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: getHighlightColor(status).colorHex }]} />
+              <Text style={styles.legendText}>{HIGHLIGHT_STATUS_LABELS[status]}</Text>
+            </View>
+          ))}
         </View>
       ) : null}
     </>

@@ -28,6 +28,12 @@ export interface StadiumZoneModelBinding {
   level: string;
   category: string;
   meshNames: string[];
+  /**
+   * Name prefixes matched against mesh names, for the repeated families the
+   * asset generates (yard lines, turf bands, endzone letters, goal posts).
+   * Listing every member by hand goes stale the moment the model is re-exported.
+   */
+  meshPrefixes?: string[];
   anchor: [number, number, number];
   cameraPreset: CameraPresetId;
   colorHex?: string;

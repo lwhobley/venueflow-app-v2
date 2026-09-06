@@ -4,7 +4,7 @@ import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { findZoneByMeshName } from './stadium-model-bindings';
+import { PROCEDURAL_MESH_NAMES, findZoneByMeshName } from './stadium-model-bindings';
 import { applyHighlights, disposeScene, isolateMaterials } from './scene-resources';
 import { computeCameraFraming, type ModelBounds } from './camera-framing';
 import { createLoadCompletionGate, getRenderableViewport } from './stadium-render-lifecycle';
@@ -497,7 +497,7 @@ function buildProceduralStadium(group: THREE.Group) {
     new THREE.BoxGeometry(14, 0.4, 24),
     new THREE.MeshStandardMaterial({ color: '#1B6B38', roughness: 0.8, metalness: 0.1 })
   );
-  turf.name = 'Field_GrassTurf';
+  turf.name = PROCEDURAL_MESH_NAMES.turf;
   turf.position.y = 0.2;
   turf.receiveShadow = true;
   group.add(turf);
@@ -507,7 +507,7 @@ function buildProceduralStadium(group: THREE.Group) {
     new THREE.BoxGeometry(13.6, 0.42, 2.8),
     new THREE.MeshStandardMaterial({ color: '#00143F', roughness: 0.6 })
   );
-  ezN.name = 'Endzone_North_Texans';
+  ezN.name = PROCEDURAL_MESH_NAMES.endzoneNorth;
   ezN.position.set(0, 0.21, -10.2);
   group.add(ezN);
 
@@ -515,7 +515,7 @@ function buildProceduralStadium(group: THREE.Group) {
     new THREE.BoxGeometry(13.6, 0.42, 2.8),
     new THREE.MeshStandardMaterial({ color: '#B71C1C', roughness: 0.6 })
   );
-  ezS.name = 'Endzone_South_Texans';
+  ezS.name = PROCEDURAL_MESH_NAMES.endzoneSouth;
   ezS.position.set(0, 0.21, 10.2);
   group.add(ezS);
 
@@ -524,7 +524,7 @@ function buildProceduralStadium(group: THREE.Group) {
     new THREE.CylinderGeometry(13.2, 10.5, 1.6, 48, 1, true),
     new THREE.MeshStandardMaterial({ color: '#0D2137', roughness: 0.6, metalness: 0.3, side: THREE.DoubleSide })
   );
-  bowl100.name = 'Bowl_100_LowerNavy';
+  bowl100.name = PROCEDURAL_MESH_NAMES.bowl100;
   bowl100.position.y = 1.3;
   bowl100.scale.set(1.1, 1, 1.35);
   group.add(bowl100);
@@ -534,7 +534,7 @@ function buildProceduralStadium(group: THREE.Group) {
     new THREE.CylinderGeometry(14.8, 13.0, 1.8, 48, 1, true),
     new THREE.MeshStandardMaterial({ color: '#132B4A', roughness: 0.5, metalness: 0.4, side: THREE.DoubleSide })
   );
-  bowl200.name = 'Bowl_200_ClubNavy';
+  bowl200.name = PROCEDURAL_MESH_NAMES.bowl200;
   bowl200.position.y = 2.8;
   bowl200.scale.set(1.11, 1, 1.36);
   group.add(bowl200);
@@ -544,7 +544,7 @@ function buildProceduralStadium(group: THREE.Group) {
     new THREE.CylinderGeometry(15.6, 14.8, 1.2, 48, 1, true),
     new THREE.MeshStandardMaterial({ color: '#D4AF37', roughness: 0.25, metalness: 0.8, side: THREE.DoubleSide })
   );
-  suites300.name = 'Suites_300_Balcony';
+  suites300.name = PROCEDURAL_MESH_NAMES.suites300;
   suites300.position.y = 4.3;
   suites300.scale.set(1.125, 1, 1.375);
   group.add(suites300);
@@ -554,7 +554,7 @@ function buildProceduralStadium(group: THREE.Group) {
     new THREE.CylinderGeometry(18.2, 15.4, 3.2, 48, 1, true),
     new THREE.MeshStandardMaterial({ color: '#8A1522', roughness: 0.6, metalness: 0.2, side: THREE.DoubleSide })
   );
-  upperBowl.name = 'Bowl_500_UpperRed';
+  upperBowl.name = PROCEDURAL_MESH_NAMES.upperBowl;
   upperBowl.position.y = 6.2;
   upperBowl.scale.set(1.14, 1, 1.39);
   group.add(upperBowl);
@@ -563,7 +563,7 @@ function buildProceduralStadium(group: THREE.Group) {
   const gateMat = new THREE.MeshStandardMaterial({ color: '#ECEFF1', roughness: 0.3, metalness: 0.6 });
   [-14.5, 14.5].forEach((z, idx) => {
     const gate = new THREE.Mesh(new THREE.BoxGeometry(8, 3.2, 1.8), gateMat);
-    gate.name = idx === 0 ? 'Gate_Ford_Tower' : 'Gate_Kroger_Tower';
+    gate.name = idx === 0 ? PROCEDURAL_MESH_NAMES.gateFord : PROCEDURAL_MESH_NAMES.gateKroger;
     gate.position.set(0, 2.2, z);
     group.add(gate);
   });

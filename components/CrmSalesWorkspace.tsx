@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { Button, Card, Chip, Divider, IconButton, SegmentedButtons, Text, TextInput } from 'react-native-paper';
 import { useMutation, useQuery } from '../lib/railway-hooks';
@@ -8,9 +8,9 @@ import { accents, colors, spacing } from '../lib/theme';
 import { useIsDesktop } from '../lib/responsive';
 import { asArray, dollarsToCents, errorMessage, formatMoneyWhole, formatShortDate, splitTags as baseSplitTags } from '../lib/format';
 import { AnimatedTab } from './AppCard';
+import type { WorkspaceView } from '../lib/crm-routing';
 
 type LeadStatus = 'new' | 'contacted' | 'qualified' | 'proposal_sent' | 'negotiating' | 'won' | 'lost' | 'unqualified' | 'on_hold';
-type WorkspaceView = 'dashboard' | 'pipeline' | 'contacts' | 'events' | 'contracts' | 'insights' | 'templates';
 
 type ForecastRow = { stage: string; probability: number; count: number; rawValueCents: number; weightedValueCents: number };
 type ForecastResponse = { byStage: ForecastRow[]; totals: { leadCount: number; rawValueCents: number; weightedValueCents: number; wonCount: number; wonValueCents: number } };
@@ -101,9 +101,23 @@ function splitTags(value: string) {
   return Array.from(new Set(baseSplitTags(value))).slice(0, 12);
 }
 
-export function CrmSalesWorkspace({ venueId, enabled }: { venueId: Id<'venues'> | undefined; enabled: boolean }) {
+export function CrmSalesWorkspace({
+  venueId,
+  enabled,
+  initialView,
+}: {
+  venueId: Id<'venues'> | undefined;
+  enabled: boolean;
+  /** Opens the workspace on a specific tab, so a BEO link can land on Events. */
+  initialView?: WorkspaceView;
+}) {
   const isDesktop = useIsDesktop();
-  const [view, setView] = useState<WorkspaceView>('dashboard');
+  const [view, setView] = useState<WorkspaceView>(initialView ?? 'dashboard');
+  // A second link to a different tab arrives as a prop change on a mounted
+  // screen, so follow it rather than leaving the user on the previous tab.
+  useEffect(() => {
+    if (initialView) setView(initialView);
+  }, [initialView]);
   const [leadSearch, setLeadSearch] = useState('');
   const [selectedLeadId, setSelectedLeadId] = useState<Id<'crmLeads'> | null>(null);
   const [showLeadForm, setShowLeadForm] = useState(false);

@@ -17,6 +17,39 @@ export const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#060D15',
   },
+  fallbackNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+  },
+  fallbackNoticeText: {
+    color: '#FFB300',
+    fontSize: 11,
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  operationsMapBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    minHeight: 44,
+    marginHorizontal: spacing.md,
+    marginVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1C3A55',
+    backgroundColor: '#0B1B2B',
+  },
+  operationsMapBtnText: {
+    color: '#00E5FF',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
 
   // ── Top Header Controls Bar ──
   topControlsBar: {

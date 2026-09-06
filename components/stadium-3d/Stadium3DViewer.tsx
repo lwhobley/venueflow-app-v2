@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, AppState, Pressable, Text, View, useWindowDimensions } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import Stadium3DCanvas from './Stadium3DCanvas';
 import { Stadium3DControls } from './Stadium3DControls';
@@ -123,17 +124,14 @@ export function Stadium3DViewer({
     setAutoRotate((prev) => !prev);
   }, []);
 
-  // Zone selection handler
-  const handleSelectZone = useCallback(
-    (zoneId: string) => {
-      onSelectZone(zoneId);
-      const binding = findZoneBinding(zoneId);
-      if (binding && binding.cameraPreset !== cameraPreset) {
-        setCameraPreset(binding.cameraPreset);
-      }
-    },
-    [onSelectZone, cameraPreset]
-  );
+  // Fly to the zone's camera preset however it was selected — a tap in the
+  // canvas, a chip in the accessible zone list, or the level pills on the host
+  // screen, which previously changed the lighting without moving the camera.
+  useEffect(() => {
+    if (!selectedZoneId) return;
+    const binding = findZoneBinding(selectedZoneId);
+    if (binding) setCameraPreset(binding.cameraPreset);
+  }, [selectedZoneId]);
 
   // Open Details action (opens the modal with the selected unit, or first unit in zone)
   const handleOpenDetails = useCallback(() => {
@@ -162,8 +160,23 @@ export function Stadium3DViewer({
 
   return (
     <View style={styles.container}>
-      <Pressable onPress={onOpenOperationsMap} accessibilityRole="button" accessibilityLabel="Open Operations Map" style={{ padding: 12, minHeight: 44 }}>
-        <Text style={{ color: '#FFFFFF' }}>{renderStatus === 'fallback' ? 'Simplified 3D — some sections are unavailable. Open Operations Map' : 'Open Operations Map'}</Text>
+      {renderStatus === 'fallback' ? (
+        <View style={styles.fallbackNotice} accessibilityRole="alert">
+          <MaterialCommunityIcons name="alert-outline" size={14} color="#FFB300" />
+          <Text style={styles.fallbackNoticeText}>
+            Simplified 3D — some sections are unavailable.
+          </Text>
+        </View>
+      ) : null}
+      <Pressable
+        onPress={onOpenOperationsMap}
+        accessibilityRole="button"
+        accessibilityLabel="Open Operations Map"
+        style={({ pressed }) => [styles.operationsMapBtn, { opacity: pressed ? 0.8 : 1 }]}
+      >
+        <MaterialCommunityIcons name="map-outline" size={16} color="#00E5FF" />
+        <Text style={styles.operationsMapBtnText}>OPEN OPERATIONS MAP</Text>
+        <MaterialCommunityIcons name="arrow-right" size={16} color="#00E5FF" />
       </Pressable>
       <View style={[styles.canvasWrapper, { height: viewerHeight }]}>
         {/* Loading State Overlay */}
@@ -192,7 +205,7 @@ export function Stadium3DViewer({
               resetToken={resetToken}
               active={foreground && focused}
               reducedMotion={reducedMotion}
-              onSelectZone={handleSelectZone}
+              onSelectZone={onSelectZone}
               onLoadProgress={(p) => setLoadProgress(p)}
               onLoadComplete={(fallback) => setRenderStatus(fallback ? 'fallback' : 'ready')}
               onLoadError={(err) => {
