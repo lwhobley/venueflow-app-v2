@@ -8,6 +8,7 @@ import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 import { canAccessCrossFacilityRealtime, canManageAssignedScope, canViewPilotHealth } from '../../auth/roles';
 import { getAuthorizedOperationalAreas } from '../../auth/access-control.helper';
 import { PrismaService } from '../../prisma/prisma.service';
+import { organizationIdForPairedVenue } from '../../common/venue-facility';
 import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
 import { SkipTenantTransaction } from '../../prisma/skip-tenant-transaction.decorator';
 
@@ -79,7 +80,6 @@ export class StadiumRealtimeController {
     let organizationId: string | undefined;
     let allowedAreas: string[] | undefined;
 
-    // Support single-use stream ticket authentication if provided
     if (ticket) {
       const ticketPayload = await this.gateway.verifyAndConsumeTicket(ticket);
       if (!ticketPayload || ticketPayload.facilityId !== facilityId) {
@@ -136,7 +136,6 @@ export class StadiumRealtimeController {
         activeRole === 'owner' ||
         activeRole === 'admin';
 
-      // True gap recovery: replay any missed events from ring buffer if lastEventId is supplied
       const lastSeq = Number(lastEventIdQuery ?? 0);
       if (Number.isFinite(lastSeq) && lastSeq > 0) {
         const missedEvents = this.gateway.getEventsSince(
@@ -163,19 +162,16 @@ export class StadiumRealtimeController {
 
       const handler = (payload: unknown) => {
         const dataObj = typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : { data: payload };
-
-        // Defense-in-depth: check operationalAreaType if present on ticket/event data
         const eventArea = (dataObj.data && typeof dataObj.data === 'object' && (dataObj.data as any).operationalAreaType)
           ? String((dataObj.data as any).operationalAreaType).toLowerCase()
           : (dataObj.operationalAreaType ? String(dataObj.operationalAreaType).toLowerCase() : null);
 
         if (eventArea && !isBroadAdmin && !allowedAreasSet.has(eventArea)) {
-          return; // Drop event if outside subscriber's allowed operational area
+          return;
         }
 
         const seq = typeof dataObj.seq === 'number' ? dataObj.seq : ++currentSeq;
         currentSeq = Math.max(currentSeq, seq);
-
         const innerData =
           typeof dataObj.data === 'object' && dataObj.data !== null
             ? (dataObj.data as Record<string, unknown>)
@@ -184,18 +180,13 @@ export class StadiumRealtimeController {
         subscriber.next({
           id: String(seq),
           type: typeof dataObj.event === 'string' ? dataObj.event : 'message',
-          data: {
-            ...innerData,
-            ...dataObj,
-            seq,
-          },
+          data: { ...innerData, ...dataObj, seq },
         } as MessageEvent);
       };
 
       for (const ch of channelKeys) {
         this.gateway.on(ch, handler);
       }
-
       return () => {
         for (const ch of channelKeys) {
           this.gateway.off(ch, handler);
@@ -204,7 +195,6 @@ export class StadiumRealtimeController {
     });
   }
 
-  // Mirrors SuiteHospitalityController.assertOperator / ConcourseInventoryController.assertOperator.
   private async assertZoneAssignment(scope: Scope, zoneId?: string) {
     const orgId = await this.organizationIdFor(scope.venueId);
     const assignment = await this.prisma.scopeAssignment.findFirst({
@@ -225,20 +215,6 @@ export class StadiumRealtimeController {
   }
 
   private async organizationIdFor(facilityId: string): Promise<string> {
-    if (this.prisma?.venue?.findUniqueOrThrow) {
-      const venue = await this.prisma.venue.findUniqueOrThrow({
-        where: { id: facilityId },
-        select: { organizationId: true },
-      });
-      return venue.organizationId;
-    }
-    if (this.prisma?.venue?.findUnique) {
-      const venue = await this.prisma.venue.findUnique({
-        where: { id: facilityId },
-        select: { organizationId: true },
-      });
-      if (venue?.organizationId) return venue.organizationId;
-    }
-    return 'default-org';
+    return organizationIdForPairedVenue(this.prisma, facilityId);
   }
 }
