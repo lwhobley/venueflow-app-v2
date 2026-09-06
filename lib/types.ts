@@ -1,6 +1,23 @@
 import type { Id } from './ids';
 
-export type Role = 'admin' | 'owner' | 'manager' | 'server' | 'staff';
+export type Role =
+  | 'admin'
+  | 'owner'
+  | 'manager'
+  | 'server'
+  | 'staff'
+  | 'platform_admin'
+  | 'organization_admin'
+  | 'fnb_director'
+  | 'event_manager'
+  | 'outlet_manager'
+  | 'executive_chef'
+  | 'warehouse_manager'
+  | 'premium_manager'
+  | 'finance_viewer'
+  | 'concourse_supervisor'
+  | 'suite_manager'
+  | 'auditor';
 
 export type Venue = {
   id: Id<'venues'>;

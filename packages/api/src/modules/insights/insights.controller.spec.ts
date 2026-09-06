@@ -9,7 +9,7 @@ import { assertWithinSharedRateLimit } from '../../common/rate-limit';
 
 function makeController() {
   const prisma = {
-    cosmicInsight: { findMany: vi.fn().mockResolvedValue([]) },
+    cosmicInsight: { findMany: vi.fn() },
   } as any;
   const controller = new InsightsController(prisma);
   return { controller, prisma };
@@ -25,7 +25,7 @@ afterEach(() => {
 
 describe('InsightsController', () => {
   describe('getLatestInsights', () => {
-    it('applies a per-IP rate limit before querying insights', async () => {
+    it('applies a per-IP rate limit before returning insights', async () => {
       const { controller, prisma } = makeController();
 
       await controller.getLatestInsights(makeRequest());
@@ -47,19 +47,13 @@ describe('InsightsController', () => {
       expect(prisma.cosmicInsight.findMany).not.toHaveBeenCalled();
     });
 
-    it('returns the 3 most recent insights ordered by batchAt desc', async () => {
+    it('does not read the unscoped CosmicInsight table', async () => {
       const { controller, prisma } = makeController();
-      prisma.cosmicInsight.findMany.mockResolvedValue([
-        { kind: 'tip', title: 'Slow Tuesdays', body: 'Consider a promo.', batchAt: new Date() },
-      ]);
 
       const result = await controller.getLatestInsights(makeRequest());
 
-      expect(prisma.cosmicInsight.findMany).toHaveBeenCalledWith({
-        orderBy: { batchAt: 'desc' },
-        take: 3,
-      });
-      expect(result).toEqual([{ kind: 'tip', title: 'Slow Tuesdays', body: 'Consider a promo.' }]);
+      expect(prisma.cosmicInsight.findMany).not.toHaveBeenCalled();
+      expect(result).toEqual([]);
     });
 
     it('returns an empty array when no insights exist', async () => {

@@ -32,8 +32,19 @@ describe('canManageVenue', () => {
     expect(canManageVenue('manager')).toBe(true);
   });
 
+  it('returns true for stadium operational manager roles', () => {
+    expect(canManageVenue('event_manager')).toBe(true);
+    expect(canManageVenue('outlet_manager')).toBe(true);
+    expect(canManageVenue('platform_admin')).toBe(true);
+  });
+
   it('returns false for staff role', () => {
     expect(canManageVenue('staff')).toBe(false);
+  });
+
+  it('returns false for viewer-only enterprise roles', () => {
+    expect(canManageVenue('finance_viewer')).toBe(false);
+    expect(canManageVenue('auditor')).toBe(false);
   });
 
   it('returns false for null role', () => {
@@ -64,6 +75,11 @@ describe('canManageBilling', () => {
 
   it('returns true for owner role', () => {
     expect(canManageBilling('owner')).toBe(true);
+  });
+
+  it('returns true for organization admins', () => {
+    expect(canManageBilling('platform_admin')).toBe(true);
+    expect(canManageBilling('organization_admin')).toBe(true);
   });
 
   it('returns false for manager role', () => {
