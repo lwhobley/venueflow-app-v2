@@ -485,9 +485,9 @@ function GuestsScreenInner() {
 
           <Card style={{ backgroundColor: colors.surface, borderRadius: radius.sharp }}>
             <Card.Content style={{ gap: spacing.sm }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm }}>
-                <Text variant="titleMedium" style={{ fontWeight: '700' }}>{t('guests.directory.title')}</Text>
-                <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm }}>
+                <Text variant="titleMedium" style={{ fontWeight: '700', flexGrow: 1, minWidth: 160 }}>{t('guests.directory.title')}</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
                   <Button compact mode="outlined" textColor={colors.primary} onPress={() => setShowLeadImport((value) => !value)} accessibilityLabel={showLeadImport ? t('guests.directory.closeLeadImportA11y') : t('guests.directory.importLeadsA11y')}>
                     {showLeadImport ? t('guests.directory.closeLeads') : t('guests.directory.importLeads')}
                   </Button>

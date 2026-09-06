@@ -85,7 +85,7 @@ export default function JoinRequestsScreen() {
         >
           {t('joinRequests.back')}
         </Button>
-        <Text style={{ ...type.heading, color: palette.charcoal, flex: 1 }}>
+        <Text style={{ ...type.heading, color: palette.charcoal, flex: 1, minWidth: 0 }}>
           {t('joinRequests.title')}
         </Text>
         <Button icon="refresh" textColor={palette.muted} onPress={() => void refetch()} compact>

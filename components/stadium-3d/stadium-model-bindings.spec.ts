@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import * as THREE from 'three';
 import {
   CAMERA_PRESETS,
   STADIUM_ZONE_MODEL_BINDINGS,
@@ -20,6 +21,16 @@ describe('stadium-model-bindings', () => {
       expect(preset.position).toHaveLength(3);
       expect(preset.target).toHaveLength(3);
       expect(preset.position[1]).toBeGreaterThan(0); // Camera should stay above floor
+
+      const camera = new THREE.PerspectiveCamera(40, 390 / 480, 0.1, 1000);
+      camera.position.fromArray(preset.position);
+      camera.lookAt(new THREE.Vector3().fromArray(preset.target));
+      camera.updateMatrixWorld();
+      const projectedTarget = new THREE.Vector3().fromArray(preset.target).project(camera);
+      expect(Math.abs(projectedTarget.x)).toBeLessThan(0.001);
+      expect(Math.abs(projectedTarget.y)).toBeLessThan(0.001);
+      expect(projectedTarget.z).toBeGreaterThan(-1);
+      expect(projectedTarget.z).toBeLessThan(1);
     }
   });
 

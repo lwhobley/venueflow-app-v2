@@ -574,12 +574,12 @@ function StaffScreen() {
             }}
           >
             <Card.Content style={{ gap: spacing.xs }}>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <Text style={{ fontWeight: "800", color: "#17643B", fontSize: 16 }}>
+              <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                <Text style={{ flex: 1, minWidth: 0, fontWeight: "800", color: "#17643B", fontSize: 16 }}>
                   Multi-Venue Compliance Command
                 </Text>
-                <View style={{ backgroundColor: "#17643B", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
-                  <Text style={{ color: "#FFFFFF", fontWeight: "800", fontSize: 11 }}>AUDIT ACTIVE</Text>
+                <View style={{ flexShrink: 0, backgroundColor: "#17643B", paddingHorizontal: 7, paddingVertical: 3, borderRadius: 4 }}>
+                  <Text style={{ color: "#FFFFFF", fontWeight: "800", fontSize: 10 }}>AUDIT ACTIVE</Text>
                 </View>
               </View>
               <Text style={{ color: "#1D2420", fontSize: 13 }}>
@@ -608,12 +608,12 @@ function StaffScreen() {
             }}
           >
             <Card.Content style={{ gap: spacing.xs }}>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <Text style={{ fontWeight: "800", color: "#60A5FA", fontSize: 16 }}>
+              <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                <Text style={{ flex: 1, minWidth: 0, fontWeight: "800", color: "#60A5FA", fontSize: 16 }}>
                   Vendor Management System (VMS)
                 </Text>
-                <View style={{ backgroundColor: "#2563EB", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
-                  <Text style={{ color: "#FFFFFF", fontWeight: "800", fontSize: 11 }}>ENTERPRISE VMS</Text>
+                <View style={{ flexShrink: 0, backgroundColor: "#2563EB", paddingHorizontal: 7, paddingVertical: 3, borderRadius: 4 }}>
+                  <Text style={{ color: "#FFFFFF", fontWeight: "800", fontSize: 10 }}>VMS</Text>
                 </View>
               </View>
               <Text style={{ color: "#D1D5DB", fontSize: 13 }}>

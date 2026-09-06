@@ -14,6 +14,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { spacing, useDesignTheme, opsConsole } from '../../lib/theme';
 import { useVenueAuth } from '../../lib/useVenueAuth';
 import { apiRequest, useApiMutation, useApiQuery } from '../../lib/api-client';
+import { useResponsive } from '../../lib/responsive';
 
 type TabKey =
   | 'directory'
@@ -58,6 +59,7 @@ function VmsPill({
 
 export default function VendorManagementSystemScreen() {
   const palette = useDesignTheme();
+  const { isPhone } = useResponsive();
   const { venue } = useVenueAuth();
 
   const [activeTab, setActiveTab] = useState<TabKey>('directory');
@@ -223,21 +225,21 @@ export default function VendorManagementSystemScreen() {
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>
       {/* Header Bar */}
-      <View style={[styles.header, { borderBottomColor: palette.border }]}>
+      <View style={[styles.header, isPhone && styles.headerPhone, { borderBottomColor: palette.border }]}>
         <View style={styles.headerLeft}>
           <Pressable onPress={() => router.back()} style={styles.backBtn}>
             <MaterialCommunityIcons name="arrow-left" size={20} color={palette.charcoal} />
           </Pressable>
-          <View>
+          <View style={styles.headerCopy}>
             <View style={styles.titleRow}>
               <Text style={[styles.headerTitle, { color: palette.charcoal }]}>
                 VENDOR MANAGEMENT SYSTEM
               </Text>
-              <VmsPill label="ENTERPRISE VMS" tone="good" palette={palette} />
+              {!isPhone ? <VmsPill label="ENTERPRISE VMS" tone="good" palette={palette} /> : null}
             </View>
-            <Text style={[styles.headerSubtitle, { color: palette.muted }]}>
+            {!isPhone ? <Text style={[styles.headerSubtitle, { color: palette.muted }]}>
               Unified Workforce, Agency Staffing & Supplier Operations • Inspired by Ubeya Stadia
-            </Text>
+            </Text> : null}
           </View>
         </View>
 
@@ -253,8 +255,8 @@ export default function VendorManagementSystemScreen() {
       </View>
 
       {/* KPI Metric Strip */}
-      <View style={[styles.kpiStrip, { borderBottomColor: palette.border }]}>
-        <View style={styles.kpiCard}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.kpiStrip, { borderBottomColor: palette.border }]}>
+        <View style={[styles.kpiCard, isPhone && styles.kpiCardPhone]}>
           <Text style={styles.kpiLabel}>ACTIVE VENDORS</Text>
           <Text style={[styles.kpiValue, { color: palette.charcoal }]}>
             {vendors.filter((v: any) => v.status === 'active').length}
@@ -262,13 +264,13 @@ export default function VendorManagementSystemScreen() {
           <Text style={styles.kpiSub}>Agencies & Suppliers</Text>
         </View>
 
-        <View style={styles.kpiCard}>
+        <View style={[styles.kpiCard, isPhone && styles.kpiCardPhone]}>
           <Text style={styles.kpiLabel}>FULFILLMENT RATE</Text>
           <Text style={[styles.kpiValue, { color: opsConsole.good }]}>98.4%</Text>
           <Text style={styles.kpiSub}>Target &gt;95%</Text>
         </View>
 
-        <View style={styles.kpiCard}>
+        <View style={[styles.kpiCard, isPhone && styles.kpiCardPhone]}>
           <Text style={styles.kpiLabel}>ON-SITE STAFF</Text>
           <Text style={[styles.kpiValue, { color: palette.primary }]}>
             {attendances.filter((a: any) => a.status === 'clocked_in').length}
@@ -276,7 +278,7 @@ export default function VendorManagementSystemScreen() {
           <Text style={styles.kpiSub}>Active Checked-In</Text>
         </View>
 
-        <View style={styles.kpiCard}>
+        <View style={[styles.kpiCard, isPhone && styles.kpiCardPhone]}>
           <Text style={styles.kpiLabel}>ANOMALIES / FLAGS</Text>
           <Text
             style={[
@@ -289,15 +291,15 @@ export default function VendorManagementSystemScreen() {
           <Text style={styles.kpiSub}>Overtime / Breaks</Text>
         </View>
 
-        <View style={styles.kpiCard}>
+        <View style={[styles.kpiCard, isPhone && styles.kpiCardPhone]}>
           <Text style={styles.kpiLabel}>YELLOW DOG SYNC</Text>
           <Text style={[styles.kpiValue, { color: opsConsole.good }]}>ONLINE</Text>
           <Text style={styles.kpiSub}>Supplies & Equipment</Text>
         </View>
-      </View>
+      </ScrollView>
 
       {/* Tab Navigation */}
-      <View style={[styles.tabBar, { borderBottomColor: palette.border }]}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.tabBar, { borderBottomColor: palette.border }]}>
         {[
           { key: 'directory', label: 'Vendor Directory', icon: 'domain' },
           { key: 'requisitions', label: 'Staffing Orders', icon: 'clipboard-list' },
@@ -332,7 +334,7 @@ export default function VendorManagementSystemScreen() {
             </Pressable>
           );
         })}
-      </View>
+      </ScrollView>
 
       <ScrollView contentContainerStyle={styles.content}>
         {/* ==================================================================== */}
@@ -341,7 +343,7 @@ export default function VendorManagementSystemScreen() {
         {activeTab === 'directory' && (
           <View>
             <View style={styles.filterRow}>
-              <View style={[styles.searchBox, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+              <View style={[styles.searchBox, isPhone && styles.searchBoxPhone, { backgroundColor: palette.surface, borderColor: palette.border }]}>
                 <MaterialCommunityIcons name="magnify" size={18} color={palette.muted} />
                 <TextInput
                   placeholder="Search agencies, contractors, suppliers..."
@@ -1151,7 +1153,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  headerPhone: { alignItems: 'stretch', flexDirection: 'column', gap: spacing.sm },
+  headerLeft: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  headerCopy: { flex: 1, minWidth: 0 },
   backBtn: { padding: spacing.sm },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   headerTitle: { fontSize: 18, fontWeight: '800', letterSpacing: 0.5 },
@@ -1167,6 +1171,7 @@ const styles = StyleSheet.create({
   },
   primaryActionText: { color: '#FFF', fontSize: 12, fontWeight: '700' },
   kpiStrip: {
+    flexGrow: 1,
     flexDirection: 'row',
     borderBottomWidth: 1,
     paddingHorizontal: spacing.lg,
@@ -1174,6 +1179,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   kpiCard: { flex: 1, paddingVertical: spacing.xs },
+  kpiCardPhone: { flex: 0, width: 120 },
   kpiLabel: { fontSize: 10, color: '#888', fontWeight: '700' },
   kpiValue: { fontSize: 18, fontWeight: '800', marginVertical: 2 },
   kpiSub: { fontSize: 10, color: '#666' },
@@ -1204,8 +1210,9 @@ const styles = StyleSheet.create({
     minWidth: 240,
     height: 38,
   },
+  searchBoxPhone: { minWidth: 0, flexBasis: '100%' },
   searchInput: { flex: 1, marginLeft: spacing.xs, fontSize: 13 },
-  filterPills: { flexDirection: 'row', gap: spacing.xs },
+  filterPills: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   filterPill: { paddingHorizontal: spacing.sm, paddingVertical: 6, borderRadius: 4 },
   filterPillText: { fontSize: 10, fontWeight: '700' },
   actionBtn: {
@@ -1224,7 +1231,8 @@ const styles = StyleSheet.create({
   },
   card: {
     flex: 1,
-    minWidth: 320,
+    minWidth: 280,
+    width: '100%',
     maxWidth: 420,
     borderWidth: 1,
     borderRadius: 8,
@@ -1297,6 +1305,8 @@ const styles = StyleSheet.create({
   emptyText: { color: '#666', fontSize: 13 },
   payrollActionBar: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: spacing.md,
@@ -1304,7 +1314,7 @@ const styles = StyleSheet.create({
   payrollBarLeft: {},
   sectionTitle: { fontSize: 14, fontWeight: '800', letterSpacing: 0.5 },
   sectionSub: { fontSize: 12, color: '#888', marginTop: 2 },
-  payrollBtnGroup: { flexDirection: 'row', gap: spacing.sm },
+  payrollBtnGroup: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   exportBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1316,13 +1326,16 @@ const styles = StyleSheet.create({
   exportText: { fontSize: 11, fontWeight: '700' },
   syncPanel: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: spacing.md,
   },
   scorecardCard: {
     flex: 1,
-    minWidth: 320,
+    minWidth: 280,
+    width: '100%',
     maxWidth: 420,
     borderWidth: 1,
     borderRadius: 8,

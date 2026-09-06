@@ -9,6 +9,7 @@ import {
   findZoneByMeshName,
 } from './stadium-model-bindings';
 import { applyHighlights, disposeScene, isolateMaterials } from './scene-resources';
+import { createLoadCompletionGate, getRenderableViewport } from './stadium-render-lifecycle';
 import type { CameraPresetId, OperationalHighlightStatus, Stadium3DCanvasProps } from './stadium-3d.types';
 
 // Asset reference bundled by Metro
@@ -60,6 +61,10 @@ function StadiumScene({
   const autoRotateRef = useRef<boolean>(autoRotate);
   autoRotateRef.current = autoRotate;
 
+  useEffect(() => {
+    if (active) needsRender.current = true;
+  }, [active]);
+
   // Track pointer for tap vs drag detection
   const pointerDownPosRef = useRef<{ x: number; y: number; time: number }>({ x: 0, y: 0, time: 0 });
 
@@ -77,6 +82,8 @@ function StadiumScene({
     if (!host) return;
     let disposed = false;
     let failed = false;
+    let hasRenderableSize = false;
+    const loadCompletionGate = createLoadCompletionGate(onLoadComplete);
     const fail = () => {
       if (disposed || failed) return;
       failed = true;
@@ -201,7 +208,7 @@ function StadiumScene({
         applyHighlights(modelGroup, selectedZoneIdRef.current, highlightedZonesRef.current);
         needsRender.current = true;
         hasModelLoaded = true;
-        onLoadComplete?.(true);
+        loadCompletionGate.markModelReady(true);
       } catch { fail(); }
     };
 
@@ -245,7 +252,7 @@ function StadiumScene({
           applyHighlights(modelGroup, selectedZoneIdRef.current, highlightedZonesRef.current);
           needsRender.current = true;
           onLoadProgress?.(100);
-          onLoadComplete?.();
+          loadCompletionGate.markModelReady();
           } catch { disposeScene(gltf.scene); fail(); }
         },
         (xhr) => {
@@ -316,29 +323,25 @@ function StadiumScene({
     // 8. Resize Observer
     const handleResize = () => {
       if (!hostRef.current || !rendererRef.current || !cameraRef.current) return;
-      const w = Math.max(hostRef.current.clientWidth, 1);
-      const h = Math.max(hostRef.current.clientHeight, 1);
-      rendererRef.current.setSize(w, h, false);
+      const viewport = getRenderableViewport(hostRef.current.clientWidth, hostRef.current.clientHeight);
+      hasRenderableSize = viewport !== null;
+      if (!viewport) return;
+      rendererRef.current.setSize(viewport.width, viewport.height, false);
       needsRender.current = true;
-      cameraRef.current.aspect = w / h;
+      cameraRef.current.aspect = viewport.width / viewport.height;
       cameraRef.current.updateProjectionMatrix();
     };
 
     const resizeObserver = new ResizeObserver(handleResize);
     resizeObserver.observe(host);
+    handleResize();
 
     // 9. Animation Render Loop
     let animationFrame = 0;
-    let isPaused = document.hidden;
-
-    const handleVisibilityChange = () => {
-      isPaused = document.hidden;
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     const animate = () => {
       if (disposed || failed) return;
-      if (!isPaused && activeRef.current) {
+      if (activeRef.current && hasRenderableSize) {
         try {
         // Subtle auto-rotation when enabled and user not interacting
         if (autoRotateRef.current && !reducedMotionRef.current && !transitioning.current) {
@@ -363,6 +366,7 @@ function StadiumScene({
         if (changed || moving || needsRender.current) {
           renderer.render(scene, camera);
           needsRender.current = false;
+          loadCompletionGate.reportRenderedFrame();
         }
         } catch { fail(); return; }
       }
@@ -375,7 +379,6 @@ function StadiumScene({
       disposed = true;
       clearTimeout(loadTimeout);
       cancelAnimationFrame(animationFrame);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
       resizeObserver.disconnect();
       renderer.domElement.removeEventListener('pointerdown', handlePointerDown);
       renderer.domElement.removeEventListener('pointerup', handlePointerUp);
