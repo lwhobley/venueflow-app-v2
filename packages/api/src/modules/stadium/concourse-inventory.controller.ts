@@ -4,6 +4,7 @@ import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 import { canManageVenue } from '../../auth/roles';
 import { PrismaService } from '../../prisma/prisma.service';
+import { organizationIdForPairedVenue } from '../../common/venue-facility';
 import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
 import { RequireSubscription } from '../../billing/require-subscription.decorator';
 import { IsIn, IsString } from 'class-validator';
@@ -34,9 +35,6 @@ export class ConcourseInventoryController {
         membership: { userId: scope.userId, status: 'active' },
         AND: [
           { OR: [{ facilityId: null }, { facilityId: scope.venueId }] },
-          // Listing an entire facility is valid for a facility-wide assignment;
-          // zone-only supervisors must provide a zone filter rather than being
-          // silently denied by a null-zone query.
           zoneId ? { OR: [{ zoneId: null }, { zoneId }] } : { OR: [{ zoneId: null }, { zoneId: { not: null } }] },
         ],
       },
@@ -46,8 +44,7 @@ export class ConcourseInventoryController {
   }
 
   private async organizationIdFor(facilityId: string) {
-    const venue = await this.prisma.venue.findUniqueOrThrow({ where: { id: facilityId }, select: { organizationId: true } });
-    return venue.organizationId;
+    return organizationIdForPairedVenue(this.prisma, facilityId);
   }
 
   @Get('stand-sheets')
