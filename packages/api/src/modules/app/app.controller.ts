@@ -1,4 +1,4 @@
-import { BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get, Header, HttpException, HttpStatus, NotFoundException, Param, Patch, Post, Query, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get, Header, NotFoundException, Param, Patch, Post, Query, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { IsBoolean, IsEmail, IsIn, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 import { Prisma, Role } from '@prisma/client';
 import { randomBytes, randomInt } from 'crypto';
@@ -22,13 +22,15 @@ import { runWithoutTenant } from '../../prisma/tenant-context';
 import { mapClockEntry, mapProfile, mapShift, mapVenue, toMs, minutesToTime } from './app-mappers';
 import { ProfileService } from './profile.service';
 import { syncTeamMemberCount } from '../../common/team-sync';
+import { ensurePairedFacility } from '../../common/venue-facility';
 
-const TRIAL_DURATION_MS = 14 * 24 * 60 * 60 * 1000;
 const STAFF_RANGES = ['1-15', '16-30', '31-50'] as const;
-const FLAT_PLAN_ID = 'venueflow_monthly';
-const FLAT_PLAN_PRICE_CENTS = 9999;
-const MULTI_VENUE_PLAN_ID = 'venueflow_multi_venue_5';
-const MULTI_VENUE_PRICE_CENTS = 39900;
+// Venue Wrangler ships as an enterprise licence: access is granted per venue by
+// contract, not sold self-serve. There is no trial to expire and no per-venue
+// price to collect in-app, so registration writes an already-active, zero-price
+// subscription rather than the consumer trial/checkout state this used to carry.
+const ENTERPRISE_PLAN_ID = 'enterprise_licensed';
+const ENTERPRISE_PRICE_CENTS = 0;
 const MULTI_VENUE_MAX_VENUES = 5;
 const PUBLIC_INVITE_RATE_LIMIT_MAX = 20;
 const PUBLIC_INVITE_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
@@ -169,11 +171,6 @@ class SwitchVenueDto {
   venueId!: string;
 }
 
-function planForStaffRange(range: string) {
-  void range;
-  return { planId: FLAT_PLAN_ID, priceCents: FLAT_PLAN_PRICE_CENTS };
-}
-
 @Controller('v1/app')
 export class AppController {
   constructor(
@@ -242,7 +239,6 @@ export class AppController {
             fullName,
             role: 'staff',
             jobTitle: body.jobTitle ?? 'Staff',
-            trialEndsAt: new Date(Date.now() + TRIAL_DURATION_MS),
           },
           include: { venue: true },
         });
@@ -285,8 +281,6 @@ export class AppController {
       throw new ForbiddenException('Verify your email before creating a venue.');
     }
 
-    const trialStartedAt = new Date();
-    const trialEndsAt = new Date(trialStartedAt.getTime() + TRIAL_DURATION_MS);
     const result = await runWithoutTenant(() => this.prisma.$transaction(async (tx) => {
       // Serialize every registration attempt for this account, regardless of
       // business name, then re-check all cross-venue invariants under the lock.
@@ -317,35 +311,6 @@ export class AppController {
         throw new ConflictException('You already manage a venue with this name.');
       }
 
-      const isAdditionalVenue = venueIds.length > 0;
-      if (isAdditionalVenue) {
-        const hasMultiPlan = await tx.subscription.findFirst({
-          where: {
-            venueId: { in: venueIds },
-            status: { in: ['active', 'trialing'] },
-            OR: [
-              { planId: MULTI_VENUE_PLAN_ID },
-              { priceCents: { gte: MULTI_VENUE_PRICE_CENTS } },
-              { planId: { contains: 'multi' } },
-            ],
-          },
-          select: { id: true },
-        });
-        if (!hasMultiPlan) {
-          throw new HttpException(
-            {
-              statusCode: 402,
-              message: 'Registering an additional venue requires a Multi-Venue Pro subscription ($399/month for up to 5 venues).',
-              code: 'MULTI_VENUE_REQUIRED',
-            },
-            HttpStatus.PAYMENT_REQUIRED,
-          );
-        }
-      }
-
-      const plan = isAdditionalVenue
-        ? { planId: MULTI_VENUE_PLAN_ID, priceCents: MULTI_VENUE_PRICE_CENTS }
-        : planForStaffRange(body.staffRange);
       const existingProfile = await tx.profile.findFirst({
         where: { userId: user.sub },
         orderBy: { createdAt: 'asc' },
@@ -363,21 +328,24 @@ export class AppController {
           address: body.address?.trim() || null,
           venueType: body.venueType?.trim() || null,
           staffRange: body.staffRange,
-          subscriptionStatus: 'trialing',
+          subscriptionStatus: 'active',
           subscriptionPlatform: null,
           organization: { create: { name: `${businessName} Organization`, code: `org_${venueCode}` } },
         },
       });
+      // The stadium/VMS tables foreign-key to Facility using this same id, so
+      // the pair has to exist before any of those writes can succeed.
+      await ensurePairedFacility(tx, venue);
       await tx.subscription.create({
         data: {
           venueId: venue.id,
-          status: 'trialing',
+          status: 'active',
           platform: null,
-          planId: plan.planId,
-          priceCents: plan.priceCents,
+          planId: ENTERPRISE_PLAN_ID,
+          priceCents: ENTERPRISE_PRICE_CENTS,
           currency: 'USD',
-          trialStartedAt,
-          trialEndsAt,
+          trialStartedAt: null,
+          trialEndsAt: null,
           cancelAtPeriodEnd: false,
         },
       });
@@ -389,7 +357,7 @@ export class AppController {
           role: existingProfile?.allAccess ? 'platform_admin' : 'admin',
           jobTitle: existingProfile?.allAccess ? 'Platform Administrator' : 'Owner',
           venueId: venue.id,
-          trialEndsAt,
+          trialEndsAt: null,
           allAccess: existingProfile?.allAccess ?? false,
         },
       });

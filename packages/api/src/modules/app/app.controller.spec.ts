@@ -204,6 +204,99 @@ describe('AppController multi-venue invariants', () => {
     expect(prisma.venue.create).not.toHaveBeenCalled();
   });
 
+  describe('enterprise venue registration', () => {
+    function makeRegistrationPrisma(existingVenueIds: string[] = []) {
+      const prisma: any = {
+        $executeRaw: vi.fn().mockResolvedValue(undefined),
+        profile: {
+          findMany: vi.fn().mockResolvedValue(existingVenueIds.map((venueId) => ({ venueId }))),
+          findFirst: vi.fn().mockResolvedValue(null),
+          create: vi.fn(async ({ data }: any) => ({ id: 'profile-new', ...data })),
+          count: vi.fn().mockResolvedValue(1),
+        },
+        venue: {
+          findFirst: vi.fn().mockResolvedValue(null),
+          findUnique: vi.fn().mockResolvedValue(null),
+          create: vi.fn(async ({ data }: any) => ({
+            id: 'venue-new',
+            organizationId: 'org-new',
+            timezone: null,
+            stadiumCapacity: null,
+            ...data,
+          })),
+        },
+        facility: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn() },
+        subscription: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn() },
+        team: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn() },
+      };
+      prisma.$transaction = vi.fn(async (callback: any) => callback(prisma));
+      return prisma;
+    }
+
+    function makeProfiles() {
+      return {
+        ensureUser: vi.fn().mockResolvedValue({ id: 'user-1' }),
+        isEmailVerified: vi.fn().mockResolvedValue(true),
+        listUserVenues: vi.fn().mockResolvedValue([]),
+      };
+    }
+
+    async function register(prisma: any) {
+      const controller = new AppController(prisma, {} as any, makeProfiles() as any);
+      return controller.registerVenue(
+        { sub: 'user-1', email: 'owner@example.com' } as any,
+        { businessName: 'Grand Arena', staffRange: '1-15' } as any,
+      );
+    }
+
+    // Stadium/VMS tables foreign-key to Facility using what the rest of the app
+    // calls venueId, so a Venue without its same-id Facility 500s on the first
+    // stadium write.
+    it('creates the Facility paired with the new venue id', async () => {
+      const prisma = makeRegistrationPrisma();
+
+      await register(prisma);
+
+      expect(prisma.facility.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ id: 'venue-new', organizationId: 'org-new' }),
+      });
+    });
+
+    it('licenses the venue as active enterprise rather than opening a trial', async () => {
+      const prisma = makeRegistrationPrisma();
+
+      await register(prisma);
+
+      expect(prisma.venue.create.mock.calls[0][0].data).toMatchObject({ subscriptionStatus: 'active' });
+      expect(prisma.subscription.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          status: 'active',
+          planId: 'enterprise_licensed',
+          priceCents: 0,
+          trialStartedAt: null,
+          trialEndsAt: null,
+        }),
+      });
+      expect(prisma.profile.create.mock.calls[0][0].data).toMatchObject({ trialEndsAt: null });
+    });
+
+    it('registers an additional venue without demanding a multi-venue purchase', async () => {
+      const prisma = makeRegistrationPrisma(['venue-existing']);
+
+      await expect(register(prisma)).resolves.toBeDefined();
+
+      expect(prisma.venue.create).toHaveBeenCalledTimes(1);
+      expect(prisma.subscription.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('still enforces the five-venue cap', async () => {
+      const prisma = makeRegistrationPrisma(['v0', 'v1', 'v2', 'v3', 'v4']);
+
+      await expect(register(prisma)).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.venue.create).not.toHaveBeenCalled();
+    });
+  });
+
   it('checks last-admin safety for every venue before deleting a multi-venue account', async () => {
     const profiles = [
       { id: 'profile-a', email: 'owner@example.com', fullName: 'Owner', role: 'owner', venueId: 'venue-a', membershipStatus: 'active' },

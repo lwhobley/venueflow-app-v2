@@ -7,6 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
 import { RequireSubscription } from '../../billing/require-subscription.decorator';
 import { IsBoolean } from 'class-validator';
+import { organizationIdForPairedVenue } from '../../common/venue-facility';
 
 type Scope = NonNullable<VenueScopedRequest['venueScope']>;
 class ToggleOverlayDto { @IsBoolean() active!: boolean; }
@@ -21,8 +22,9 @@ export class EventMenuController {
     if (!canManageVenue(scope.role, scope.allAccess)) throw new ForbiddenException('Event manager access is required.');
   }
 
-  private async organizationIdFor(facilityId: string) {
-    return (await this.prisma.venue.findUniqueOrThrow({ where: { id: facilityId }, select: { organizationId: true } })).organizationId;
+  /** Resolves the org and guarantees the same-id Facility exists, so `facilityId` is safe as a facilityId. */
+  private async organizationIdFor(facilityId: string): Promise<string> {
+    return organizationIdForPairedVenue(this.prisma, facilityId);
   }
 
   @Get()

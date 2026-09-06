@@ -39,7 +39,6 @@ import { EmailService } from "../email/email.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuthService } from "./auth.service";
 
-const TRIAL_DURATION_MS = 14 * 24 * 60 * 60 * 1000;
 // Matches the JWT's 30-day expiry so a session and its token expire together.
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 const EMAIL_CODE_TTL_MS = 24 * 60 * 60 * 1000;

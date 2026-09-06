@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { runWithTenant } from '../prisma/tenant-context';
 import { applyTenantSessionSettings } from '../prisma/tenant-transaction';
 import { AsyncWriteMessage, AsyncWriteService } from './async-write.service';
+import { applyQueuedClockIn, type ClockInPayload } from './clock-in-write';
 import { assertQueueTopology, HIGH_VOLUME_WRITE_QUEUE, HIGH_VOLUME_RETRY_QUEUE, MAX_DELIVERY_RETRIES, deliveryAttempt } from './queue-topology';
 
 function payloadHash(payload: Record<string, unknown>) {
@@ -44,20 +45,7 @@ async function apply(prisma: PrismaService, message: AsyncWriteMessage): Promise
       const payload = message.payload as Record<string, any>;
       let result: Record<string, unknown>;
       if (message.kind === 'clock_in') {
-        const timeEntry = await tx.timeEntry.create({
-          data: {
-            profileId: payload.profileId,
-            venueId,
-            clockInAt: new Date(payload.clockInAt),
-            clockInLat: payload.lat,
-            clockInLng: payload.lng,
-            clockInAccuracyM: payload.accuracy,
-            clockInMocked: payload.mocked,
-            isOpen: true,
-          },
-          select: { id: true, clockInAt: true },
-        });
-        result = { accepted: true, status: 'completed', timeEntryId: timeEntry.id, clockInAt: timeEntry.clockInAt.toISOString() };
+        result = await applyQueuedClockIn(tx, venueId, payload as ClockInPayload);
       } else {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`bar-inventory-${payload.itemId}`}))`;
         const item = await tx.barInventoryItem.findFirstOrThrow({ where: { id: payload.itemId, venueId } });

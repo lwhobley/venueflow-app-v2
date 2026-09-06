@@ -47,26 +47,16 @@ describe('InsightsController', () => {
       expect(prisma.cosmicInsight.findMany).not.toHaveBeenCalled();
     });
 
-    it('returns the 3 most recent insights ordered by batchAt desc', async () => {
+    // CosmicInsight has no venueId/organizationId column, so the previous
+    // unfiltered findMany returned every tenant's insights to every caller.
+    it('never reads the untenanted CosmicInsight table', async () => {
       const { controller, prisma } = makeController();
       prisma.cosmicInsight.findMany.mockResolvedValue([
-        { kind: 'tip', title: 'Slow Tuesdays', body: 'Consider a promo.', batchAt: new Date() },
+        { kind: 'tip', title: 'Another venue insight', body: 'Leaked.', batchAt: new Date() },
       ]);
 
-      const result = await controller.getLatestInsights(makeRequest());
-
-      expect(prisma.cosmicInsight.findMany).toHaveBeenCalledWith({
-        orderBy: { batchAt: 'desc' },
-        take: 3,
-      });
-      expect(result).toEqual([{ kind: 'tip', title: 'Slow Tuesdays', body: 'Consider a promo.' }]);
-    });
-
-    it('returns an empty array when no insights exist', async () => {
-      const { controller, prisma } = makeController();
-      prisma.cosmicInsight.findMany.mockResolvedValue([]);
-
       await expect(controller.getLatestInsights(makeRequest())).resolves.toEqual([]);
+      expect(prisma.cosmicInsight.findMany).not.toHaveBeenCalled();
     });
   });
 });

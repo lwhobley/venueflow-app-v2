@@ -11,6 +11,7 @@ import { Prisma } from '@prisma/client';
 import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 import { assertEventTransition, EVENT_OPERATIONAL_STATES, legacyStatusForState, type EventOperationalState } from './event-state';
+import { organizationIdForPairedVenue } from '../../common/venue-facility';
 
 
 type Scope = NonNullable<VenueScopedRequest['venueScope']>;
@@ -153,9 +154,9 @@ export class StadiumController {
     }
   }
 
-  private async organizationIdFor(venueId: string) {
-    const venue = await this.prisma.venue.findUniqueOrThrow({ where: { id: venueId }, select: { organizationId: true } });
-    return venue.organizationId;
+  /** Resolves the org and guarantees the same-id Facility exists, so `venueId` is safe as a facilityId. */
+  private async organizationIdFor(venueId: string): Promise<string> {
+    return organizationIdForPairedVenue(this.prisma, venueId);
   }
 
   @Get('overview')

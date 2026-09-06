@@ -57,34 +57,6 @@ export class ProfileService {
   }
 
   /** Checks whether the user has an active or trialing Multi-Venue subscription on any of their venues. */
-  async hasMultiVenueSubscription(userId: string): Promise<boolean> {
-    return runWithoutTenant(async () => {
-      const profiles = await this.prisma.profile.findMany({
-        where: {
-          userId,
-          venueId: { not: null },
-          OR: [{ membershipStatus: null }, { membershipStatus: 'active' }],
-        },
-        select: { venueId: true },
-      });
-      const venueIds = Array.from(new Set(profiles.map((p) => p.venueId!).filter(Boolean)));
-      if (!venueIds.length) return false;
-
-      const sub = await this.prisma.subscription.findFirst({
-        where: {
-          venueId: { in: venueIds },
-          status: { in: ['active', 'trialing'] },
-          OR: [
-            { planId: 'venueflow_multi_venue_5' },
-            { priceCents: { gte: 39900 } },
-            { planId: { contains: 'multi' } },
-          ],
-        },
-      });
-      return Boolean(sub);
-    });
-  }
-
   async ensureUser(user: AuthUser) {
     // Do NOT recreate the user from token claims: a deleted account's JWT stays
     // valid until expiry, and recreating here would silently resurrect it.

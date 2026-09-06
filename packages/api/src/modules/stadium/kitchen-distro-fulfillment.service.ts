@@ -6,6 +6,7 @@ import { applyTenantSessionSettings } from '../../prisma/tenant-transaction';
 import { SuiteHospitalityGateway } from './suite-hospitality.gateway';
 import { NotificationsService } from '../../notifications/notifications.service';
 import type { OperationalAreaType } from '../../auth/access-control.helper';
+import { organizationIdForPairedVenue } from '../../common/venue-facility';
 
 export const DISTRO_OVERDUE_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -165,12 +166,9 @@ export class KitchenDistroFulfillmentService {
     private readonly notifications?: NotificationsService,
   ) {}
 
+  /** Resolves the org and guarantees the same-id Facility exists, so `facilityId` is safe as a facilityId. */
   private async organizationIdFor(facilityId: string): Promise<string> {
-    const venue = await this.prisma.venue.findUniqueOrThrow({
-      where: { id: facilityId },
-      select: { organizationId: true },
-    });
-    return venue.organizationId;
+    return organizationIdForPairedVenue(this.prisma, facilityId);
   }
 
   /**

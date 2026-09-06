@@ -10,6 +10,7 @@ import { getAuthorizedOperationalAreas } from '../../auth/access-control.helper'
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
 import { SkipTenantTransaction } from '../../prisma/skip-tenant-transaction.decorator';
+import { organizationIdForPairedVenue } from '../../common/venue-facility';
 
 type Scope = NonNullable<VenueScopedRequest['venueScope']>;
 
@@ -39,7 +40,7 @@ export class StadiumRealtimeController {
       await this.assertZoneAssignment(scope, zoneId);
     }
 
-    const organizationId = await this.organizationIdFor(facilityId).catch(() => 'default-org');
+    const organizationId = await this.organizationIdFor(facilityId);
     const allowedAreasSet = await getAuthorizedOperationalAreas({
       userId: scope.userId,
       venueId: facilityId,
@@ -105,7 +106,7 @@ export class StadiumRealtimeController {
     }
 
     if (!organizationId) {
-      organizationId = await this.organizationIdFor(facilityId).catch(() => 'default-org');
+      organizationId = await this.organizationIdFor(facilityId);
     }
     if (!allowedAreas) {
       const areasSet = await getAuthorizedOperationalAreas({
@@ -224,21 +225,8 @@ export class StadiumRealtimeController {
     }
   }
 
+  /** Resolves the org and guarantees the same-id Facility exists, so `facilityId` is safe as a facilityId. */
   private async organizationIdFor(facilityId: string): Promise<string> {
-    if (this.prisma?.venue?.findUniqueOrThrow) {
-      const venue = await this.prisma.venue.findUniqueOrThrow({
-        where: { id: facilityId },
-        select: { organizationId: true },
-      });
-      return venue.organizationId;
-    }
-    if (this.prisma?.venue?.findUnique) {
-      const venue = await this.prisma.venue.findUnique({
-        where: { id: facilityId },
-        select: { organizationId: true },
-      });
-      if (venue?.organizationId) return venue.organizationId;
-    }
-    return 'default-org';
+    return organizationIdForPairedVenue(this.prisma, facilityId);
   }
 }

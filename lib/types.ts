@@ -1,6 +1,30 @@
 import type { Id } from './ids';
 
-export type Role = 'admin' | 'owner' | 'manager' | 'server' | 'staff';
+/**
+ * Mirrors the Prisma `Role` enum. The client used to know only the five
+ * original venue roles, so every stadium/enterprise role (event_manager,
+ * outlet_manager, platform_admin, ...) was a type error at the boundary and
+ * fell through the permission helpers as plain staff — locking those users out
+ * of the manager UI their server-side role grants them.
+ */
+export type Role =
+  | 'admin'
+  | 'owner'
+  | 'manager'
+  | 'server'
+  | 'staff'
+  | 'platform_admin'
+  | 'organization_admin'
+  | 'fnb_director'
+  | 'event_manager'
+  | 'outlet_manager'
+  | 'executive_chef'
+  | 'warehouse_manager'
+  | 'premium_manager'
+  | 'finance_viewer'
+  | 'concourse_supervisor'
+  | 'suite_manager'
+  | 'auditor';
 
 export type Venue = {
   id: Id<'venues'>;

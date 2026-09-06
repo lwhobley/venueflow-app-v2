@@ -18,7 +18,7 @@ Venue Wrangler is a native iOS/Android venue ops app built with Expo Router, Nes
 - Floor plan and table management with drag-and-drop editor for admins/managers
 - Staff management screen for admins/managers to add people and assign roles to a venue
 - Profile page shortcut to open staff management for privileged roles
-- Billing shell with Stripe-backed venue subscriptions
+- Enterprise licensing: venues are licensed by contract, with no in-app trial or checkout
 
 ## Local setup
 
@@ -32,8 +32,8 @@ Venue Wrangler is a native iOS/Android venue ops app built with Expo Router, Nes
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
-| `EXPO_PUBLIC_API_URL` | NestJS API endpoint the client connects to | required |
-| `EXPO_PUBLIC_BILLING_ENABLED` | Enables the subscription gate. Keep `false` until Stripe billing or RevenueCat in-app purchase is active. | `false` |
+| `EXPO_PUBLIC_API_URL` | NestJS API endpoint the client connects to. There is no built-in default — the app refuses to start without it, so a dev build can never silently read production. | required |
+| `EXPO_PUBLIC_BILLING_ENABLED` | Shows the read-only licence status screen. Enterprise licences are provisioned out of band; this does not enable a purchase flow. | `false` |
 
 ## Quality gates
 

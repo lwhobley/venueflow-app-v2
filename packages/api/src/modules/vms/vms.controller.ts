@@ -52,6 +52,7 @@ import {
   VmsVendorStatus,
   VmsVendorType,
 } from '@prisma/client';
+import { organizationIdForPairedVenue } from '../../common/venue-facility';
 
 type Scope = NonNullable<VenueScopedRequest['venueScope']>;
 
@@ -73,12 +74,9 @@ export class VmsController {
     }
   }
 
+  /** Resolves the org and guarantees the same-id Facility exists, so `facilityId` is safe as a facilityId. */
   private async organizationIdFor(facilityId: string): Promise<string> {
-    const venue = await this.prisma.venue.findUniqueOrThrow({
-      where: { id: facilityId },
-      select: { organizationId: true },
-    });
-    return venue.organizationId;
+    return organizationIdForPairedVenue(this.prisma, facilityId);
   }
 
   // ---------------------------------------------------------------------------

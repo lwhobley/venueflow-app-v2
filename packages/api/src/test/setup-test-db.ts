@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { execSync } from 'child_process';
 import { randomUUID } from 'crypto';
+import { ensurePairedFacility } from '../common/venue-facility';
 
 let containerCleanup: (() => Promise<void>) | null = null;
 
@@ -147,6 +148,10 @@ export async function seedSchedulingFixtures(prisma: PrismaClient) {
       organization: { create: { name: `Test Organization ${suffix}`, code: `org-vw-${suffix}` } },
     },
   });
+
+  // Same-id Facility pairing: stadium/VMS tables foreign-key to Facility using
+  // what the rest of the app calls venueId, so fixtures must create both.
+  await ensurePairedFacility(prisma, venue);
 
   const [profileA, profileB] = await Promise.all([
     prisma.profile.create({

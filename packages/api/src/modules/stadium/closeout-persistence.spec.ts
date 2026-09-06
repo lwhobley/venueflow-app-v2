@@ -8,7 +8,8 @@ describe('closeout append-only checkpoints', () => {
     const tx: any = {
       $queryRaw: vi.fn().mockResolvedValue([]),
       venueEvent: { findFirst: vi.fn().mockResolvedValue({ id: 'event' }) },
-      venue: { findUniqueOrThrow: vi.fn().mockResolvedValue({ organizationId: 'org' }) },
+      venue: { findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 'venue', organizationId: 'org' }) },
+      facility: { findUnique: vi.fn().mockResolvedValue({ id: 'venue' }), create: vi.fn() },
       eventCloseout: {
         findUnique: vi.fn(async () => closeout),
         findUniqueOrThrow: vi.fn(async () => ({ ...closeout, revisions })),

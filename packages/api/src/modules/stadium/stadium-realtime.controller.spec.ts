@@ -4,7 +4,8 @@ import { StadiumRealtimeController } from './stadium-realtime.controller';
 
 function makePrismaStub(overrides: Record<string, unknown> = {}) {
   return {
-    venue: { findUniqueOrThrow: async () => ({ organizationId: 'org-1' }) },
+    venue: { findUniqueOrThrow: async () => ({ id: 'facility-1', organizationId: 'org-1' }) },
+    facility: { findUnique: async () => ({ id: 'facility-1' }), create: async () => ({ id: 'facility-1' }) },
     scopeAssignment: { findFirst: async () => null },
     ...overrides,
   } as any;

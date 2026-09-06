@@ -24,10 +24,10 @@ export class InsightsController {
       INSIGHTS_RATE_LIMIT_WINDOW_MS,
       'Too many requests.',
     );
-    const rows = await this.prisma.cosmicInsight.findMany({
-      orderBy: { batchAt: 'desc' },
-      take: 3,
-    });
-    return rows.map((r) => ({ kind: r.kind, title: r.title, body: r.body }));
+    // Quarantined. `CosmicInsight` has no venueId/organizationId column, so an
+    // unfiltered findMany served one tenant's insights to every other tenant.
+    // The endpoint stays (clients call it) but returns nothing until the model
+    // carries a tenant key and something actually writes rows per venue.
+    return [];
   }
 }

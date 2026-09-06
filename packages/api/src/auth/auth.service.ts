@@ -6,7 +6,6 @@ import { promisify } from 'util';
 import { hashInviteToken } from '../common/invite-token';
 
 const pbkdf2Async = promisify(pbkdf2);
-const TRIAL_DURATION_MS = 14 * 24 * 60 * 60 * 1000;
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 600_000;
 const PASSWORD_KEY_LENGTH = 32;
@@ -44,7 +43,8 @@ export class AuthService {
   }
 
   async issueSession(userId: string, email: string, fullName?: string, inviteToken?: string, rawPhone?: string) {
-    const trialEndsAt = new Date(Date.now() + TRIAL_DURATION_MS);
+    // Enterprise licensing has no self-serve trial: issuing a session never
+    // stamps a trial deadline. Profiles that already carry one keep it.
     const account = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { emailVerifiedAt: true },
@@ -126,7 +126,6 @@ export class AuthService {
               email,
               ...(trimmedFullName ? { fullName: trimmedFullName } : {}),
               ...(grant ?? {}),
-              ...(existingByUser.trialEndsAt ? {} : { trialEndsAt }),
             },
             include: { venue: true },
           });
@@ -141,7 +140,7 @@ export class AuthService {
             role: grant.role,
             jobTitle: grant.jobTitle,
             venueId: grant.venueId,
-            trialEndsAt,
+            trialEndsAt: null,
           },
           include: { venue: true },
         });
@@ -169,7 +168,7 @@ export class AuthService {
               role: grant?.role ?? adoptableProfile.role,
               jobTitle: grant?.jobTitle ?? adoptableProfile.jobTitle,
               venueId: grant?.venueId ?? adoptableProfile.venueId,
-              trialEndsAt: adoptableProfile.trialEndsAt ?? trialEndsAt,
+              trialEndsAt: adoptableProfile.trialEndsAt,
             },
             include: { venue: true },
           });
@@ -183,7 +182,7 @@ export class AuthService {
               role: grant?.role ?? 'staff',
               jobTitle: grant?.jobTitle ?? 'Staff',
               venueId: grant?.venueId ?? undefined,
-              trialEndsAt,
+              trialEndsAt: null,
             },
             include: { venue: true },
           });

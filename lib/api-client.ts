@@ -9,12 +9,19 @@ import { useAuthStore } from "./auth-store";
 import { createIdempotencyKey } from "./idempotency";
 import type { Role } from "./types";
 
-const DEFAULT_API_BASE_URL = "https://stadium-wrangler-api-c57mm72zpa-ue.a.run.app/api";
-
+// No baked-in default. A hardcoded production URL here meant any dev, preview,
+// or test build with EXPO_PUBLIC_API_URL unset silently read and wrote live
+// production data. The API base must be configured explicitly — app.json and
+// eas.json set it per build profile.
 const configuredApiBaseUrl =
   process.env.EXPO_PUBLIC_API_URL ??
-  (Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL as string | undefined) ??
-  DEFAULT_API_BASE_URL;
+  (Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL as string | undefined);
+
+if (!configuredApiBaseUrl) {
+  throw new Error(
+    "EXPO_PUBLIC_API_URL is not set. Configure it in the environment or in expo extra before starting the app.",
+  );
+}
 
 export class ApiError extends Error {
   constructor(

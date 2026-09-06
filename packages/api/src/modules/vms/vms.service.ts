@@ -36,69 +36,16 @@ import { VmsWorkforceService } from './vms-workforce.service';
 import { VmsNotificationsService } from './vms-notifications.service';
 import { VmsNotificationEvent } from '@prisma/client';
 import { zonedIsoDate, zonedWallClockToUtc } from '../../common/venue-time';
+import { generatePunchAuthToken, verifyPunchAuthToken } from './vms-punch-auth';
 
 /** Failed punch attempts before a worker is locked out, and for how long. */
 export const MAX_PUNCH_ATTEMPTS = 5;
 export const PUNCH_LOCKOUT_MINUTES = 15;
 
-function getPunchSecret(): string {
-  return process.env.JWT_SECRET || process.env.SESSION_SECRET || 'venue-wrangler-punch-secret-key-1882';
-}
-
-export function generatePunchAuthToken(payload: {
-  staffMemberId: string;
-  facilityId: string;
-  action: 'clock_in' | 'clock_out';
-  attendanceId?: string;
-  expiresInSeconds?: number;
-}): string {
-  const exp = Date.now() + (payload.expiresInSeconds ?? 900) * 1000;
-  const data = {
-    staffMemberId: payload.staffMemberId,
-    facilityId: payload.facilityId,
-    action: payload.action,
-    attendanceId: payload.attendanceId,
-    exp,
-  };
-  const body = Buffer.from(JSON.stringify(data)).toString('base64url');
-  const sig = crypto.createHmac('sha256', getPunchSecret()).update(body).digest('base64url');
-  return `${body}.${sig}`;
-}
-
-export function verifyPunchAuthToken(token: string, expected: {
-  staffMemberId?: string;
-  facilityId: string;
-  action: 'clock_in' | 'clock_out';
-  attendanceId?: string;
-}): { valid: boolean; staffMemberId?: string; error?: string } {
-  try {
-    const [body, sig] = token.split('.');
-    if (!body || !sig) return { valid: false, error: 'Malformed punch authorization token.' };
-    const expectedSig = crypto.createHmac('sha256', getPunchSecret()).update(body).digest('base64url');
-    if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))) {
-      return { valid: false, error: 'Invalid punch authorization token signature.' };
-    }
-    const data = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
-    if (Date.now() > data.exp) {
-      return { valid: false, error: 'Punch authorization token expired.' };
-    }
-    if (data.facilityId !== expected.facilityId) {
-      return { valid: false, error: 'Punch token bound to different facility.' };
-    }
-    if (data.action !== expected.action) {
-      return { valid: false, error: `Punch token action mismatch: expected ${expected.action}, got ${data.action}.` };
-    }
-    if (expected.staffMemberId && data.staffMemberId !== expected.staffMemberId) {
-      return { valid: false, error: 'Punch token bound to different staff member.' };
-    }
-    if (expected.attendanceId && data.attendanceId && data.attendanceId !== expected.attendanceId) {
-      return { valid: false, error: 'Punch token bound to different attendance record.' };
-    }
-    return { valid: true, staffMemberId: data.staffMemberId };
-  } catch {
-    return { valid: false, error: 'Failed to verify punch authorization token.' };
-  }
-}
+// Punch authorization tokens live in ./vms-punch-auth so the HMAC secret is
+// resolved in one fail-closed place. Re-exported here because callers and
+// tests have always imported them from this module.
+export { generatePunchAuthToken, verifyPunchAuthToken };
 
 /**
  * Scrypt-based Key Derivation for Worker PINs (N3)

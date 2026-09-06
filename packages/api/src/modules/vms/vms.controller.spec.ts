@@ -48,8 +48,9 @@ describe('VmsController', () => {
 
     prisma = {
       venue: {
-        findUniqueOrThrow: vi.fn().mockResolvedValue({ organizationId: 'org-1' }),
+        findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 'facility-1', organizationId: 'org-1' }),
       },
+      facility: { findUnique: vi.fn().mockResolvedValue({ id: 'facility-1' }), create: vi.fn() },
     };
 
     workforce = {

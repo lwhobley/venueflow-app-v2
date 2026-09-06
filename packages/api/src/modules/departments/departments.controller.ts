@@ -14,6 +14,7 @@ import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
 import { RequireSubscription } from '../../billing/require-subscription.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
+import { organizationIdForPairedVenue } from '../../common/venue-facility';
 
 type Scope = NonNullable<VenueScopedRequest['venueScope']>;
 
@@ -26,12 +27,9 @@ export class DepartmentsController {
     private readonly prisma: PrismaService,
   ) {}
 
-  private async organizationIdFor(facilityId: string) {
-    const venue = await this.prisma.venue.findUniqueOrThrow({
-      where: { id: facilityId },
-      select: { organizationId: true },
-    });
-    return venue.organizationId;
+  /** Resolves the org and guarantees the same-id Facility exists, so `facilityId` is safe as a facilityId. */
+  private async organizationIdFor(facilityId: string): Promise<string> {
+    return organizationIdForPairedVenue(this.prisma, facilityId);
   }
 
   @Get('workspace')
