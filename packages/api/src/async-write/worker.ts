@@ -27,8 +27,6 @@ async function apply(prisma: PrismaService, message: AsyncWriteMessage): Promise
   return runWithTenant(venueId, async () => {
     return prisma.$transaction(async (tx) => {
       await applyTenantSessionSettings(tx, { venueId });
-      // Upsert plus an explicit row lock means two broker deliveries with the
-      // same idempotency key cannot both mutate domain state.
       const claimed = await tx.asyncWriteReceipt.upsert({
         where: { venueId_kind_idempotencyKey: { venueId, kind: message.kind, idempotencyKey: message.idempotencyKey } },
         create: { venueId, kind: message.kind, idempotencyKey: message.idempotencyKey, payloadHash: hash },
@@ -44,20 +42,30 @@ async function apply(prisma: PrismaService, message: AsyncWriteMessage): Promise
       const payload = message.payload as Record<string, any>;
       let result: Record<string, unknown>;
       if (message.kind === 'clock_in') {
-        const timeEntry = await tx.timeEntry.create({
-          data: {
-            profileId: payload.profileId,
-            venueId,
-            clockInAt: new Date(payload.clockInAt),
-            clockInLat: payload.lat,
-            clockInLng: payload.lng,
-            clockInAccuracyM: payload.accuracy,
-            clockInMocked: payload.mocked,
-            isOpen: true,
-          },
-          select: { id: true, clockInAt: true },
-        });
-        result = { accepted: true, status: 'completed', timeEntryId: timeEntry.id, clockInAt: timeEntry.clockInAt.toISOString() };
+        try {
+          const timeEntry = await tx.timeEntry.create({
+            data: {
+              profileId: payload.profileId,
+              venueId,
+              clockInAt: new Date(payload.clockInAt),
+              clockInLat: payload.lat,
+              clockInLng: payload.lng,
+              clockInAccuracyM: payload.accuracy,
+              clockInMocked: payload.mocked,
+              isOpen: true,
+            },
+            select: { id: true, clockInAt: true },
+          });
+          result = { accepted: true, status: 'completed', timeEntryId: timeEntry.id, clockInAt: timeEntry.clockInAt.toISOString() };
+        } catch (error: any) {
+          if (error?.code !== 'P2002') throw error;
+          const existing = await tx.timeEntry.findFirst({
+            where: { profileId: payload.profileId, venueId, isOpen: true },
+            select: { id: true, clockInAt: true },
+          });
+          if (!existing) throw error;
+          result = { accepted: true, status: 'completed', timeEntryId: existing.id, clockInAt: existing.clockInAt.toISOString() };
+        }
       } else {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`bar-inventory-${payload.itemId}`}))`;
         const item = await tx.barInventoryItem.findFirstOrThrow({ where: { id: payload.itemId, venueId } });
@@ -71,7 +79,6 @@ async function apply(prisma: PrismaService, message: AsyncWriteMessage): Promise
             venueId,
             itemId: item.id,
             movementType: payload.movementType,
-            // The ledger quantity must reflect what actually changed stock.
             quantity: appliedQuantity,
             requestedQuantity,
             appliedQuantity,
@@ -150,7 +157,6 @@ async function bootstrap() {
         channel.nack(delivery, false, false);
       } else {
         try {
-          // Confirm the delayed copy before acknowledging the original.
           await new Promise<void>((resolve, reject) => {
             channel.sendToQueue(HIGH_VOLUME_RETRY_QUEUE, delivery.content, {
               ...delivery.properties, persistent: true,
@@ -160,7 +166,6 @@ async function bootstrap() {
           channel.ack(delivery);
         } catch {
           ready = false;
-          // Closing returns unacked work to the broker; avoid a hot requeue loop.
           await connection.close().catch(() => undefined);
         }
       }
