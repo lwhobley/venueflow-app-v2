@@ -48,9 +48,9 @@ export default function StadiumMapScreen() {
             <CommandText palette={palette} variant="caption" style={{ color: '#FFFFFF', fontWeight: '800' }}>LIVE F&B MAPPING</CommandText>
           </View>
         </View>
-        <CommandText palette={palette} variant="hero" style={{ color: '#FFFFFF', marginTop: spacing.xs }}>3D Stadium Model</CommandText>
+        <CommandText palette={palette} variant="hero" style={{ color: '#FFFFFF', marginTop: spacing.xs }}>Stadium Map</CommandText>
         <CommandText palette={palette} variant="body" style={{ color: '#C5D6EB', marginTop: 2 }}>
-          Orbit the live GLB stadium with touch or mouse controls. Use the areas list to open a unit for stand sheets, BEOs, and staffing.
+          Choose a level, then open a suite, club or service space for BEOs, staffing and stand details.
         </CommandText>
       </View>
       <View style={{ padding: spacing.md, gap: spacing.md }}>

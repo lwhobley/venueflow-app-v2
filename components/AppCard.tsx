@@ -14,6 +14,7 @@ import {
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { radius, spacing, type, useDesignTheme } from '../lib/theme';
+import { useResponsive } from '../lib/responsive';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -96,26 +97,28 @@ export function SectionHeader({
   rule?: boolean;
 }) {
   const palette = useDesignTheme();
+  const { isPhone } = useResponsive();
   return (
     <View
       style={{
-        flexDirection: 'row',
-        alignItems: 'flex-end',
+        flexDirection: isPhone && trailing ? 'column' : 'row',
+        alignItems: isPhone && trailing ? 'stretch' : 'flex-end',
         justifyContent: 'space-between',
+        gap: spacing.sm,
         paddingBottom: spacing.md,
         marginBottom: spacing.lg,
         borderBottomWidth: rule ? StyleSheet.hairlineWidth : 0,
         borderBottomColor: palette.divider,
       }}
     >
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, minWidth: 0 }}>
         {kicker ? <Kicker style={{ marginBottom: 4 }}>{kicker}</Kicker> : null}
         <Text style={{ ...type.title, color: palette.charcoal }}>{title}</Text>
         {subtitle ? (
           <Text style={{ ...type.body, color: palette.muted, marginTop: 4 }}>{subtitle}</Text>
         ) : null}
       </View>
-      {trailing}
+      {trailing ? <View style={{ flexShrink: 1, maxWidth: '100%' }}>{trailing}</View> : null}
     </View>
   );
 }
