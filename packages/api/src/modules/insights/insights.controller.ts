@@ -24,10 +24,7 @@ export class InsightsController {
       INSIGHTS_RATE_LIMIT_WINDOW_MS,
       'Too many requests.',
     );
-    const rows = await this.prisma.cosmicInsight.findMany({
-      orderBy: { batchAt: 'desc' },
-      take: 3,
-    });
-    return rows.map((r) => ({ kind: r.kind, title: r.title, body: r.body }));
+    // CosmicInsight has no tenant column. Do not read the global table.
+    return [];
   }
 }

@@ -4,6 +4,7 @@ import { VenueScope } from '../../venue/venue-scope.decorator';
 import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 import { canManageVenue } from '../../auth/roles';
 import { PrismaService } from '../../prisma/prisma.service';
+import { organizationIdForPairedVenue } from '../../common/venue-facility';
 import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
 import { RequireSubscription } from '../../billing/require-subscription.decorator';
 import { IsBoolean } from 'class-validator';
@@ -22,7 +23,7 @@ export class EventMenuController {
   }
 
   private async organizationIdFor(facilityId: string) {
-    return (await this.prisma.venue.findUniqueOrThrow({ where: { id: facilityId }, select: { organizationId: true } })).organizationId;
+    return organizationIdForPairedVenue(this.prisma, facilityId);
   }
 
   @Get()
