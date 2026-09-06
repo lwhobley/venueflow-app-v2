@@ -7,6 +7,7 @@ import { useStadiumLiveStream } from '../../lib/stadium-live-stream';
 import { asArray } from '../../lib/format';
 import { OpsQueryState, OpsStaleNotice } from '../../components/stadium/OpsQueryState';
 import { opsConsole } from '../../lib/theme';
+import { useResponsive } from '../../lib/responsive';
 
 export interface BEOItem {
   code: string;
@@ -36,6 +37,7 @@ const SUITE_BEOS_KEY = ['stadium', 'suite-beos'];
 
 export default function KitchenBumpScreen() {
   const router = useRouter();
+  const { isPhone } = useResponsive();
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const queryClient = useQueryClient();
 
@@ -78,12 +80,12 @@ export default function KitchenBumpScreen() {
   return (
     <View style={styles.container}>
       {/* Header Bar */}
-      <View style={styles.header}>
+      <View style={[styles.header, isPhone && styles.headerPhone]}>
         <View style={styles.headerTitleGroup}>
           <Text style={styles.headerTitle}>CHEF'S BUMP SCREEN</Text>
           <Text style={styles.headerSub}>STADIUM CENTRAL KITCHEN KDS • LIVE WEBSOCKET SYNC</Text>
         </View>
-        <View style={styles.headerRight}>
+        <View style={[styles.headerRight, isPhone && styles.headerRightPhone]}>
           <Text style={styles.syncText}>LAST SYNC: {lastSynced || 'LIVE'}</Text>
           <TouchableOpacity
             style={[styles.seedBtn, { backgroundColor: '#0284C7', borderColor: '#0369A1' }]}
@@ -127,7 +129,7 @@ export default function KitchenBumpScreen() {
           {filteredBeos.map((beo) => {
             const urgencyBg = beo.minutesUntilDelivery <= 15 ? opsConsole.danger : beo.minutesUntilDelivery <= 30 ? opsConsole.warn : opsConsole.good;
             return (
-              <View key={beo.id} style={styles.card}>
+              <View key={beo.id} style={[styles.card, isPhone && styles.cardPhone]}>
                 {/* Urgency Header */}
                 <View style={[styles.cardHeader, { backgroundColor: urgencyBg }]}>
                   <View>
@@ -209,14 +211,16 @@ const styles = StyleSheet.create({
     padding: 16, backgroundColor: opsConsole.surface, borderBottomWidth: 2, borderBottomColor: opsConsole.border,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
   },
-  headerTitleGroup: { flexDirection: 'column' },
+  headerPhone: { flexDirection: 'column', alignItems: 'stretch', gap: 10 },
+  headerTitleGroup: { flexDirection: 'column', flex: 1, minWidth: 0 },
   headerTitle: { color: opsConsole.text, fontSize: 24, fontWeight: '900', letterSpacing: 1 },
   headerSub: { color: opsConsole.muted, fontSize: 11, fontWeight: '700', marginTop: 2 },
-  headerRight: { alignItems: 'flex-end' },
+  headerRight: { alignItems: 'flex-end', gap: 6 },
+  headerRightPhone: { alignItems: 'stretch', flexDirection: 'row', flexWrap: 'wrap' },
   syncText: { color: opsConsole.good, fontSize: 11, fontWeight: '800', marginBottom: 4 },
   seedBtn: { backgroundColor: opsConsole.accent, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
   seedBtnText: { color: opsConsole.textStrong, fontSize: 12, fontWeight: '800' },
-  filterBar: { flexDirection: 'row', padding: 12, backgroundColor: opsConsole.surface, gap: 8 },
+  filterBar: { flexDirection: 'row', flexWrap: 'wrap', padding: 12, backgroundColor: opsConsole.surface, gap: 8 },
   filterChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: opsConsole.border },
   filterChipActive: { backgroundColor: opsConsole.accent },
   filterChipText: { color: opsConsole.muted, fontSize: 12, fontWeight: '700' },
@@ -228,15 +232,16 @@ const styles = StyleSheet.create({
     width: '48%', backgroundColor: opsConsole.surface, borderRadius: 12, overflow: 'hidden',
     borderWidth: 1, borderColor: opsConsole.border, marginBottom: 12,
   },
-  cardHeader: { padding: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  cardPhone: { width: '100%' },
+  cardHeader: { padding: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
   suiteName: { color: opsConsole.textStrong, fontSize: 18, fontWeight: '800' },
   beoNumber: { color: '#f1f5f9', fontSize: 12, fontWeight: '600' },
-  timerBadge: { backgroundColor: 'rgba(0,0,0,0.3)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  timerBadge: { backgroundColor: 'rgba(0,0,0,0.3)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, flexShrink: 0 },
   timerText: { color: opsConsole.textStrong, fontSize: 12, fontWeight: '900' },
   cardBody: { padding: 12 },
   metaRow: { flexDirection: 'row', marginBottom: 8 },
   metaLabel: { color: opsConsole.mutedDim, fontSize: 12, fontWeight: '700', width: 60 },
-  metaValue: { color: opsConsole.subtle, fontSize: 12, fontWeight: '600' },
+  metaValue: { color: opsConsole.subtle, fontSize: 12, fontWeight: '600', flex: 1, minWidth: 0 },
   instructionsBox: { backgroundColor: '#451a03', padding: 8, borderRadius: 6, borderWidth: 1, borderColor: '#b45309', marginVertical: 8 },
   instructionsLabel: { color: opsConsole.warn, fontSize: 11, fontWeight: '800' },
   instructionsText: { color: '#fef3c7', fontSize: 12, marginTop: 2 },

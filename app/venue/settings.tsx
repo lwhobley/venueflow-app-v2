@@ -122,7 +122,7 @@ export default function VenueSettingsScreen() {
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           <IconButton icon="arrow-left" onPress={() => router.back()} />
-          <View>
+          <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={{ ...type.title, color: colors.charcoal }}>{t('venueSettings.title')}</Text>
             <Text style={{ color: colors.muted }}>{t('venueSettings.subtitle')}</Text>
           </View>
@@ -141,7 +141,7 @@ export default function VenueSettingsScreen() {
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
         <IconButton icon="arrow-left" onPress={() => router.back()} />
-        <View>
+        <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={{ ...type.title, color: colors.charcoal }}>{t('venueSettings.title')}</Text>
           <Text style={{ color: colors.muted }}>{t('venueSettings.subtitle')}</Text>
         </View>
