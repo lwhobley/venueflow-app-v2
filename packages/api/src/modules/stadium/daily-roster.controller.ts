@@ -21,6 +21,7 @@ import type { VenueScopedRequest } from '../../venue/venue-scope.interceptor';
 import { TenantRequestTransactionInterceptor } from '../../prisma/tenant-request-transaction.interceptor';
 import { RequireSubscription } from '../../billing/require-subscription.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
+import { organizationIdForPairedVenue } from '../../common/venue-facility';
 
 type Scope = NonNullable<VenueScopedRequest['venueScope']>;
 
@@ -34,11 +35,7 @@ export class DailyRosterController {
   ) {}
 
   private async organizationIdFor(facilityId: string) {
-    const venue = await this.prisma.venue.findUniqueOrThrow({
-      where: { id: facilityId },
-      select: { organizationId: true },
-    });
-    return venue.organizationId;
+    return organizationIdForPairedVenue(this.prisma, facilityId);
   }
 
   @Get()
