@@ -629,12 +629,18 @@ export class CrmController {
       orderBy: { createdAt: 'desc' },
       skip: page * limit,
       take: limit,
-      include: { lead: { select: { fullName: true } } },
+      include: {
+        lead: { select: { fullName: true } },
+        // Operational suite orders raised against this sales BEO, so a
+        // salesperson can see what service has actually booked off it.
+        _count: { select: { suiteOrders: true } },
+      },
     });
 
     return beos.map((b) => ({
       ...this.mapBeo(b),
       leadName: b.lead?.fullName ?? null,
+      suiteOrderCount: b._count.suiteOrders,
     }));
   }
 

@@ -40,6 +40,8 @@ type BeoRow = {
   _id: Id<'crmBeos'>;
   leadId?: Id<'crmLeads'>;
   leadName?: string | null;
+  /** Operational suite orders raised against this sales BEO. */
+  suiteOrderCount?: number;
   eventName: string;
   eventDate?: number;
   eventType?: string;
@@ -106,6 +108,7 @@ export function CrmSalesWorkspace({
   enabled,
   initialView,
   initialEventName,
+  initialBeoId,
 }: {
   venueId: Id<'venues'> | undefined;
   enabled: boolean;
@@ -117,6 +120,8 @@ export function CrmSalesWorkspace({
    * and operational BEO records share.
    */
   initialEventName?: string;
+  /** Filters the Events tab to one BEO by record id, from a linked suite row. */
+  initialBeoId?: string;
 }) {
   const isDesktop = useIsDesktop();
   const [view, setView] = useState<WorkspaceView>(initialView ?? 'dashboard');
@@ -129,6 +134,14 @@ export function CrmSalesWorkspace({
   useEffect(() => {
     setEventFilter(initialEventName ?? '');
   }, [initialEventName]);
+  const [beoIdFilter, setBeoIdFilter] = useState<string>(initialBeoId ?? '');
+  useEffect(() => {
+    setBeoIdFilter(initialBeoId ?? '');
+  }, [initialBeoId]);
+  const clearBeoFilters = () => {
+    setEventFilter('');
+    setBeoIdFilter('');
+  };
   const [leadSearch, setLeadSearch] = useState('');
   const [selectedLeadId, setSelectedLeadId] = useState<Id<'crmLeads'> | null>(null);
   const [showLeadForm, setShowLeadForm] = useState(false);
@@ -434,7 +447,7 @@ export function CrmSalesWorkspace({
           ) : null}
 
           {view === 'events' ? (
-            <EventsView beos={beos} eventFilter={eventFilter} onClearFilter={() => setEventFilter('')} onConvert={async (beoId) => {
+            <EventsView beos={beos} eventFilter={eventFilter} beoIdFilter={beoIdFilter} onClearFilter={clearBeoFilters} onConvert={async (beoId) => {
               if (!venueId) return;
               try {
                 await convertBeoToContract({ venueId, beoId });
@@ -609,33 +622,46 @@ function ContactsView({ leads, search, onSearch, onSelectLead }: { leads: LeadRo
 function EventsView({
   beos,
   eventFilter,
+  beoIdFilter,
   onClearFilter,
   onConvert,
 }: {
   beos: BeoRow[] | undefined;
   /** Event name to narrow the list to, from a report link. Empty shows all. */
   eventFilter?: string;
+  /** Exact BEO record id, from a suite order that carries a link. Wins over name. */
+  beoIdFilter?: string;
   onClearFilter?: () => void;
   onConvert: (beoId: Id<'crmBeos'>) => Promise<void>;
 }) {
   const needle = eventFilter?.trim().toLocaleLowerCase() ?? '';
+  const targetId = beoIdFilter?.trim() ?? '';
   const all = asArray(beos);
-  const matching = needle ? all.filter((beo) => beo.eventName.toLocaleLowerCase().includes(needle)) : all;
+  // An id is exact, so it takes precedence over a name match.
+  const matching = targetId
+    ? all.filter((beo) => beo._id === targetId)
+    : needle
+      ? all.filter((beo) => beo.eventName.toLocaleLowerCase().includes(needle))
+      : all;
+  const filtered = Boolean(targetId || needle);
+  const filterLabel = targetId ? 'the linked BEO' : `"${eventFilter}"`;
   return (
     <View style={{ gap: spacing.sm }}>
-      {needle ? (
+      {filtered ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' }}>
           <Text style={{ color: colors.muted, flex: 1 }}>
             {matching.length
-              ? `Showing ${matching.length} of ${all.length} BEOs for "${eventFilter}".`
-              : `No BEO drafts match "${eventFilter}". This event may only have suite orders.`}
+              ? `Showing ${matching.length} of ${all.length} BEOs for ${filterLabel}.`
+              : targetId
+                ? 'That linked BEO is no longer in this venue’s list.'
+                : `No BEO drafts match ${filterLabel}. This event may only have suite orders.`}
           </Text>
           <Button compact mode="outlined" textColor={colors.primary} onPress={() => onClearFilter?.()}>
             Show all
           </Button>
         </View>
       ) : null}
-      {matching.length === 0 && !needle ? <EmptyLine text="No BEO drafts yet." /> : matching.map((beo) => (
+      {matching.length === 0 && !filtered ? <EmptyLine text="No BEO drafts yet." /> : matching.map((beo) => (
         <View key={beo._id} style={{ padding: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: 8, gap: 4 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm }}>
             <View style={{ flex: 1 }}>
@@ -649,6 +675,11 @@ function EventsView({
             {beo.eventType ? <Chip compact>{beo.eventType}</Chip> : null}
             {beo.setupStyle ? <Chip compact>{beo.setupStyle}</Chip> : null}
             {beo.menuBarPackage ? <Chip compact>{beo.menuBarPackage}</Chip> : null}
+            {beo.suiteOrderCount ? (
+              <Chip compact icon="room-service-outline">
+                {beo.suiteOrderCount} suite {beo.suiteOrderCount === 1 ? 'order' : 'orders'}
+              </Chip>
+            ) : null}
           </View>
           {[
             { label: 'Apps', value: beo.menuAppetizers },

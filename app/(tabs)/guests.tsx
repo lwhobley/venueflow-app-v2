@@ -241,9 +241,10 @@ function GuestsScreenInner() {
   // `?crmView=events` lets the readiness rows and a link from the published BEO
   // report open the BEO list rather than dropping the user on the dashboard;
   // `?crmEvent=` narrows that list to one event.
-  const params = useLocalSearchParams<{ crmView?: string; crmEvent?: string }>();
+  const params = useLocalSearchParams<{ crmView?: string; crmEvent?: string; crmBeoId?: string }>();
   const crmView = parseWorkspaceView(params.crmView);
   const crmEvent = typeof params.crmEvent === 'string' ? params.crmEvent : undefined;
+  const crmBeoId = typeof params.crmBeoId === 'string' ? params.crmBeoId : undefined;
   const guestList = useQuery(api.guests.listGuests, isReady && canManage && venue?.id ? { venueId: venue.id } : 'skip') as GuestListResponse | undefined;
   const guests = guestList?.guests;
   const upsertGuest = useMutation(api.guests.upsertGuest);
@@ -470,7 +471,7 @@ function GuestsScreenInner() {
             subtitle={t('guests.header.subtitle', { venue: venue?.name ?? t('guests.header.yourVenue') })}
           />
 
-          <CrmSalesWorkspace venueId={venue?.id} enabled={isReady && canManage} initialView={crmView} initialEventName={crmEvent} />
+          <CrmSalesWorkspace venueId={venue?.id} enabled={isReady && canManage} initialView={crmView} initialEventName={crmEvent} initialBeoId={crmBeoId} />
 
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
             {[

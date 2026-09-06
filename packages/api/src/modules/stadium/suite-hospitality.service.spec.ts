@@ -25,6 +25,9 @@ describe('SuiteHospitalityService', () => {
       subVenue: {
         findMany: vi.fn(),
       },
+      crmBeo: {
+        findFirst: vi.fn(),
+      },
       $transaction: vi.fn(async (cb) => cb(prisma)),
     };
 
@@ -126,5 +129,58 @@ describe('SuiteHospitalityService', () => {
 
     expect(orders).toHaveLength(10);
     expect(prisma.suiteBeoOrder.create).toHaveBeenCalledTimes(10);
+  });
+
+  /**
+   * `Venue` and `Facility` deliberately share an id, so a sales BEO belongs to
+   * this facility exactly when its `venueId` matches. A database trigger
+   * enforces the same rule; the service checks first so an operator gets a
+   * message rather than a raw Postgres exception.
+   */
+  describe('linkToCrmBeo', () => {
+    it('links a suite order to a sales BEO in the same venue', async () => {
+      prisma.suiteBeoOrder.findFirst.mockResolvedValue({ id: 'beo_1' });
+      prisma.crmBeo.findFirst.mockResolvedValue({ id: 'crm_1' });
+      prisma.suiteBeoOrder.update.mockResolvedValue({ id: 'beo_1', crmBeoId: 'crm_1' });
+
+      const result = await service.linkToCrmBeo('facility-1', 'beo_1', 'crm_1');
+
+      expect(prisma.crmBeo.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'crm_1', venueId: 'facility-1' } })
+      );
+      expect(prisma.suiteBeoOrder.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'beo_1' }, data: { crmBeoId: 'crm_1' } })
+      );
+      expect(result.crmBeoId).toBe('crm_1');
+    });
+
+    it('refuses a sales BEO from another venue', async () => {
+      prisma.suiteBeoOrder.findFirst.mockResolvedValue({ id: 'beo_1' });
+      prisma.crmBeo.findFirst.mockResolvedValue(null);
+
+      await expect(service.linkToCrmBeo('facility-1', 'beo_1', 'crm_other')).rejects.toThrow(
+        /does not exist in this venue/
+      );
+      expect(prisma.suiteBeoOrder.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses a suite order from another facility', async () => {
+      prisma.suiteBeoOrder.findFirst.mockResolvedValue(null);
+
+      await expect(service.linkToCrmBeo('facility-1', 'beo_elsewhere', 'crm_1')).rejects.toThrow(
+        /unavailable in this facility/
+      );
+      expect(prisma.suiteBeoOrder.update).not.toHaveBeenCalled();
+    });
+
+    it('clears the link without looking up a sales BEO', async () => {
+      prisma.suiteBeoOrder.findFirst.mockResolvedValue({ id: 'beo_1' });
+      prisma.suiteBeoOrder.update.mockResolvedValue({ id: 'beo_1', crmBeoId: null });
+
+      const result = await service.linkToCrmBeo('facility-1', 'beo_1', null);
+
+      expect(prisma.crmBeo.findFirst).not.toHaveBeenCalled();
+      expect(result.crmBeoId).toBeNull();
+    });
   });
 });

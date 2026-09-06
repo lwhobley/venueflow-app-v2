@@ -40,6 +40,7 @@ function suiteBeo(overrides: Partial<Record<string, unknown>> = {}) {
     totalCents: 90000,
     zone: { name: 'Suites 300' },
     subVenue: { code: 'S-312', name: 'Suite 312' },
+    crmBeo: null,
     ...overrides,
   };
 }
@@ -179,6 +180,63 @@ describe('EventBeoReportService.buildReport', () => {
       'premium_hospitality',
       'beverage_operations',
     ]);
+  });
+
+  it('carries the linked sales BEO onto the suite row', async () => {
+    const service = buildService({
+      suiteBeos: [
+        suiteBeo({
+          crmBeo: {
+            id: 'crm_1',
+            eventName: 'Acme Q4 Hospitality',
+            eventDate: new Date('2026-09-13T00:00:00Z'),
+            status: 'confirmed',
+            fbMinimumCents: 500000,
+            depositCents: 100000,
+          },
+        }),
+      ],
+    });
+
+    const report = await service.buildReport('ven_1', 'evt_1');
+
+    expect(report.suites.rows[0].salesBeo).toEqual({
+      id: 'crm_1',
+      eventName: 'Acme Q4 Hospitality',
+      eventDate: '2026-09-13T00:00:00.000Z',
+      status: 'confirmed',
+      fbMinimumCents: 500000,
+      depositCents: 100000,
+    });
+    expect(report.suites.linkedToSalesCount).toBe(1);
+  });
+
+  it('flags suite orders with no sales BEO behind them', async () => {
+    const service = buildService({
+      suiteBeos: [
+        suiteBeo({ id: 'beo_a', beoNumber: 'BEO-A' }),
+        suiteBeo({
+          id: 'beo_b',
+          beoNumber: 'BEO-B',
+          crmBeo: {
+            id: 'crm_1',
+            eventName: 'Acme Q4',
+            eventDate: null,
+            status: 'draft',
+            fbMinimumCents: null,
+            depositCents: null,
+          },
+        }),
+      ],
+    });
+
+    const report = await service.buildReport('ven_1', 'evt_1');
+
+    expect(report.suites.rows[0].salesBeo).toBeNull();
+    expect(report.suites.linkedToSalesCount).toBe(1);
+    expect(report.dataGaps).toContain(
+      '1 suite BEO is not linked to a sales BEO, so its contracted minimum and deposit cannot be checked against the CRM.'
+    );
   });
 
   it('reports the gaps that make a published report incomplete', async () => {

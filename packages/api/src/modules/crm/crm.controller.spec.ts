@@ -368,6 +368,7 @@ describe('CrmController', () => {
           depositDueDate: null, menuAppetizers: null, menuEntrees: null, menuDesserts: null, menuBarPackage: null,
           specialRequirements: null, internalNotes: null, assignedRepId: null, status: 'draft',
           createdAt: new Date(), updatedAt: new Date(), lead: { fullName: 'Jo Diner' },
+          _count: { suiteOrders: 3 },
         },
       ]);
 
@@ -375,6 +376,24 @@ describe('CrmController', () => {
 
       expect(prisma.crmBeo.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { venueId: 'venue-1' } }));
       expect(result[0]).toEqual(expect.objectContaining({ leadName: 'Jo Diner' }));
+    });
+
+    it('reports how many operational suite orders were raised against each BEO', async () => {
+      const { controller, prisma } = makeController();
+      prisma.crmBeo.findMany.mockResolvedValue([
+        {
+          id: 'beo-1', venueId: 'venue-1', leadId: null, eventName: 'Suite hospitality', eventDate: null,
+          eventType: null, guestCount: null, venueSpace: null, setupStyle: null, fbMinimumCents: null,
+          depositCents: null, depositDueDate: null, menuAppetizers: null, menuEntrees: null, menuDesserts: null,
+          menuBarPackage: null, specialRequirements: null, internalNotes: null, assignedRepId: null,
+          status: 'confirmed', createdAt: new Date(), updatedAt: new Date(), lead: null,
+          _count: { suiteOrders: 4 },
+        },
+      ]);
+
+      const result = await controller.listBeos(managerScope, {});
+
+      expect(result[0]).toEqual(expect.objectContaining({ suiteOrderCount: 4 }));
     });
   });
 

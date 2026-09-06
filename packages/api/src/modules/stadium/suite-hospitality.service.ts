@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { applyTenantSessionSettings } from '../../prisma/tenant-transaction';
+import { applyTenantSessionSettings, withTenantTransaction } from '../../prisma/tenant-transaction';
 import { SuiteHospitalityGateway } from './suite-hospitality.gateway';
 import { EnterpriseWebhookService } from '../integrations/enterprise-webhook.service';
 import { SuiteBeoStatus } from '@prisma/client';
@@ -78,6 +78,44 @@ export class SuiteHospitalityService {
     private readonly webhooks: EnterpriseWebhookService,
   ) {}
 
+  /**
+   * Points an operational suite order at the sales BEO it fulfils, or clears
+   * the link when `crmBeoId` is null.
+   *
+   * `Venue` and `Facility` deliberately share an id in this schema, so a sales
+   * BEO belongs to this facility exactly when its `venueId` matches. A database
+   * trigger enforces the same rule, but checking here turns a raw Postgres
+   * exception into a message an operator can act on.
+   */
+  async linkToCrmBeo(facilityId: string, suiteBeoId: string, crmBeoId: string | null) {
+    const order = await this.prisma.suiteBeoOrder.findFirst({
+      where: { id: suiteBeoId, facilityId },
+      select: { id: true },
+    });
+    if (!order) throw new NotFoundException('Suite BEO order is unavailable in this facility.');
+
+    if (crmBeoId) {
+      const salesBeo = await this.prisma.crmBeo.findFirst({
+        where: { id: crmBeoId, venueId: facilityId },
+        select: { id: true },
+      });
+      if (!salesBeo) {
+        throw new BadRequestException('That sales BEO does not exist in this venue.');
+      }
+    }
+
+    return withTenantTransaction(
+      this.prisma,
+      (tx) =>
+        tx.suiteBeoOrder.update({
+          where: { id: suiteBeoId },
+          data: { crmBeoId },
+          include: { crmBeo: { select: { id: true, eventName: true, eventDate: true, status: true } } },
+        }),
+      { venueId: facilityId, facilityId },
+    );
+  }
+
   async listSuiteBeos(facilityId: string, zoneId?: string, status?: SuiteBeoStatus) {
     const orders = await this.prisma.suiteBeoOrder.findMany({
       where: {
@@ -88,6 +126,7 @@ export class SuiteHospitalityService {
       include: {
         subVenue: { select: { id: true, code: true, name: true, subVenueType: true } },
         zone: { select: { id: true, code: true, name: true, level: true } },
+        crmBeo: { select: { id: true, eventName: true, eventDate: true, status: true } },
         statusLogs: { orderBy: { timestamp: 'desc' }, take: 10 },
         replenishments: { orderBy: { createdAt: 'desc' } },
       },

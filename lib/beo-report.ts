@@ -46,9 +46,21 @@ export interface ReportDepartmentSection {
   lines: ReportLine[];
 }
 
+/** The sales BEO an operational suite order fulfils, when one is linked. */
+export interface SalesBeoRef {
+  id: string;
+  eventName: string;
+  eventDate: string | null;
+  status: string;
+  fbMinimumCents: number | null;
+  depositCents: number | null;
+}
+
 export interface SuiteBeoReportRow {
   id: string;
   beoNumber: string;
+  /** Null when the suite order was raised without a sales document behind it. */
+  salesBeo: SalesBeoRef | null;
   suiteCode: string;
   suiteName: string;
   zoneName: string;
@@ -82,7 +94,14 @@ export interface EventBeoReportDocument {
     expectedGuests: number | null;
     opponentOrHeadliner: string | null;
   };
-  suites: { beoCount: number; guestCount: number; revenueCents: number; rows: SuiteBeoReportRow[] };
+  suites: {
+    beoCount: number;
+    guestCount: number;
+    revenueCents: number;
+    /** Suite orders carrying a link to their sales BEO. */
+    linkedToSalesCount: number;
+    rows: SuiteBeoReportRow[];
+  };
   departments: ReportDepartmentSection[];
   totals: { lineCount: number; openLineCount: number; departmentCount: number };
   dataGaps: string[];

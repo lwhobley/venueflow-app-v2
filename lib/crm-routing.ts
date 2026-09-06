@@ -41,13 +41,21 @@ export { EVENT_BEO_ROUTE, SUITE_BEO_REPORT_ROUTE, beoReportRoute } from './beo-r
 
 /**
  * The CRM workspace on its Events tab, where BEOs are drafted and converted to
- * contracts. `eventName` filters the list to one event, which is the only
- * handle the two sides share: a `CrmBeo` and a `SuiteBeoOrder` are separate
- * records with no relation between them.
+ * contracts. `eventName` filters the list to one event — the fallback for a
+ * suite order that carries no `crmBeoId`; a linked one uses `crmBeoRoute`.
  */
 export function crmEventBeoRoute(eventName?: string): string {
   const query = new URLSearchParams({ crmView: 'events' });
   if (eventName) query.set('crmEvent', eventName);
+  return `/(tabs)/guests?${query.toString()}`;
+}
+
+/**
+ * One sales BEO in the CRM, by record id. A suite order linked to its `CrmBeo`
+ * can route here exactly, rather than filtering the list by event name.
+ */
+export function crmBeoRoute(crmBeoId: string): string {
+  const query = new URLSearchParams({ crmView: 'events', crmBeoId });
   return `/(tabs)/guests?${query.toString()}`;
 }
 

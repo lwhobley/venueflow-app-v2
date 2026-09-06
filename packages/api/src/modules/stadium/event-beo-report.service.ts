@@ -98,9 +98,21 @@ export interface ReportDepartmentSection {
   lines: ReportLine[];
 }
 
+/** The sales BEO an operational suite order fulfils, when one is linked. */
+export interface SalesBeoRef {
+  id: string;
+  eventName: string;
+  eventDate: string | null;
+  status: string;
+  fbMinimumCents: number | null;
+  depositCents: number | null;
+}
+
 export interface SuiteBeoReportRow {
   id: string;
   beoNumber: string;
+  /** Null when the suite order was raised without a sales document behind it. */
+  salesBeo: SalesBeoRef | null;
   suiteCode: string;
   suiteName: string;
   zoneName: string;
@@ -138,6 +150,8 @@ export interface EventBeoReportDocument {
     beoCount: number;
     guestCount: number;
     revenueCents: number;
+    /** Suite orders carrying a link to their sales BEO. */
+    linkedToSalesCount: number;
     /** Chronological by delivery window. */
     rows: SuiteBeoReportRow[];
   };
@@ -226,6 +240,16 @@ export class EventBeoReportService {
           totalCents: true,
           zone: { select: { name: true } },
           subVenue: { select: { code: true, name: true } },
+          crmBeo: {
+            select: {
+              id: true,
+              eventName: true,
+              eventDate: true,
+              status: true,
+              fbMinimumCents: true,
+              depositCents: true,
+            },
+          },
         },
       }),
       this.prisma.eventExecutionWorkspace.findMany({
@@ -261,6 +285,16 @@ export class EventBeoReportService {
     const suiteRows: SuiteBeoReportRow[] = suiteBeos.map((beo) => ({
       id: beo.id,
       beoNumber: beo.beoNumber,
+      salesBeo: beo.crmBeo
+        ? {
+            id: beo.crmBeo.id,
+            eventName: beo.crmBeo.eventName,
+            eventDate: beo.crmBeo.eventDate ? beo.crmBeo.eventDate.toISOString() : null,
+            status: beo.crmBeo.status,
+            fbMinimumCents: beo.crmBeo.fbMinimumCents,
+            depositCents: beo.crmBeo.depositCents,
+          }
+        : null,
       suiteCode: beo.subVenue?.code ?? '',
       suiteName: beo.subVenue?.name ?? 'Suite',
       zoneName: beo.zone?.name ?? '',
@@ -355,6 +389,7 @@ export class EventBeoReportService {
       ];
     });
 
+    const unlinkedSuiteCount = suiteRows.filter((row) => !row.salesBeo).length;
     const suiteGuestCount = suiteRows.reduce((total, row) => total + row.guestCount, 0);
     const suiteRevenueCents = suiteRows.reduce((total, row) => total + row.totalCents, 0);
     const lineCount = departments.reduce((total, section) => total + section.lineCount, 0);
@@ -365,6 +400,11 @@ export class EventBeoReportService {
       ...(event.expectedGuests == null ? ['Expected attendance is not set on the event.'] : []),
       ...(suiteRows.some((row) => row.totalCents === 0)
         ? ['One or more suite BEOs carry a zero total; catering charges may not be priced yet.']
+        : []),
+      ...(unlinkedSuiteCount
+        ? [
+            `${unlinkedSuiteCount} suite ${unlinkedSuiteCount === 1 ? 'BEO is' : 'BEOs are'} not linked to a sales BEO, so ${unlinkedSuiteCount === 1 ? 'its' : 'their'} contracted minimum and deposit cannot be checked against the CRM.`,
+          ]
         : []),
     ];
 
@@ -390,6 +430,7 @@ export class EventBeoReportService {
         beoCount: suiteRows.length,
         guestCount: suiteGuestCount,
         revenueCents: suiteRevenueCents,
+        linkedToSalesCount: suiteRows.length - unlinkedSuiteCount,
         rows: suiteRows,
       },
       departments,

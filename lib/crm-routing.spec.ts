@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   EVENT_BEO_ROUTE,
   READINESS_ROW_ROUTES,
+  crmBeoRoute,
   crmEventBeoRoute,
   parseWorkspaceView,
 } from './crm-routing';
@@ -44,7 +45,15 @@ describe('BEO entry point routing', () => {
     );
   });
 
-  it('links the report back to the CRM, narrowed to the event by name', () => {
+  it('links a suite row to its own sales BEO record when one is linked', () => {
+    const params = new URLSearchParams(crmBeoRoute('crm_1').split('?')[1]);
+    expect(params.get('crmView')).toBe('events');
+    expect(params.get('crmBeoId')).toBe('crm_1');
+    // An exact record link never also carries a name filter to compete with it.
+    expect(params.get('crmEvent')).toBeNull();
+  });
+
+  it('falls back to filtering the CRM by event name for an unlinked suite row', () => {
     expect(crmEventBeoRoute()).toBe('/(tabs)/guests?crmView=events');
 
     const route = crmEventBeoRoute('Texans vs Colts');

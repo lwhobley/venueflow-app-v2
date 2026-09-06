@@ -1679,7 +1679,7 @@ model CrmNote {
 }
 
 model CrmBeo {
-  id                  String    @id @default(cuid())
+  id                  String          @id @default(cuid())
   venueId             String
   leadId              String?
   eventName           String
@@ -1699,10 +1699,14 @@ model CrmBeo {
   internalNotes       String?
   assignedRepId       String?
   status              BeoStatus
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  venue               Venue     @relation(fields: [venueId], references: [id], onDelete: Cascade)
-  lead                CrmLead?  @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  venue               Venue           @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  lead                CrmLead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  /**
+   * Operational suite orders raised against this sales BEO.
+   */
+  suiteOrders         SuiteBeoOrder[]
 
   @@index([venueId])
   @@index([leadId])
@@ -2672,6 +2676,13 @@ model SuiteBeoOrder {
   zoneId                   String
   subVenueId               String
   eventId                  String?
+  /**
+   * The sales BEO this operational order fulfils, when one exists. Nullable
+   * because a suite order can be raised directly on event day with no sales
+   * document behind it, and cleared on delete rather than cascading: losing a
+   * draft contract must not delete the catering a suite is actually owed.
+   */
+  crmBeoId                 String?
   beoNumber                String
   hostName                 String
   hostPhone                String?
@@ -2694,10 +2705,12 @@ model SuiteBeoOrder {
   facility                 Facility                       @relation(fields: [organizationId, facilityId], references: [organizationId, id], onDelete: Cascade)
   zone                     FacilityZone                   @relation(fields: [organizationId, facilityId, zoneId], references: [organizationId, facilityId, id], onDelete: Restrict)
   subVenue                 SubVenue                       @relation(fields: [organizationId, facilityId, zoneId, subVenueId], references: [organizationId, facilityId, zoneId, id], onDelete: Restrict)
+  crmBeo                   CrmBeo?                        @relation(fields: [crmBeoId], references: [id], onDelete: SetNull)
   statusLogs               SuiteBeoStatusLog[]
   replenishments           SuiteBeoReplenishmentRequest[]
 
   @@unique([organizationId, facilityId, beoNumber])
+  @@index([crmBeoId])
   @@index([organizationId, facilityId, zoneId, status])
   @@index([subVenueId, deliveryWindowStart])
   @@index([eventId, status])

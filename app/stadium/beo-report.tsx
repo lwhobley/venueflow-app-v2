@@ -8,7 +8,7 @@ import { apiRequest, useApiQuery } from '../../lib/api-client';
 import { useVenueAuth } from '../../lib/useVenueAuth';
 import { asArray, errorMessage, formatMoney, humanizeLabel } from '../../lib/format';
 import { radius, spacing, useDesignTheme } from '../../lib/theme';
-import { crmEventBeoRoute } from '../../lib/crm-routing';
+import { crmBeoRoute, crmEventBeoRoute } from '../../lib/crm-routing';
 import {
   type EventBeoReportDocument,
   type PublishedBeoReport,
@@ -167,6 +167,11 @@ export default function EventBeoReportScreen() {
                   <Summary palette={palette} label="Suite BEOs" value={String(document.suites.beoCount)} />
                   <Summary palette={palette} label="Suite guests" value={String(document.suites.guestCount)} />
                   <Summary palette={palette} label="Catering total" value={formatMoney(document.suites.revenueCents)} />
+                  <Summary
+                    palette={palette}
+                    label="Linked to sales"
+                    value={`${document.suites.linkedToSalesCount}/${document.suites.beoCount}`}
+                  />
                   <Summary palette={palette} label="Open items" value={String(document.totals.openLineCount)} />
                 </View>
                 {canManage ? (
@@ -204,9 +209,9 @@ export default function EventBeoReportScreen() {
               </View>
               {/*
                 The report is read-only by design — it is a published snapshot.
-                Editing happens in the CRM, which holds the sales BEO. The link
-                carries the event name because a CrmBeo and a SuiteBeoOrder are
-                separate records with no relation, so there is no per-row target.
+                Editing happens in the CRM, which holds the sales BEO. A suite
+                row linked to its CrmBeo routes to that exact record; the header
+                action stays as the fallback for rows with no link yet.
               */}
               {document.suites.rows.length === 0 ? (
                 <CommandText palette={palette} variant="body" style={{ color: palette.muted }}>
@@ -243,6 +248,37 @@ export default function EventBeoReportScreen() {
                         {row.specialInstructions}
                       </CommandText>
                     ) : null}
+
+                    {row.salesBeo ? (
+                      <View style={styles.beoHeader}>
+                        <View style={{ flex: 1 }}>
+                          <CommandText palette={palette} variant="caption" style={{ color: palette.muted }}>
+                            Sales BEO · {row.salesBeo.eventName} · {humanizeLabel(row.salesBeo.status)}
+                          </CommandText>
+                          {row.salesBeo.fbMinimumCents != null || row.salesBeo.depositCents != null ? (
+                            <CommandText palette={palette} variant="caption" style={{ color: palette.muted }}>
+                              Minimum {formatMoney(row.salesBeo.fbMinimumCents ?? 0)} · Deposit{' '}
+                              {formatMoney(row.salesBeo.depositCents ?? 0)}
+                            </CommandText>
+                          ) : null}
+                        </View>
+                        <Pressable
+                          onPress={() => router.push(crmBeoRoute(row.salesBeo!.id) as any)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Edit the sales BEO for ${row.suiteName} in the CRM`}
+                          style={({ pressed }) => [styles.linkBtn, { borderColor: palette.border, opacity: pressed ? 0.7 : 1 }]}
+                        >
+                          <MaterialCommunityIcons name="pencil-outline" size={14} color={String(palette.primary)} />
+                          <CommandText palette={palette} variant="caption" style={{ color: palette.primary, fontWeight: '700' }}>
+                            Edit in CRM
+                          </CommandText>
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <CommandText palette={palette} variant="caption" style={{ color: palette.muted }}>
+                        Not linked to a sales BEO.
+                      </CommandText>
+                    )}
 
                     <View style={[styles.itemsBox, { borderColor: palette.divider }]}>
                       {row.lineItems.map((item, index) => (
