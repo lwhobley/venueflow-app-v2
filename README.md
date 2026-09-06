@@ -18,7 +18,7 @@ Venue Wrangler is a native iOS/Android venue ops app built with Expo Router, Nes
 - Floor plan and table management with drag-and-drop editor for admins/managers
 - Staff management screen for admins/managers to add people and assign roles to a venue
 - Profile page shortcut to open staff management for privileged roles
-- Billing shell with Stripe-backed venue subscriptions
+- Enterprise licensing (consumer Stripe/RevenueCat checkout is disabled; venues are provisioned as licensed)
 
 ## Local setup
 
